@@ -1,0 +1,891 @@
+<script lang="ts">
+  import { onMount, untrack } from "svelte";
+  import { api, inTauri, isMac, fileName, trackName, khz, dsdName, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import Library from "$lib/Library.svelte";
+  import DevicePicker from "$lib/DevicePicker.svelte";
+  import Display from "$lib/Display.svelte";
+  import Enhancers from "$lib/Enhancers.svelte";
+
+  // --- persisted preferences (per machine) ---
+  function load<T>(key: string, fallback: T): T {
+    try {
+      const v = localStorage.getItem(key);
+      return v === null ? fallback : (JSON.parse(v) as T);
+    } catch {
+      return fallback;
+    }
+  }
+  function save(key: string, v: unknown) {
+    try {
+      localStorage.setItem(key, JSON.stringify(v));
+    } catch {}
+  }
+
+  let devices = $state<Device[]>([]);
+  let selected = $state<string>(load("device", ""));
+  let exclusive = $state<boolean>(load("exclusive", true));
+  /** Devices the user switched DoP on for (by UID): DSD goes to them as DoP, not PCM. */
+  let dopDevices = $state<string[]>(load("dopDevices", []));
+  let dop = $derived(dopDevices.includes(selected));
+
+  let queue = $state<string[]>([]);
+  let index = $state(-1);
+  let now = $state<NowPlaying | null>(null);
+  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null });
+  let dsp = $state<DspSettings>({ upsampleKhz: null, crossfeed: null, eqPath: null, headroom: true, restoreHighs: false, ...load("dsp", {}) });
+  let eq = $state<EqInfo | null>(null);
+  let error = $state<string | null>(null);
+  let loading = $state(false);
+  let testing = $state(false);
+  let dragOver = $state(false);
+  let sweepKey = $state(0);
+  let advancing = false;
+  let screen = $state<"player" | "library">(load("screen", "player"));
+  let libGoto = $state<LibraryGoto | null>(null);
+  let gotoCount = 0;
+  /** Open the playing track's artist or album in the library. */
+  function goToLibrary(kind: LibraryGoto["kind"]) {
+    if (!now) return;
+    libGoto = { kind, path: now.path, artist: now.artist, album: now.album, n: ++gotoCount };
+    screen = "library";
+  }
+  $effect(() => save("screen", screen));
+
+  let deviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? "DAC");
+
+  async function refreshDevices() {
+    try {
+      devices = await api.listDevices();
+      if (!devices.some((d) => d.uid === selected)) {
+        selected = (devices.find((d) => d.isDefault) ?? devices[0])?.uid ?? "";
+      }
+    } catch (e) {
+      error = `Не удалось получить список устройств: ${e}`;
+    }
+  }
+
+  async function playIndex(i: number, startAt = 0) {
+    if (i < 0 || i >= queue.length || !selected) return;
+    loading = true;
+    testing = false;
+    try {
+      now = await api.playFile(queue[i], selected, exclusive, startAt, dop);
+      index = i;
+      error = null;
+      sweepKey++;
+    } catch (e) {
+      error = `Не удалось воспроизвести «${fileName(queue[i])}»: ${e}`;
+      index = i;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function addPaths(paths: string[]) {
+    const files = await api.expandPaths(paths);
+    if (!files.length) {
+      error = "В перетащенном нет аудиофайлов. Поддерживаются FLAC, WAV, AIFF, ALAC, MP3, OGG.";
+      return;
+    }
+    const first = queue.length;
+    queue.push(...files);
+    if (!status.active || status.finished) await playIndex(first);
+  }
+
+  async function pickFiles() {
+    if (!inTauri) return addPaths(["/Music/Miles Davis/Kind of Blue/01 So What.flac", "/Music/Miles Davis/Kind of Blue/02 Freddie Freeloader.flac", "/Music/Miles Davis/Kind of Blue/03 Blue in Green.dsf"]);
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({ multiple: true, filters: [{ name: "Аудио", extensions: AUDIO_EXTENSIONS }] });
+    if (picked) await addPaths(Array.isArray(picked) ? picked : [picked]);
+  }
+
+  /** Replace the queue with `paths` and play from `start` (library "Play"). */
+  async function playPaths(paths: string[], start: number) {
+    queue = [...paths];
+    await playIndex(start);
+  }
+
+  /** Append to the queue; start playing if nothing is. */
+  async function enqueue(paths: string[]) {
+    const first = queue.length;
+    queue.push(...paths);
+    if (!status.active || status.finished) await playIndex(first);
+  }
+
+  function removeAt(i: number) {
+    queue.splice(i, 1);
+    if (i < index) index--;
+    else if (i === index) {
+      api.stop();
+      now = null;
+      index = -1;
+    }
+  }
+
+  function clearQueue() {
+    api.stop();
+    queue = [];
+    index = -1;
+    now = null;
+  }
+
+  async function togglePause() {
+    if (!status.active) {
+      if (queue.length) await playIndex(Math.max(index, 0));
+      return;
+    }
+    await api.setPaused(!status.paused);
+  }
+
+  async function next() {
+    if (index < queue.length - 1) await playIndex(index + 1);
+  }
+
+  async function prev() {
+    if (status.position > 3 || index <= 0) await api.seek(0);
+    else await playIndex(index - 1);
+  }
+
+  async function channelTest() {
+    try {
+      const signal = await api.channelTest(selected);
+      testing = true;
+      error = null;
+      sweepKey++;
+      now = {
+        path: "", title: "Проверка каналов", artist: "Сначала низкий тон в левом ухе, затем высокий в правом",
+        album: null, year: null, cover: null, channels: 2, duration: 3, deviceName, signal,
+      };
+    } catch (e) {
+      error = `Проверка каналов не запустилась: ${e}`;
+    }
+  }
+
+  /** Apply processing settings; a playing track continues in place with the new chain. */
+  async function applyDsp(next: DspSettings) {
+    try {
+      const res = await api.setDsp(next);
+      dsp = next;
+      eq = res.eq;
+      save("dsp", next);
+      if (res.signal && now && !testing) {
+        now = { ...now, signal: res.signal };
+        sweepKey++;
+      }
+      error = null;
+    } catch (e) {
+      error = `Не удалось применить обработку: ${e}`;
+      // An unreadable EQ file shouldn't take the rest of the settings down with it.
+      if (next.eqPath && next.eqPath !== dsp.eqPath) return;
+      if (next.eqPath) await applyDsp({ ...next, eqPath: null });
+    }
+  }
+
+  async function pickEq() {
+    if (!inTauri) return applyDsp({ ...dsp, eqPath: "/Users/me/AutoEq/Audeze LCD-2 ParametricEQ.txt" });
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({ multiple: false, filters: [{ name: "Профиль AutoEQ", extensions: ["txt"] }] });
+    if (typeof picked === "string") await applyDsp({ ...dsp, eqPath: picked });
+  }
+
+  // Switching device or access mode mid-track: continue the same track on the new output.
+  let lastOutput = untrack(() => `${selected}|${exclusive}`);
+  $effect(() => {
+    const key = `${selected}|${exclusive}`;
+    save("device", selected);
+    save("exclusive", exclusive);
+    if (key !== lastOutput) {
+      lastOutput = key;
+      if (status.active && !testing && index >= 0) playIndex(index, status.position);
+    }
+  });
+
+  // DoP switched for the current device: only a DSD track needs to restart.
+  let lastDop = untrack(() => dop);
+  $effect(() => {
+    save("dopDevices", dopDevices);
+    if (dop !== lastDop) {
+      lastDop = dop;
+      if (untrack(() => status.active && !testing && index >= 0 && now?.signal.dsdRate !== null))
+        playIndex(index, untrack(() => status.position));
+    }
+  });
+
+  function onKey(e: KeyboardEvent) {
+    const t = e.target as HTMLElement;
+    if (t.tagName === "INPUT" && (t as HTMLInputElement).type !== "range") return;
+    if (e.code === "Space") {
+      e.preventDefault();
+      togglePause();
+    } else if (e.key === "ArrowRight" && status.active) {
+      api.seek(Math.min(status.position + 10, status.duration));
+    } else if (e.key === "ArrowLeft" && status.active) {
+      api.seek(Math.max(status.position - 10, 0));
+    }
+  }
+
+  onMount(() => {
+    refreshDevices();
+    // Restore last session's processing (also loads and validates the EQ file).
+    applyDsp(untrack(() => dsp));
+    const timer = setInterval(async () => {
+      status = await api.status();
+      if (status.finished && !advancing) {
+        advancing = true;
+        if (testing) {
+          testing = false;
+          await api.stop();
+          now = null;
+          if (index >= 0) await playIndex(index);
+        } else if (index < queue.length - 1) {
+          await playIndex(index + 1);
+        }
+        advancing = false;
+      }
+    }, 250);
+
+    let unlisten: (() => void) | undefined;
+    if (inTauri) {
+      import("@tauri-apps/api/webview").then(async ({ getCurrentWebview }) => {
+        unlisten = await getCurrentWebview().onDragDropEvent((ev) => {
+          const p = ev.payload;
+          if (p.type === "enter" || p.type === "over") dragOver = true;
+          else if (p.type === "leave") dragOver = false;
+          else if (p.type === "drop") {
+            dragOver = false;
+            addPaths(p.paths);
+          }
+        });
+      });
+    }
+    return () => {
+      clearInterval(timer);
+      unlisten?.();
+    };
+  });
+</script>
+
+<svelte:window onkeydown={onKey} />
+
+<div class="app" class:drag-over={dragOver}>
+  <header data-tauri-drag-region class:mac={isMac}>
+    <span class="wordmark" data-tauri-drag-region>Hifi</span>
+    <nav class="tabs" aria-label="Экраны">
+      <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>Сейчас играет</button>
+      <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>Медиатека</button>
+    </nav>
+    <div class="controls">
+      <Enhancers settings={dsp} {eq} onchange={applyDsp} onpickeq={pickEq} />
+      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={refreshDevices} onchanneltest={channelTest} />
+    </div>
+  </header>
+
+  <aside class="queue" aria-label="Очередь">
+    <div class="q-head">
+      <h2>Очередь</h2>
+      {#if queue.length}
+        <button class="q-clear" onclick={clearQueue}>Очистить</button>
+      {/if}
+    </div>
+
+    {#if queue.length}
+      <ol class="q-list">
+        {#each queue as path, i (path + i)}
+          <li class:current={i === index}>
+            <button class="q-item" onclick={() => playIndex(i)} title={path}>
+              <span class="q-n num">{i + 1}</span>
+              <span class="q-name">{trackName(path)}</span>
+            </button>
+            <button class="q-remove" onclick={() => removeAt(i)} aria-label={`Убрать «${trackName(path)}» из очереди`}>
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.5" /></svg>
+            </button>
+          </li>
+        {/each}
+      </ol>
+    {:else}
+      <p class="q-empty">Перетащите сюда файлы или папку с альбомом.</p>
+    {/if}
+
+    <button class="q-add" onclick={pickFiles}>Добавить файлы</button>
+  </aside>
+
+  {#if screen === "player"}
+  <main class="panel">
+    <div class="np">
+      {#if now && !testing}
+        <button class="cover" onclick={() => goToLibrary("album")} title="Открыть альбом в медиатеке">
+          {#if now.cover}
+            <img src={now.cover} alt={`Обложка альбома ${now.album ?? now.title}`} />
+          {:else}
+            <span class="cover-initial" aria-hidden="true">{(now.album ?? now.title).slice(0, 1)}</span>
+          {/if}
+        </button>
+      {:else}
+        <div class="cover" class:test={testing}>
+          {#if now}
+            <span class="cover-initial" aria-hidden="true">{(now.album ?? now.title).slice(0, 1)}</span>
+          {/if}
+        </div>
+      {/if}
+      <div class="np-info">
+        {#if now}
+          <h1>{now.title}</h1>
+          {#if now.artist}
+            <p class="artist">
+              {#if testing}{now.artist}{:else}<button class="link" onclick={() => goToLibrary("artist")} title="Открыть исполнителя в медиатеке">{now.artist}</button>{/if}
+            </p>
+          {/if}
+          {#if now.album}
+            <p class="album">
+              {#if testing}{now.album}{:else}<button class="link" onclick={() => goToLibrary("album")} title="Открыть альбом в медиатеке">{now.album}</button>{/if}{now.year ? `, ${now.year}` : ""}
+            </p>
+          {/if}
+        {:else}
+          <h1 class="idle">Ничего не играет</h1>
+          <p class="album">Перетащите альбом в окно или добавьте файлы. Каждый трек целиком загружается в память и уходит в DAC без изменений.</p>
+          <button class="primary" onclick={pickFiles}>Добавить файлы</button>
+        {/if}
+      </div>
+    </div>
+
+    <Display {now} {status} {testing} {error} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
+
+    <div class="keys">
+      <button class="key" onclick={prev} aria-label="Предыдущий трек" disabled={!now || testing}>
+        <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 4v14M18 4L8 11l10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+      </button>
+      <button class="play" onclick={togglePause} aria-label={status.active && !status.paused ? "Пауза" : "Играть"} disabled={loading || (!now && !queue.length)}>
+        {#if status.active && !status.paused}
+          <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true"><rect x="6" y="5" width="5" height="16" rx="1" fill="currentColor" /><rect x="15" y="5" width="5" height="16" rx="1" fill="currentColor" /></svg>
+        {:else}
+          <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true"><path d="M8 4.5v17l14-8.5z" fill="currentColor" /></svg>
+        {/if}
+      </button>
+      <button class="key" onclick={next} aria-label="Следующий трек" disabled={testing || index >= queue.length - 1}>
+        <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+      </button>
+    </div>
+  </main>
+  {:else}
+    <main class="lib">
+      <Library currentPath={testing ? null : (now?.path ?? null)} goto={libGoto} onplay={playPaths} onenqueue={enqueue} />
+      {#if now}
+        <div class="mini" style={`--p: ${status.duration ? (status.position / status.duration) * 100 : 0}%`}>
+          <div class="mini-np">
+            <button class="mini-art" onclick={() => goToLibrary("album")} title="Открыть альбом" aria-label={`Открыть альбом ${now.album ?? ""}`}>
+              {#if now.cover}<img src={now.cover} alt="" />{/if}
+            </button>
+            <span class="mini-text">
+              <button class="mini-title" onclick={() => (screen = "player")} title="Открыть плеер">{now.title}</button>
+              {#if now.artist}<button class="mini-artist" onclick={() => goToLibrary("artist")} title="Открыть исполнителя">{now.artist}</button>{/if}
+            </span>
+          </div>
+          <span class="mini-sig" class:ok={now.signal.bitPerfect}>
+            <i aria-hidden="true"></i>{#if now.signal.dop && now.signal.dsdRate}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {dsdName(now.signal.dsdRate)} DoP{:else}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {khz(now.signal.deviceRate)} кГц{/if}
+          </span>
+          <div class="mini-keys">
+            <button onclick={prev} aria-label="Предыдущий трек" disabled={testing}>
+              <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 4v14M18 4L8 11l10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+            </button>
+            <button class="mini-play" onclick={togglePause} aria-label={status.active && !status.paused ? "Пауза" : "Играть"}>
+              {#if status.active && !status.paused}
+                <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><rect x="6" y="5" width="5" height="16" rx="1" fill="currentColor" /><rect x="15" y="5" width="5" height="16" rx="1" fill="currentColor" /></svg>
+              {:else}
+                <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><path d="M8 4.5v17l14-8.5z" fill="currentColor" /></svg>
+              {/if}
+            </button>
+            <button onclick={next} aria-label="Следующий трек" disabled={testing || index >= queue.length - 1}>
+              <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+            </button>
+          </div>
+        </div>
+      {/if}
+    </main>
+  {/if}
+
+  {#if dragOver}
+    <div class="drop-hint" aria-hidden="true"><p>Отпустите, чтобы добавить в очередь</p></div>
+  {/if}
+</div>
+
+<style>
+  .app {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-rows: 52px minmax(0, 1fr);
+    height: 100vh;
+  }
+
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--slate-600);
+    background: var(--slate-900);
+  }
+  /* room for the macOS traffic lights of the overlay title bar (Windows has its own bar) */
+  header.mac {
+    padding-left: 88px;
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--t-lg);
+    letter-spacing: 0.04em;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: 28px;
+    margin-right: auto;
+  }
+  .tabs button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: var(--t-sm);
+    color: var(--mist);
+  }
+  .tabs button:hover {
+    color: var(--porcelain);
+  }
+  .tabs button.sel {
+    color: var(--porcelain);
+    font-weight: 600;
+    background: var(--slate-700);
+  }
+
+  /* --- library screen --- */
+  .lib {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--slate-800);
+  }
+  .lib > :global(.library) {
+    flex: 1;
+    min-height: 0;
+  }
+  .mini {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    background: var(--slate-900);
+    border-top: 1px solid var(--slate-600);
+  }
+  /* progress as a hairline along the top edge */
+  .mini::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 0;
+    height: 2px;
+    width: var(--p);
+    background: var(--porcelain);
+  }
+  .mini-np {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    text-align: left;
+  }
+  .mini-art {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    flex: none;
+    background:
+      repeating-linear-gradient(90deg, rgba(232, 237, 234, 0.05) 0 2px, transparent 2px 6px),
+      var(--slate-700);
+  }
+  .mini-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .mini-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-size: var(--t-sm);
+  }
+  .mini-text {
+    align-items: flex-start;
+  }
+  .mini-text button {
+    max-width: 100%;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mini-title {
+    font-weight: 600;
+  }
+  .mini-artist {
+    color: var(--mist);
+  }
+  .mini-text button:hover {
+    color: var(--brass);
+  }
+  .mini-art:hover {
+    outline: 1px solid var(--brass);
+    outline-offset: 1px;
+  }
+  .mini-sig {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: var(--t-sm);
+    color: var(--violet);
+    white-space: nowrap;
+  }
+  .mini-sig i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .mini-sig.ok {
+    color: var(--brass);
+  }
+  .mini-keys {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .mini-keys button {
+    display: grid;
+    place-items: center;
+    color: var(--porcelain);
+  }
+  .mini-keys button:disabled {
+    color: var(--slate-500);
+  }
+  .mini-play {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--brass);
+    color: var(--brass) !important;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  /* --- queue --- */
+  .queue {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--slate-600);
+    background: var(--slate-900);
+  }
+  .q-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 18px 20px 8px;
+  }
+  h2 {
+    margin: 0;
+    font-size: var(--t-md);
+    font-weight: 600;
+  }
+  .q-clear {
+    color: var(--mist);
+    font-size: var(--t-sm);
+  }
+  .q-clear:hover {
+    color: var(--porcelain);
+  }
+  .q-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 8px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .q-list li {
+    display: flex;
+    align-items: center;
+    border-radius: var(--r-md);
+  }
+  .q-list li:hover {
+    background: var(--slate-800);
+  }
+  .q-list li.current {
+    background: var(--slate-700);
+  }
+  .q-item {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    text-align: left;
+    padding: 8px 4px 8px 10px;
+  }
+  .q-n {
+    color: var(--mist-dim);
+    font-size: var(--t-sm);
+    width: 1.4em;
+    text-align: right;
+    flex: none;
+  }
+  .current .q-n {
+    color: var(--brass);
+  }
+  .q-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--t-sm);
+  }
+  .current .q-name {
+    font-weight: 600;
+  }
+  .q-remove {
+    padding: 8px 10px;
+    color: var(--mist-dim);
+    opacity: 0;
+  }
+  .q-list li:hover .q-remove,
+  .q-remove:focus-visible {
+    opacity: 1;
+  }
+  .q-remove:hover {
+    color: var(--porcelain);
+  }
+  .q-empty {
+    flex: 1;
+    margin: 0;
+    padding: 4px 20px;
+    color: var(--mist);
+    font-size: var(--t-sm);
+    max-width: 26ch;
+  }
+  .q-add {
+    margin: 12px;
+    padding: 9px;
+    border-radius: var(--r-md);
+    border: 1px dashed var(--slate-500);
+    color: var(--mist);
+    font-size: var(--t-sm);
+  }
+  .q-add:hover {
+    color: var(--porcelain);
+    border-color: var(--mist);
+  }
+
+  /* --- faceplate --- */
+  .panel {
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 28px 40px 32px;
+    /* brushed anodised finish, barely there */
+    background:
+      repeating-linear-gradient(90deg, rgba(232, 237, 234, 0.012) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #1a2930, var(--slate-800));
+  }
+  .panel > :global(*) {
+    width: 100%;
+    max-width: 900px;
+    margin-inline: auto;
+  }
+  /* Centre vertically, but never push content above the scroll origin when it doesn't fit
+     (justify-content: center would clip the cover off the top). */
+  .panel > :global(:first-child) {
+    margin-top: auto;
+  }
+  .panel > :global(:last-child) {
+    margin-bottom: auto;
+  }
+
+  .np {
+    display: grid;
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: 24px;
+    align-items: end;
+  }
+  .cover {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    background:
+      repeating-linear-gradient(90deg, rgba(232, 237, 234, 0.05) 0 2px, transparent 2px 8px),
+      var(--slate-700);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 14px 30px rgba(5, 12, 15, 0.5);
+  }
+  button.cover {
+    padding: 0;
+    width: 100%;
+    cursor: pointer;
+  }
+  button.cover:hover {
+    outline: 1px solid var(--brass);
+    outline-offset: 2px;
+  }
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .cover-initial {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 4rem;
+    color: var(--slate-500);
+  }
+  .cover.test .cover-initial {
+    color: var(--brass);
+  }
+  .np-info {
+    min-width: 0;
+    padding-bottom: 4px;
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--t-2xl);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  h1.idle {
+    color: var(--mist);
+  }
+  .artist {
+    margin: 0;
+    font-size: var(--t-lg);
+    font-weight: 500;
+  }
+  .link {
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  .link:hover {
+    color: var(--brass);
+  }
+  .album {
+    margin: 2px 0 0;
+    color: var(--mist);
+    max-width: 60ch;
+  }
+  .primary {
+    margin-top: 14px;
+    padding: 9px 16px;
+    border-radius: var(--r-md);
+    background: var(--brass);
+    color: var(--slate-900);
+    font-weight: 600;
+  }
+  .primary:hover {
+    filter: brightness(1.08);
+  }
+
+  /* hardware keys */
+  .keys {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 18px;
+  }
+  .key {
+    width: 52px;
+    height: 38px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: var(--porcelain);
+    background: linear-gradient(180deg, #25383f, var(--slate-700));
+    box-shadow:
+      inset 0 1px 0 rgba(232, 237, 234, 0.08),
+      0 2px 0 #0c1418,
+      0 3px 8px rgba(0, 0, 0, 0.35);
+  }
+  .key:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 0 rgba(232, 237, 234, 0.05),
+      0 1px 0 #0c1418;
+  }
+  .key:disabled {
+    color: var(--slate-500);
+    cursor: default;
+  }
+  .play {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--brass);
+    border: 2px solid var(--brass);
+    background: radial-gradient(circle at 50% 35%, #22343b, var(--slate-800));
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  }
+  .play:hover:not(:disabled) {
+    background: radial-gradient(circle at 50% 35%, #2a3f47, var(--slate-800));
+  }
+  .play:disabled {
+    color: var(--slate-500);
+    border-color: var(--slate-500);
+    cursor: default;
+  }
+
+  .drop-hint {
+    position: fixed;
+    inset: 8px;
+    border: 2px dashed var(--brass);
+    border-radius: 14px;
+    background: rgba(18, 29, 35, 0.82);
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .drop-hint p {
+    font-family: var(--font-display);
+    font-size: var(--t-xl);
+    font-weight: 600;
+    color: var(--brass);
+  }
+
+  @media (max-width: 1000px) {
+    .app {
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+    .panel {
+      padding: 22px 24px;
+    }
+  }
+  @media (max-height: 700px) {
+    .panel {
+      gap: 14px;
+      padding-block: 18px;
+    }
+    .np {
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 18px;
+    }
+    h1 {
+      font-size: var(--t-xl);
+    }
+  }
+</style>

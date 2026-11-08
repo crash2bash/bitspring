@@ -1,0 +1,8 @@
+target/
+testdata/
+.DS_Store
+.remember/
+node_modules/
+/.svelte-kit/
+/.vite/
+/.claude/

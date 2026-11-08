@@ -1,0 +1,82 @@
+/* Design tokens. Palette: anodised hardware panel — slate housing, porcelain legends,
+   brass for an untouched signal (gold-plated contacts), violet for a processed one. */
+:root {
+  --slate-900: #121d23;
+  --slate-800: #16232a;
+  --slate-700: #1f3039;
+  --slate-600: #2b414c;
+  --slate-500: #3d5763;
+  --porcelain: #e8edea;
+  --mist: #8fa3a8;
+  --mist-dim: #62777d;
+  --brass: #c9a45c;
+  --brass-glow: rgba(201, 164, 92, 0.35);
+  --violet: #8c7ae6;
+  --alarm: #e5625e;
+
+  --font: "Barlow", system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+
+  /* Type scale (1.25 ratio) */
+  --t-xs: 0.75rem;
+  --t-sm: 0.875rem;
+  --t-md: 1rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.563rem;
+  --t-2xl: 2.441rem;
+  --t-3xl: 3.052rem;
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --gutter: 24px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--slate-800);
+  color: var(--porcelain);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
