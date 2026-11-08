@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicUsize, Ordering}
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use symphonia::core::audio::sample::Sample;
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error as SymError;
@@ -24,6 +24,12 @@ use symphonia::core::meta::{MetadataOptions, MetadataRevision, StandardTag, Stan
 /// Frames per storage chunk. Chunks never move once allocated, so a reader holding a frame
 /// index below `ready` can always find its sample — the buffer grows without reallocating.
 const CHUNK_FRAMES: usize = 1 << 16;
+
+/// Longest track we make room for (24 h) — caps what a forged header can make us allocate.
+const MAX_TRACK_SECS: usize = 24 * 3600;
+
+/// Highest PCM sample rate we accept (8 × 192 kHz); beyond it a header is lying.
+pub(crate) const MAX_PCM_RATE: u32 = 1_536_000;
 
 /// A decoded (or still decoding) track in memory.
 ///
@@ -161,6 +167,8 @@ impl Track {
     pub(crate) fn new(sample_rate: u32, channels: usize, bits: Option<u32>, lossy: bool, meta: TrackMeta, expected: usize) -> Self {
         // Room for 1.5x what the container announces, and at least an hour — the chunk table
         // is only pointers (8 bytes per 64k frames), the samples themselves are allocated lazily.
+        // The container's figure is untrusted: never size the table for more than a day of audio.
+        let expected = expected.min(sample_rate as usize * MAX_TRACK_SECS);
         let max_frames = (expected + expected / 2).max(sample_rate as usize * 3600);
         let n = max_frames.div_ceil(CHUNK_FRAMES) + 1;
         Self {
@@ -185,7 +193,8 @@ impl Track {
     pub(crate) fn new_dop(dsd_rate: u32, channels: usize, meta: TrackMeta, frames: usize) -> Self {
         let channels = channels.max(1);
         let dop_len = frames * channels * 2;
-        let buf = Box::into_raw(vec![0x69u8; dop_len].into_boxed_slice()) as *mut u8;
+        // Zeroed, so the pages are only committed as the reader fills them.
+        let buf = Box::into_raw(vec![0u8; dop_len].into_boxed_slice()) as *mut u8;
         Self {
             sample_rate: dsd_rate / 16,
             channels,
@@ -392,7 +401,13 @@ fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize
         .context("no decoder for this codec")?;
 
     let sample_rate = params.sample_rate.ok_or_else(|| anyhow!("unknown sample rate"))?;
+    if sample_rate == 0 || sample_rate > MAX_PCM_RATE {
+        bail!("implausible sample rate {sample_rate} Hz");
+    }
     let channels = params.channels.as_ref().map(|c| c.count()).ok_or_else(|| anyhow!("unknown channel count"))?;
+    if channels == 0 || channels > 32 {
+        bail!("implausible channel count {channels}");
+    }
     let lossy = crate::library::codec_is_lossy(params.codec);
     let expected = num_frames.or(expected_frames).unwrap_or(0);
     let track = Track::new(sample_rate, channels, params.bits_per_sample, lossy, meta, expected);

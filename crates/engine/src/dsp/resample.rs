@@ -55,10 +55,21 @@ pub struct Resampler {
     skip: usize,
 }
 
+/// Most polyphase branches we build (out_rate / gcd). Standard rates need at most a few
+/// hundred; an odd source rate (or a forged header) could otherwise ask for millions.
+pub const MAX_PHASES: usize = 8192;
+
+/// Polyphase branches converting `in_rate` → `out_rate` needs.
+pub fn phases(in_rate: u32, out_rate: u32) -> usize {
+    (out_rate as u64 / gcd(in_rate as u64, out_rate as u64).max(1)) as usize
+}
+
 impl Resampler {
+    /// `in_rate → out_rate` must need at most [`MAX_PHASES`] phases (see [`phases`]).
     pub fn new(in_rate: u32, out_rate: u32, channels: usize, q: ResampleQuality) -> Self {
         let g = gcd(in_rate as u64, out_rate as u64);
         let (l, m) = ((out_rate as u64 / g) as usize, (in_rate as u64 / g) as usize);
+        assert!(l <= MAX_PHASES, "resampling {in_rate} → {out_rate} Hz needs {l} phases");
         let taps = q.taps;
         let n = taps * l;
         // A windowed sinc's cut-off is its −6 dB point, so put it midway through the transition

@@ -256,6 +256,9 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     let lossy = crate::dsp::lossy::plan(track, &opts.dsp.lossy);
     let resampled = (target - src_hz).abs() >= 0.5;
     let processing = !dop && (resampled || opts.dsp.is_active() || lossy.is_some());
+    if resampled && crate::dsp::resample::phases(track.sample_rate, target as u32) > crate::dsp::resample::MAX_PHASES {
+        bail!("не могу пересчитать нестандартную частоту {} Гц в {} Гц", track.sample_rate, target as u32);
+    }
     Ok(Plan { target, start_frame, lossy, resampled, processing, dop })
 }
 

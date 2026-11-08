@@ -26,6 +26,19 @@ use crate::decode::{DsdSource, Track, TrackMeta, meta_from_revision};
 /// 1-bit sample rate of DSD64 (64 × 44.1 kHz).
 pub const DSD64: u32 = 2_822_400;
 
+/// Highest DSD rate we accept (DSD1024); beyond it a header is lying.
+const MAX_DSD_RATE: u32 = DSD64 * 16;
+/// Largest DSF block per channel we accept (the spec fixes it at 4096).
+const MAX_DSF_BLOCK: usize = 1 << 16;
+/// Largest tag we read into memory.
+const MAX_TAG: u64 = 64 << 20;
+
+/// Offset of the chunk after one at `body` with `size` bytes (chunks are padded to even sizes),
+/// or None when a forged size would overflow — so a chunk walk always moves forward and ends.
+fn next_chunk(body: u64, size: u64) -> Option<u64> {
+    body.checked_add(size)?.checked_add(size & 1)
+}
+
 /// DoP idle pattern: the DSD equivalent of digital silence (equal ones and zeros).
 pub const DOP_IDLE: u16 = 0x6969;
 
@@ -143,11 +156,17 @@ fn probe_dsf(f: &mut File, file_len: u64) -> Result<DsdHeader> {
     if &data[..4] != b"data" {
         bail!("DSF: missing data chunk");
     }
-    if !(1..=8).contains(&channels) || rate < DSD64 / 2 || block == 0 || !matches!(bits, 1 | 8) {
+    if !(1..=8).contains(&channels)
+        || !(DSD64 / 2..=MAX_DSD_RATE).contains(&rate)
+        || !(1..=MAX_DSF_BLOCK).contains(&block)
+        || !matches!(bits, 1 | 8)
+    {
         bail!("DSF: implausible header ({channels} ch, {rate} Hz, {bits} bit, block {block})");
     }
     let data_len = u64le(&data[4..]).saturating_sub(12).min(file_len.saturating_sub(92));
-    let meta = if meta_ptr > 0 && meta_ptr < file_len {
+    // Never trust the sample count beyond what the data chunk can hold.
+    let samples = samples.min(data_len / channels as u64 * 8);
+    let meta = if meta_ptr > 0 && meta_ptr < file_len && file_len - meta_ptr <= MAX_TAG {
         read_exact_at(f, meta_ptr, (file_len - meta_ptr) as usize).map(|t| id3_meta(&t)).unwrap_or_default()
     } else {
         TrackMeta::default()
@@ -182,7 +201,7 @@ fn probe_dff(f: &mut File, file_len: u64) -> Result<DsdHeader> {
         let body = pos + 12;
         match &id {
             b"PROP" => {
-                let end = body + size;
+                let end = body.saturating_add(size).min(file_len);
                 let mut p = body + 4; // skip "SND "
                 while p + 12 <= end {
                     let sh = read_exact_at(f, p, 12)?;
@@ -198,19 +217,25 @@ fn probe_dff(f: &mut File, file_len: u64) -> Result<DsdHeader> {
                         }
                         _ => {}
                     }
-                    p += 12 + ssize + (ssize & 1);
+                    match next_chunk(p + 12, ssize) {
+                        Some(n) => p = n,
+                        None => break,
+                    }
                 }
             }
             b"DSD " => data = Some((body, size.min(file_len - body))),
             b"DST " => bail!("DSDIFF: DST-compressed files are not supported"),
-            b"ID3 " if size < 64 << 20 => meta = id3_meta(&read_exact_at(f, body, size as usize)?),
-            b"DIIN" if meta.title.is_none() => meta = diin_meta(f, body, body + size)?,
+            b"ID3 " if size <= MAX_TAG => meta = id3_meta(&read_exact_at(f, body, size as usize)?),
+            b"DIIN" if meta.title.is_none() => meta = diin_meta(f, body, body.saturating_add(size).min(file_len))?,
             _ => {}
         }
-        pos = body + size + (size & 1);
+        match next_chunk(body, size) {
+            Some(n) => pos = n,
+            None => break,
+        }
     }
     let (data_start, data_len) = data.ok_or_else(|| anyhow!("DSDIFF: no DSD sound data"))?;
-    if !(1..=8).contains(&channels) || rate < DSD64 / 2 {
+    if !(1..=8).contains(&channels) || !(DSD64 / 2..=MAX_DSD_RATE).contains(&rate) {
         bail!("DSDIFF: implausible header ({channels} ch, {rate} Hz)");
     }
     Ok(DsdHeader {
@@ -238,7 +263,10 @@ fn diin_meta(f: &mut File, start: u64, end: u64) -> Result<TrackMeta> {
             let text = String::from_utf8_lossy(&b[4..4 + n]).trim().to_string();
             if &h[..4] == b"DITI" { m.title = Some(text) } else { m.artist = Some(text) }
         }
-        p += 12 + size + (size & 1);
+        match next_chunk(p + 12, size) {
+            Some(n) => p = n,
+            None => break,
+        }
     }
     Ok(m)
 }
@@ -675,6 +703,36 @@ mod tests {
             }
         }
         std::fs::remove_file(&p).ok();
+    }
+
+    /// Forged headers must neither hang the parser nor make it allocate what the file can't hold.
+    #[test]
+    fn forged_headers_are_contained() {
+        let bits = modulate(DSD64, 2, 0.01, tone);
+        // DSF claiming 2^63 samples: clamped to what the data chunk holds.
+        let p = tmp("forged.dsf");
+        write_dsf(&p, DSD64, &bits).unwrap();
+        let mut v = std::fs::read(&p).unwrap();
+        v[64..72].copy_from_slice(&(u64::MAX / 2).to_le_bytes());
+        std::fs::write(&p, &v).unwrap();
+        let h = probe(&p).unwrap();
+        assert!(h.samples <= (v.len() as u64) * 8, "samples {} not clamped", h.samples);
+        // A gigantic block size is refused outright.
+        v[72..76].copy_from_slice(&u32::MAX.to_le_bytes());
+        std::fs::write(&p, &v).unwrap();
+        assert!(probe(&p).is_err());
+
+        // DFF whose chunk sizes would overflow the offset arithmetic: the walk must end.
+        let p2 = tmp("forged.dff");
+        write_dff(&p2, DSD64, &bits).unwrap();
+        let mut v = std::fs::read(&p2).unwrap();
+        let fver = v.windows(4).position(|w| w == b"FVER").unwrap();
+        v[fver + 4..fver + 12].copy_from_slice(&u64::MAX.to_be_bytes());
+        std::fs::write(&p2, &v).unwrap();
+        assert!(probe(&p2).is_err()); // no sound data reachable, but no hang either
+        for p in [p, p2] {
+            std::fs::remove_file(p).ok();
+        }
     }
 
     #[test]
