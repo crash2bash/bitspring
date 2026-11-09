@@ -602,8 +602,27 @@ fn percent_decode(s: &str) -> String {
 /// imported playlist must never reach the file system — such entries only count when the
 /// library itself already has that exact path.
 pub fn is_network_path(p: &str) -> bool {
-    let p = p.trim();
-    p.starts_with("\\\\") || p.starts_with("//") || p.starts_with("\\/") || p.starts_with("/\\")
+    !is_local_path(Path::new(p.trim()))
+}
+
+/// Fail closed: true only for a plain path on this machine — nothing that starts with two
+/// slashes of either kind or a `\?`/`\??` device prefix, and on Windows only a drive-letter
+/// path (or one relative to the current drive), never a UNC, verbatim or device path.
+pub fn is_local_path(p: &Path) -> bool {
+    let s = p.to_string_lossy();
+    let b = s.as_bytes();
+    let slash = |c: u8| c == b'/' || c == b'\\';
+    if b.len() >= 2 && slash(b[0]) && (slash(b[1]) || b[1] == b'?') {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        if let Some(Component::Prefix(pre)) = p.components().next() {
+            return matches!(pre.kind(), Prefix::Disk(_));
+        }
+    }
+    true
 }
 
 /// A playlist location as a path on this computer (relative ones against the playlist's
@@ -812,7 +831,7 @@ pub fn resolve(entries: &[Entry], index: &Index, base: Option<&Path>) -> Vec<Opt
                     if let Some(i) = index.by_location(&p) {
                         return Some(Found::Library(i));
                     }
-                    if !is_network_path(&p.to_string_lossy()) && p.is_file() {
+                    if is_local_path(&p) && p.is_file() {
                         return Some(Found::File(p.to_string_lossy().into_owned()));
                     }
                 }
@@ -1124,7 +1143,7 @@ mod tests {
 
     #[test]
     fn network_paths_never_touch_the_file_system() {
-        for p in [r"\\evil\share\a.flac", "//evil/share/a.flac", "file://evil/share/a.flac"] {
+        for p in [r"\\evil\share\a.flac", "//evil/share/a.flac", "file://evil/share/a.flac", r"\??\UNC\evil\s\a.flac", r"\\?\UNC\evil\s\a.flac", r"\\.\pipe\x", r"/\evil\s\a.flac"] {
             let l = local_path(p, Some(Path::new("/Music"))).unwrap();
             assert!(is_network_path(&l.to_string_lossy()), "{p} -> {l:?}");
         }
