@@ -54,8 +54,30 @@ export type DsdNote =
 /** The queue stopped at a track it couldn't play. */
 export interface AdvanceError {
   name: string;
-  error: string;
+  error: EngineError;
 }
+
+/**
+ * An error from the engine, as a code with parameters (hifi_engine::UserError), worded by
+ * errorText(). Commands reject with one; Status.error and AdvanceError.error carry one.
+ */
+export type EngineError =
+  | {
+      code:
+        | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice"
+        | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder";
+    }
+  | { code: "audioSetup" | "outputFailed" | "profileUnreadable"; detail: string }
+  | { code: "noRates"; device: string }
+  | { code: "rateRefused"; khz: number }
+  | { code: "rateStuck"; khz: number; current: number }
+  | { code: "resample"; from: number; to: number }
+  | { code: "dopRefused"; device: string; dsd: string; khz: number }
+  | { code: "openFailed"; device: string; detail: string }
+  | { code: "otherFormat"; device: string; khz: number }
+  | { code: "copyFailed"; name: string; detail: string }
+  /** No code: the failing part's own words (a corrupt file, an OS error). */
+  | { code: "other"; message: string };
 
 export interface EqInfo {
   name: string;
@@ -104,7 +126,8 @@ export interface Status {
   underruns: number;
   buffering: boolean;
   buffered: number;
-  error: string | null;
+  /** Playback hit a problem (decoding stopped, the device went away, iOS volume during DoP). */
+  error: EngineError | null;
   /** Queue position of the playing track; the backend moves it on at the end of a track. */
   queueIndex: number | null;
   /** Changes whenever a different track starts — then fetch nowPlaying(). */
@@ -273,7 +296,7 @@ export function longDuration(secs: number): string {
 }
 
 /** The library's name for music without an artist tag (set by the engine). */
-export const UNKNOWN_ARTIST = "Неизвестный исполнитель";
+export const UNKNOWN_ARTIST = "Unknown artist";
 
 /** An artist name as shown: the untagged placeholder in the UI language. */
 export function artistLabel(name: string): string {
@@ -282,10 +305,10 @@ export function artistLabel(name: string): string {
 
 /** Built-in outputs the phone backends name themselves (the rest carry the OS's own names). */
 const DEVICE_KEYS: Record<string, string> = {
-  Динамик: "dev.speaker",
-  Наушники: "dev.headphones",
-  "Док-станция": "dev.dock",
-  Аудиовыход: "dev.output",
+  Speaker: "dev.speaker",
+  Headphones: "dev.headphones",
+  Dock: "dev.dock",
+  "Audio output": "dev.output",
 };
 
 /** A device name as shown. */
@@ -314,4 +337,42 @@ export function transportLabel(transport: string): string {
 export function dsdNoteText(n: DsdNote): string {
   if (n.kind === "rate") return t("dsd.rate", { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
   return t(`dsd.${n.kind}`);
+}
+
+/**
+ * Any error a command rejects with, in the UI language: an engine code is worded from the
+ * error.* keys; plain text (from Tauri itself or a plugin) is shown as it is.
+ */
+export function errorText(e: unknown): string {
+  if (e && typeof e === "object" && "code" in e) {
+    const err = e as EngineError;
+    switch (err.code) {
+      case "other":
+        return err.message;
+      case "rateRefused":
+        return t("error.rateRefused", { rate: num(err.khz) });
+      case "rateStuck":
+        return t("error.rateStuck", { rate: num(err.khz), current: num(err.current) });
+      case "resample":
+        return t("error.resample", { from: num(err.from, { useGrouping: false }), to: num(err.to, { useGrouping: false }) });
+      case "dopRefused":
+        return t("error.dopRefused", { device: deviceLabel(err.device), dsd: err.dsd, rate: num(err.khz) });
+      case "otherFormat":
+        return t("error.otherFormat", { device: deviceLabel(err.device), rate: num(err.khz) });
+      case "noRates":
+        return t("error.noRates", { device: deviceLabel(err.device) });
+      case "openFailed":
+        return t("error.openFailed", { device: deviceLabel(err.device), detail: err.detail });
+      case "copyFailed":
+        return t("error.copyFailed", { name: err.name, detail: err.detail });
+      case "audioSetup":
+      case "outputFailed":
+      case "profileUnreadable":
+        return t(`error.${err.code}`, { detail: err.detail });
+      default:
+        return t(`error.${err.code}`);
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
 }

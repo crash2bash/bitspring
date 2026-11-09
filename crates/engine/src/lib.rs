@@ -5,6 +5,7 @@
 pub mod decode;
 pub mod dsd;
 pub mod dsp;
+pub mod error;
 pub mod library;
 pub mod output;
 pub mod rate;
@@ -20,6 +21,7 @@ pub mod ios_out;
 #[cfg(target_os = "android")]
 pub mod android_out;
 
+pub use error::UserError;
 pub use decode::{DsdSource, Track, TrackMeta, load_track, open_source, open_track};
 
 use std::path::Path;

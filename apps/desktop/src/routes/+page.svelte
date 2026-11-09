@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, inTauri, isMac, isIOS, isAndroid, fileName, trackName, khz, dsdName, artistLabel, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import { api, inTauri, isMac, isIOS, isAndroid, fileName, trackName, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
   import Library from "$lib/Library.svelte";
@@ -76,7 +76,7 @@
         selected = (devices.find((d) => d.isDefault) ?? devices[0])?.uid ?? "";
       }
     } catch (e) {
-      error = t("err.devices", { error: String(e) });
+      error = t("err.devices", { error: errorText(e) });
     }
   }
 
@@ -92,7 +92,7 @@
       error = null;
       sweepKey++;
     } catch (e) {
-      error = t("err.play", { name: fileName(queue[i]), error: String(e) });
+      error = t("err.play", { name: fileName(queue[i]), error: errorText(e) });
       index = i;
     } finally {
       loading = false;
@@ -121,7 +121,7 @@
       try {
         await addPaths(await api.importFiles(Array.isArray(picked) ? picked : [picked]));
       } catch (e) {
-        error = t("err.addFiles", { error: String(e) });
+        error = t("err.addFiles", { error: errorText(e) });
       }
       return;
     }
@@ -187,7 +187,7 @@
         album: null, year: null, cover: null, channels: 2, duration: 3, deviceName, signal, rev: knownRev,
       };
     } catch (e) {
-      error = t("err.test", { error: String(e) });
+      error = t("err.test", { error: errorText(e) });
     }
   }
 
@@ -204,7 +204,7 @@
       }
       error = null;
     } catch (e) {
-      error = t("err.dsp", { error: String(e) });
+      error = t("err.dsp", { error: errorText(e) });
       // An unreadable EQ file shouldn't take the rest of the settings down with it.
       if (next.eqPath && next.eqPath !== dsp.eqPath) return;
       if (next.eqPath) await applyDsp({ ...next, eqPath: null });
@@ -275,12 +275,13 @@
           sweepKey++;
         }
         if (status.queueIndex !== null) index = status.queueIndex;
-        if (status.advanceError) error = t("err.play", { name: status.advanceError.name, error: status.advanceError.error });
+        if (status.advanceError) error = t("err.play", { name: status.advanceError.name, error: errorText(status.advanceError.error) });
       }
       // iPhone: the output route changed (DAC unplugged) — pick up the new one; the device
       // effect above then restarts the track there, paused.
-      if (isIOS && status.error && status.error !== lastOutputError) refreshDevices();
-      lastOutputError = status.error;
+      const outputError = status.error && JSON.stringify(status.error);
+      if (isIOS && outputError && outputError !== lastOutputError) refreshDevices();
+      lastOutputError = outputError;
       if (status.finished && testing && !advancing) {
         advancing = true;
         testing = false;
@@ -397,7 +398,7 @@
       </div>
     </div>
 
-    <Display {now} {status} {testing} error={error ?? status.error} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
+    <Display {now} {status} {testing} error={error ?? (status.error && errorText(status.error))} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
 
     <!-- transport keys keep their tape direction in right-to-left languages -->
     <div class="keys" dir="ltr">

@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering}
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 
 use crate::decode::{DsdSource, Track};
 use crate::dsd::{DOP_IDLE, PCM_GAIN};
@@ -40,7 +40,7 @@ pub fn system_volume() -> Option<f32> {
 
 /// Why DSD can't go out as DoP right now, if something system-wide prevents it (iOS: volume).
 #[cfg(not(target_os = "ios"))]
-pub fn dop_blocker() -> Option<String> {
+pub fn dop_blocker() -> Option<crate::UserError> {
     None
 }
 
@@ -238,12 +238,12 @@ pub(crate) struct Plan {
 }
 
 pub(crate) fn dop_error(device_name: &str, track: &Track) -> anyhow::Error {
-    anyhow!(
-        "{} не может принять DoP для {} (нужно {} кГц, 24 бита, монопольный режим)",
-        device_name.trim(),
-        crate::dsd::dsd_name(track.dsd.map_or(0, |d| d.rate)),
-        track.sample_rate as f64 / 1000.0
-    )
+    crate::UserError::DopRefused {
+        device: device_name.trim().to_string(),
+        dsd: crate::dsd::dsd_name(track.dsd.map_or(0, |d| d.rate)),
+        khz: track.sample_rate as f64 / 1000.0,
+    }
+    .into()
 }
 
 /// `rates`: what the device can run at. `dop_ok`: the device could carry this DoP track.
@@ -256,7 +256,7 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     }
     let mut target = match choose_device_rate(track.sample_rate, rates) {
         RateDecision::BitPerfect(hz) | RateDecision::Resample { device_hz: hz } => hz,
-        RateDecision::Unsupported => bail!("{} reports no usable sample rates", device_name.trim()),
+        RateDecision::Unsupported => bail!(crate::UserError::NoRates { device: device_name.trim().to_string() }),
     };
     if let Upsample::UpTo(max_hz) = opts.dsp.upsample {
         if !dop {
@@ -276,7 +276,7 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     let resampled = (target - src_hz).abs() >= 0.5;
     let processing = !dop && (resampled || opts.dsp.is_active() || lossy.is_some());
     if resampled && crate::dsp::resample::phases(track.sample_rate, target as u32) > crate::dsp::resample::MAX_PHASES {
-        bail!("не могу пересчитать нестандартную частоту {} Гц в {} Гц", track.sample_rate, target as u32);
+        bail!(crate::UserError::Resample { from: track.sample_rate, to: target as u32 });
     }
     Ok(Plan { target, start_frame, lossy, resampled, processing, dop })
 }
@@ -407,7 +407,7 @@ impl Playback {
             if out_rate != track.sample_rate
                 && crate::dsp::resample::phases(track.sample_rate, out_rate) > crate::dsp::resample::MAX_PHASES
             {
-                bail!("не могу пересчитать частоту {} Гц в {} Гц", track.sample_rate, out_rate);
+                bail!(crate::UserError::Resample { from: track.sample_rate, to: out_rate });
             }
             let rs = Arc::new(RingState {
                 // ~0.5 s of audio: enough to ride out scheduling hiccups, short enough that

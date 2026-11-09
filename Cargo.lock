@@ -1414,6 +1414,7 @@ dependencies = [
  "objc2-avf-audio",
  "objc2-foundation",
  "serde",
+ "serde_json",
  "symphonia",
  "wasapi",
  "windows",

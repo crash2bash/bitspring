@@ -5,7 +5,7 @@ import type { Album, Device, DspSettings, EqInfo, LibTrack, NowPlaying, Signal, 
 
 // ---- library ----------------------------------------------------------------------------------
 /** The engine's name for untagged music (api.ts UNKNOWN_ARTIST; not imported: api.ts imports this file). */
-const UNKNOWN_ARTIST = "Неизвестный исполнитель";
+const UNKNOWN_ARTIST = "Unknown artist";
 const LIB: [string, string, string | null, string | null, string, number, number | null, string | null, string[]][] = [
   ["Ada Marlow", "Paper Moons", "2017", "Folk", "ALAC", 48000, 24, "#6b5d2e", ["Kite Strings", "Harbour", "Paper Moons"]],
   ["Echo Field", "Signal Path", "2020", "Electronic", "MP3", 44100, null, null, ["Carrier", "Sideband", "Noise Floor"]],

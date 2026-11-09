@@ -34,6 +34,7 @@ use objc2_avf_audio::{
 };
 use objc2_foundation::NSString;
 
+use crate::UserError;
 use crate::decode::Track;
 use crate::output::{self, OutBuf, OutFormat, PlayOptions, Playback, SignalPath, StreamFormat, Transport};
 use crate::rate::RateRange;
@@ -55,8 +56,8 @@ fn configure() -> Result<()> {
     let s = session();
     // SAFETY: plain property calls on the shared session; the category is a framework static.
     unsafe {
-        let cat = AVAudioSessionCategoryPlayback.ok_or_else(|| anyhow!("AVAudioSession недоступна"))?;
-        s.setCategory_error(cat).map_err(|e| anyhow!("не удалось настроить звук: {e}"))?;
+        let cat = AVAudioSessionCategoryPlayback.ok_or_else(|| anyhow!("AVAudioSession unavailable"))?;
+        s.setCategory_error(cat).map_err(|e| UserError::AudioSetup { detail: e.to_string() })?;
     }
     Ok(())
 }
@@ -68,11 +69,9 @@ pub fn system_volume() -> Option<f32> {
 }
 
 /// Why DSD can't go out as DoP right now, if something system-wide prevents it.
-pub fn dop_blocker() -> Option<String> {
+pub fn dop_blocker() -> Option<UserError> {
     let v = system_volume()?;
-    (v < FULL_VOLUME).then(|| {
-        "для DoP громкость iPhone должна быть на максимуме — громкость регулируйте на DAC".to_string()
-    })
+    (v < FULL_VOLUME).then_some(UserError::DopVolume)
 }
 
 struct Route {
@@ -113,9 +112,9 @@ fn current_route() -> Option<Route> {
             Transport::Other(0)
         };
         let builtin_name = if is_port(&kind, AVAudioSessionPortBuiltInSpeaker) {
-            Some("Динамик")
+            Some("Speaker")
         } else if is_port(&kind, AVAudioSessionPortHeadphones) {
-            Some("Наушники")
+            Some("Headphones")
         } else {
             None
         };
@@ -172,12 +171,12 @@ pub struct Device {
 
 impl Device {
     pub fn default_output() -> Result<Self> {
-        let r = current_route().ok_or_else(|| anyhow!("нет устройства вывода"))?;
+        let r = current_route().ok_or(UserError::NoDevice)?;
         Ok(Self { uid: r.uid })
     }
 
     pub fn info(&self) -> Result<DeviceInfo> {
-        let r = current_route().filter(|r| r.uid == self.uid).ok_or_else(|| anyhow!("устройство не найдено — отключено?"))?;
+        let r = current_route().filter(|r| r.uid == self.uid).ok_or(UserError::DeviceNotFound)?;
         // SAFETY: plain property read.
         let now = unsafe { session().sampleRate() };
         remember_rate(&r.uid, now);
@@ -227,7 +226,7 @@ pub struct Player {
     io: Box<IoContext>,
     stop: Arc<AtomicBool>,
     watchdog: Option<JoinHandle<()>>,
-    failure: Arc<Mutex<Option<String>>>,
+    failure: Arc<Mutex<Option<UserError>>>,
     pub path: SignalPath,
 }
 
@@ -258,7 +257,10 @@ fn activate_at(hz: f64) -> Result<f64> {
         }
         // ~20 ms buffers: low enough for snappy seeks, long enough to survive a busy UI.
         let _ = s.setPreferredIOBufferDuration_error(0.02);
-        s.setActive_error(true).map_err(|e| anyhow!("звук занят другим приложением: {e}"))?;
+        s.setActive_error(true).map_err(|e| {
+            log::warn!("setActive: {e}");
+            UserError::AudioBusy
+        })?;
         Ok(s.sampleRate())
     }
 }
@@ -315,7 +317,7 @@ impl Player {
 
     /// The route changed under us (DAC unplugged, headphones pulled) — playback is paused —
     /// or, during DoP, the volume is below maximum (muted until it is back).
-    pub fn output_error(&self) -> Option<String> {
+    pub fn output_error(&self) -> Option<UserError> {
         self.failure.lock().unwrap().clone()
     }
 }
@@ -328,8 +330,7 @@ impl Player {
 ///   it is back at maximum.
 ///
 /// Polls: fast enough during DoP that a scaled stream never reaches the ear for more than a few ms.
-fn watch(io: &IoContext, uid: &str, dop: bool, stop: &AtomicBool, failure: &Mutex<Option<String>>) {
-    const LOW_VOLUME: &str = "громкость iPhone ниже максимума — DoP приглушён; громкость регулируйте на DAC";
+fn watch(io: &IoContext, uid: &str, dop: bool, stop: &AtomicBool, failure: &Mutex<Option<UserError>>) {
     let every = Duration::from_millis(if dop { 5 } else { 40 });
     while !stop.load(Ordering::Acquire) {
         if current_route().is_none_or(|r| r.uid != uid) {
@@ -337,14 +338,14 @@ fn watch(io: &IoContext, uid: &str, dop: bool, stop: &AtomicBool, failure: &Mute
                 io.mute.store(true, Ordering::Release);
             }
             io.playback.set_paused(true);
-            *failure.lock().unwrap() = Some("устройство отключено".to_string());
+            *failure.lock().unwrap() = Some(UserError::DeviceUnplugged);
             return;
         }
         if dop {
             let low = system_volume().is_some_and(|v| v < FULL_VOLUME);
             if low != io.mute.load(Ordering::Acquire) {
                 io.mute.store(low, Ordering::Release);
-                *failure.lock().unwrap() = low.then(|| LOW_VOLUME.to_string());
+                *failure.lock().unwrap() = low.then_some(UserError::DopVolume);
             }
         }
         std::thread::sleep(every);
@@ -382,7 +383,7 @@ fn open_unit(io: &IoContext, rate: f64, channels: u32) -> Result<ca::AudioUnit> 
     unsafe {
         let comp = ca::AudioComponentFindNext(std::ptr::null_mut(), &desc);
         if comp.is_null() {
-            bail!("RemoteIO недоступен");
+            bail!("RemoteIO unavailable");
         }
         let mut unit: ca::AudioUnit = std::ptr::null_mut();
         check(ca::AudioComponentInstanceNew(comp, &mut unit), "open RemoteIO")?;

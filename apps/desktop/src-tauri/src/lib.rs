@@ -26,7 +26,7 @@ use hifi_engine::dsp::eq::{EqProfile, FilterKind};
 use hifi_engine::dsp::lossy::LossySettings;
 use hifi_engine::dsp::{DspSettings, Upsample};
 use hifi_engine::dsd::{self, DsdMode};
-use hifi_engine::{Track, open_file, testsignal};
+use hifi_engine::{Track, UserError, open_file, testsignal};
 use serde::Serialize;
 use tauri::State;
 
@@ -61,7 +61,7 @@ enum DsdNote {
 #[derive(Serialize, Clone, Debug)]
 struct AdvanceError {
     name: String,
-    error: String,
+    error: UserError,
 }
 
 /// The play queue, mirrored from the UI so the next track starts from Rust — on time, and
@@ -98,13 +98,14 @@ fn crossfeed_key(level: CrossfeedLevel) -> String {
     CROSSFEED_LEVELS.iter().find(|(_, l)| *l == level).map_or("custom", |(k, _)| k).to_string()
 }
 
-type CmdResult<T> = Result<T, String>;
+/// Errors cross to the UI as codes (`{ code, ...params }`), worded there in the user's language.
+type CmdResult<T> = Result<T, UserError>;
 
 /// The app, for code that runs outside a command (system media controls).
 static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
-fn err(e: impl std::fmt::Display) -> String {
-    e.to_string()
+fn err(e: impl Into<anyhow::Error>) -> UserError {
+    UserError::of(&e.into())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -237,8 +238,9 @@ struct StatusDto {
     buffering: bool,
     /// Seconds decoded so far (== duration once the whole track is in RAM).
     buffered: f64,
-    /// Decoding stopped early (corrupt file, dropped connection).
-    error: Option<String>,
+    /// Decoding stopped early (corrupt file, dropped connection), or the output hit a problem
+    /// (device gone; iOS: volume below maximum during DoP).
+    error: Option<UserError>,
     /// Queue position of the playing track (moves on by itself at the end of a track).
     queue_index: Option<usize>,
     /// Changes whenever a different track starts; then fetch `now_playing`.
@@ -314,7 +316,7 @@ fn find_device(uid: &str) -> CmdResult<DeviceInfo> {
         .map_err(err)?
         .into_iter()
         .find(|d| d.uid == uid)
-        .ok_or_else(|| "device not found — was it unplugged?".to_string())
+        .ok_or(UserError::DeviceNotFound)
 }
 
 /// Stop whatever plays and start `track` on `device`. The old player is dropped *first*, so
@@ -539,7 +541,7 @@ fn play_queue_at(state: &AppState, i: usize) {
         drop(state.player.lock().unwrap().take());
         *state.current.lock().unwrap() = None;
         let name = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(path);
-        *state.advance_error.lock().unwrap() = Some(AdvanceError { name, error: e.to_string() });
+        *state.advance_error.lock().unwrap() = Some(AdvanceError { name, error: e });
         state.now_rev.fetch_add(1, Ordering::AcqRel);
     }
 }
@@ -604,7 +606,7 @@ fn status(state: State<'_, AppState>) -> StatusDto {
             underruns: p.underruns(),
             buffering: p.is_buffering(),
             buffered: p.buffered_secs(),
-            error: p.source_error().or_else(|| p.output_error()),
+            error: p.source_error().map(UserError::other).or_else(|| p.output_error()),
             queue_index,
             now_rev,
             advance_error,
@@ -676,7 +678,7 @@ fn set_dsp(
     let eq = match &eq_path {
         Some(path) => {
             let p = PathBuf::from(path);
-            let text = std::fs::read_to_string(&p).map_err(|e| format!("не удалось прочитать профиль: {e}"))?;
+            let text = std::fs::read_to_string(&p).map_err(|e| UserError::ProfileUnreadable { detail: e.to_string() })?;
             let name = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             let name = name.trim_end_matches(" ParametricEQ").to_string();
             Some(EqProfile::parse_autoeq(&name, &text).map_err(err)?)

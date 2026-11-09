@@ -228,7 +228,7 @@ impl Device {
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        bail!("device did not switch to {hz} Hz (still {} Hz)", self.nominal_rate()?)
+        bail!(crate::UserError::RateStuck { khz: hz / 1000.0, current: self.nominal_rate()? / 1000.0 })
     }
 
     fn output_streams(&self) -> Result<Vec<ca::AudioStreamID>> {
@@ -330,12 +330,14 @@ impl Device {
             return Ok(HogGuard { device: *self, owned: false });
         }
         if owner != NO_HOG {
-            bail!("device is held exclusively by another process (pid {owner})");
+            log::warn!("device is held exclusively by another process (pid {owner})");
+            bail!(crate::UserError::DeviceBusy);
         }
         set(self.id, ca::kAudioDevicePropertyHogMode as u32, GLOBAL, &me)?;
         let owner: i32 = get(self.id, ca::kAudioDevicePropertyHogMode as u32, GLOBAL)?;
         if owner != me {
-            bail!("hog mode request was not honoured (owner is now {owner})");
+            log::warn!("hog mode request was not honoured (owner is now {owner})");
+            bail!(crate::UserError::DeviceBusy);
         }
         Ok(HogGuard { device: *self, owned: true })
     }
@@ -543,7 +545,7 @@ impl Player {
     }
 
     /// The device went away mid-stream. (CoreAudio keeps the IOProc alive; nothing to report.)
-    pub fn output_error(&self) -> Option<String> {
+    pub fn output_error(&self) -> Option<crate::UserError> {
         None
     }
 }

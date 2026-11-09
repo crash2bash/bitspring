@@ -59,7 +59,7 @@ impl EqProfile {
             }
         }
         if p.bands.is_empty() {
-            bail!("no filters found — expected AutoEQ ParametricEQ.txt lines like `Filter 1: ON PK Fc 100 Hz Gain 3 dB Q 1.0`");
+            bail!(crate::UserError::ProfileEmpty);
         }
         Ok(p)
     }
