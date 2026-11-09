@@ -1,0 +1,8 @@
+# Vercel only needs the website: upload nothing else from the repo (engine, apps, test audio).
+/*
+!/vercel.json
+!/apps
+/apps/*
+!/apps/website
+/apps/website/node_modules
+/apps/website/dist
