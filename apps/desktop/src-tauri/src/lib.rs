@@ -26,7 +26,7 @@ use hifi_engine::dsp::eq::{EqProfile, FilterKind};
 use hifi_engine::dsp::lossy::LossySettings;
 use hifi_engine::dsp::{DspSettings, Upsample};
 use hifi_engine::dsd::{self, DsdMode};
-use hifi_engine::{Track, open_file, testsignal};
+use hifi_engine::{Track, UserError, open_file, testsignal};
 use serde::Serialize;
 use tauri::State;
 
@@ -39,7 +39,29 @@ struct Current {
     /// The user wants DSD sent as DoP on this device.
     dop: bool,
     /// Why a DSD file plays as PCM although DoP was asked for.
-    dsd_note: Option<String>,
+    dsd_note: Option<DsdNote>,
+}
+
+/// Why a DSD file plays as PCM although DoP was asked for. Sent as a code: the UI words it
+/// in the user's language.
+#[derive(Serialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum DsdNote {
+    /// DoP needs exclusive access to the device.
+    Exclusive,
+    /// Something system-wide blocks DoP (iOS: the volume is below maximum).
+    Volume,
+    /// The equalizer and crossfeed work on PCM.
+    Dsp,
+    /// The device doesn't run at the PCM rate DoP needs (`khz`) for this DSD rate (`dsd`).
+    Rate { device: String, khz: f64, dsd: String },
+}
+
+/// The queue stopped at a track it couldn't play: which one, and the engine's reason.
+#[derive(Serialize, Clone, Debug)]
+struct AdvanceError {
+    name: String,
+    error: UserError,
 }
 
 /// The play queue, mirrored from the UI so the next track starts from Rust — on time, and
@@ -63,7 +85,7 @@ struct AppState {
     /// One start at a time: a click in the UI and the queue's own advance can't race.
     play_lock: Mutex<()>,
     /// Why the queue stopped at a track it couldn't play.
-    advance_error: Mutex<Option<String>>,
+    advance_error: Mutex<Option<AdvanceError>>,
 }
 
 const CROSSFEED_LEVELS: [(&str, CrossfeedLevel); 3] = [
@@ -76,13 +98,14 @@ fn crossfeed_key(level: CrossfeedLevel) -> String {
     CROSSFEED_LEVELS.iter().find(|(_, l)| *l == level).map_or("custom", |(k, _)| k).to_string()
 }
 
-type CmdResult<T> = Result<T, String>;
+/// Errors cross to the UI as codes (`{ code, ...params }`), worded there in the user's language.
+type CmdResult<T> = Result<T, UserError>;
 
 /// The app, for code that runs outside a command (system media controls).
 static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
-fn err(e: impl std::fmt::Display) -> String {
-    e.to_string()
+fn err(e: impl Into<anyhow::Error>) -> UserError {
+    UserError::of(&e.into())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -152,7 +175,7 @@ struct SignalDto {
     /// DSD goes out as DoP (false with `dsd_rate` set = converted to PCM).
     dop: bool,
     /// Why DoP was asked for but this DSD file plays as PCM.
-    dsd_note: Option<String>,
+    dsd_note: Option<DsdNote>,
     bit_perfect: bool,
 }
 
@@ -215,14 +238,15 @@ struct StatusDto {
     buffering: bool,
     /// Seconds decoded so far (== duration once the whole track is in RAM).
     buffered: f64,
-    /// Decoding stopped early (corrupt file, dropped connection).
-    error: Option<String>,
+    /// Decoding stopped early (corrupt file, dropped connection), or the output hit a problem
+    /// (device gone; iOS: volume below maximum during DoP).
+    error: Option<UserError>,
     /// Queue position of the playing track (moves on by itself at the end of a track).
     queue_index: Option<usize>,
     /// Changes whenever a different track starts; then fetch `now_playing`.
     now_rev: u64,
     /// The queue stopped at a track it could not play.
-    advance_error: Option<String>,
+    advance_error: Option<AdvanceError>,
     /// System volume 0…1 where the OS may scale our samples with it (iOS); else None.
     system_volume: Option<f32>,
 }
@@ -292,7 +316,7 @@ fn find_device(uid: &str) -> CmdResult<DeviceInfo> {
         .map_err(err)?
         .into_iter()
         .find(|d| d.uid == uid)
-        .ok_or_else(|| "device not found — was it unplugged?".to_string())
+        .ok_or(UserError::DeviceNotFound)
 }
 
 /// Stop whatever plays and start `track` on `device`. The old player is dropped *first*, so
@@ -309,7 +333,7 @@ fn start(state: &AppState, device: &DeviceInfo, track: Arc<Track>, opts: PlayOpt
 /// How to carry a DSD file to this device. DoP only when the user switched it on for the
 /// device, the device can take it, we have exclusive access, and no EQ/crossfeed has to run
 /// (those need PCM). Returns the mode and, for a PCM fallback, the reason.
-fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: bool, dsp: &DspSettings) -> (DsdMode, Option<String>) {
+fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: bool, dsp: &DspSettings) -> (DsdMode, Option<DsdNote>) {
     if !dop || !dsd::is_dsd_path(path) {
         return (DsdMode::Pcm, None);
     }
@@ -318,18 +342,17 @@ fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: b
         Err(_) => return (DsdMode::Pcm, None),
     };
     let note = if !exclusive {
-        Some("DoP работает только в эксклюзивном режиме".to_string())
-    } else if let Some(why) = output::dop_blocker() {
-        Some(why)
+        Some(DsdNote::Exclusive)
+    } else if output::dop_blocker().is_some() {
+        Some(DsdNote::Volume)
     } else if dsp.eq.is_some() || dsp.crossfeed.is_some() {
-        Some("эквалайзер и кроссфид работают с PCM".to_string())
+        Some(DsdNote::Dsp)
     } else if !device.device.supports_dop(rate) {
-        Some(format!(
-            "{} не работает на {} кГц, нужных для DoP {}",
-            device.name.trim(),
-            (rate as f64 / 16_000.0).to_string().replace('.', ","),
-            dsd::dsd_name(rate)
-        ))
+        Some(DsdNote::Rate {
+            device: device.name.trim().to_string(),
+            khz: rate as f64 / 16_000.0,
+            dsd: dsd::dsd_name(rate),
+        })
     } else {
         None
     };
@@ -338,6 +361,14 @@ fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: b
 
 fn open_for(path: &std::path::Path, mode: DsdMode) -> CmdResult<Arc<Track>> {
     open_file(path, mode).map_err(err)
+}
+
+/// The OS's preferred UI languages, best first (BCP 47, e.g. "de-DE", "zh-Hant-TW"). The web
+/// view's navigator.languages can't be trusted for this: WKWebView reports the languages the
+/// app bundle declares rather than the user's own.
+#[tauri::command]
+fn system_locales() -> Vec<String> {
+    sys_locale::get_locales().collect()
 }
 
 const AUDIO_EXTENSIONS: [&str; 12] = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff"];
@@ -393,7 +424,7 @@ fn begin(
     start_at: f64,
     start_paused: bool,
     dop: bool,
-    dsd_note: Option<String>,
+    dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
     let dsp = state.dsp.lock().unwrap().clone();
     let meta = track.meta.clone();
@@ -510,7 +541,7 @@ fn play_queue_at(state: &AppState, i: usize) {
         drop(state.player.lock().unwrap().take());
         *state.current.lock().unwrap() = None;
         let name = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(path);
-        *state.advance_error.lock().unwrap() = Some(format!("Не удалось воспроизвести «{name}»: {e}"));
+        *state.advance_error.lock().unwrap() = Some(AdvanceError { name, error: e });
         state.now_rev.fetch_add(1, Ordering::AcqRel);
     }
 }
@@ -575,7 +606,7 @@ fn status(state: State<'_, AppState>) -> StatusDto {
             underruns: p.underruns(),
             buffering: p.is_buffering(),
             buffered: p.buffered_secs(),
-            error: p.source_error().or_else(|| p.output_error()),
+            error: p.source_error().map(UserError::other).or_else(|| p.output_error()),
             queue_index,
             now_rev,
             advance_error,
@@ -647,7 +678,7 @@ fn set_dsp(
     let eq = match &eq_path {
         Some(path) => {
             let p = PathBuf::from(path);
-            let text = std::fs::read_to_string(&p).map_err(|e| format!("не удалось прочитать профиль: {e}"))?;
+            let text = std::fs::read_to_string(&p).map_err(|e| UserError::ProfileUnreadable { detail: e.to_string() })?;
             let name = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             let name = name.trim_end_matches(" ParametricEQ").to_string();
             Some(EqProfile::parse_autoeq(&name, &text).map_err(err)?)
@@ -760,6 +791,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_devices,
+            system_locales,
             expand_paths,
             play_file,
             set_queue,

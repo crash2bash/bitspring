@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use hifi_engine::UserError;
 use hifi_engine::library::{self, Album, TrackInfo, album_id, folder_image, group_albums};
 use serde::{Deserialize, Serialize};
 use tauri::http::{Response, StatusCode};
@@ -271,8 +272,8 @@ pub fn library_rescan(app: AppHandle, lib: State<'_, Library>) -> LibraryStatus 
 /// Copy files picked from the Files app into the library folder (the picker hands us
 /// temporary copies that iOS deletes later). Returns the kept copies, in the given order.
 #[tauri::command]
-pub fn import_files(app: AppHandle, lib: State<'_, Library>, paths: Vec<String>) -> Result<Vec<String>, String> {
-    let dir = PathBuf::from(music_dir(&app).ok_or("нет папки приложения")?);
+pub fn import_files(app: AppHandle, lib: State<'_, Library>, paths: Vec<String>) -> Result<Vec<String>, UserError> {
+    let dir = PathBuf::from(music_dir(&app).ok_or(UserError::NoAppFolder)?);
     let mut kept = Vec::new();
     for p in paths.iter().map(PathBuf::from) {
         let Some(name) = p.file_name() else { continue };
@@ -292,7 +293,7 @@ pub fn import_files(app: AppHandle, lib: State<'_, Library>, paths: Vec<String>)
             n += 1;
         }
         if !target.exists() {
-            std::fs::copy(&p, &target).map_err(|e| format!("не удалось скопировать {}: {e}", name.to_string_lossy()))?;
+            std::fs::copy(&p, &target).map_err(|e| UserError::CopyFailed { name: name.to_string_lossy().into_owned(), detail: e.to_string() })?;
             let _ = std::fs::remove_file(&p);
         }
         kept.push(target.to_string_lossy().into_owned());

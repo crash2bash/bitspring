@@ -19,6 +19,7 @@ use ndk::audio::{
     AudioSharingMode, AudioStream, AudioStreamBuilder, AudioUsage,
 };
 
+use crate::UserError;
 use crate::decode::Track;
 use crate::output::{self, OutBuf, OutFormat, PlayOptions, Playback, SignalPath, StreamFormat, Transport};
 use crate::rate::RateRange;
@@ -239,13 +240,13 @@ pub struct Device {
 /// priority for picking the default (higher wins: what the user plugged in last-ish).
 fn classify(kind: i32) -> Option<(Transport, Option<&'static str>, u8)> {
     Some(match kind {
-        2 => (Transport::BuiltIn, Some("Динамик"), 1),            // TYPE_BUILTIN_SPEAKER
-        3 | 4 => (Transport::BuiltIn, Some("Наушники"), 3),       // TYPE_WIRED_HEADSET / HEADPHONES
+        2 => (Transport::BuiltIn, Some("Speaker"), 1),             // TYPE_BUILTIN_SPEAKER
+        3 | 4 => (Transport::BuiltIn, Some("Headphones"), 3),      // TYPE_WIRED_HEADSET / HEADPHONES
         5 | 6 | 19 => (Transport::Other(kind as u32), None, 2),    // LINE_ANALOG / LINE_DIGITAL / AUX_LINE
         8 | 26 | 27 | 30 => (Transport::Bluetooth, None, 2),        // BLUETOOTH_A2DP / BLE_*
         9 | 10 | 29 => (Transport::Hdmi, None, 2),                  // HDMI / HDMI_ARC / HDMI_EARC
         11 | 12 | 22 => (Transport::Usb, None, 4),                  // USB_DEVICE / ACCESSORY / HEADSET
-        13 => (Transport::Other(kind as u32), Some("Док-станция"), 2),
+        13 => (Transport::Other(kind as u32), Some("Dock"), 2),
         _ => return None, // earpiece, telephony, remote submix, buses…
     })
 }
@@ -288,7 +289,7 @@ fn list() -> Result<Vec<DeviceInfo>> {
             DeviceInfo {
                 device: Device { id },
                 uid: format!("android:{id}"),
-                name: if name.trim().is_empty() { "Аудиовыход".into() } else { name },
+                name: if name.trim().is_empty() { "Audio output".into() } else { name },
                 transport,
                 output_channels: channels,
                 nominal_rate: *rates.last().unwrap() as f64,
@@ -307,11 +308,11 @@ pub fn output_devices() -> Result<Vec<DeviceInfo>> {
 
 impl Device {
     pub fn default_output() -> Result<Self> {
-        list()?.into_iter().find(|d| d.is_default).map(|d| d.device).ok_or_else(|| anyhow!("нет устройства вывода"))
+        list()?.into_iter().find(|d| d.is_default).map(|d| d.device).ok_or_else(|| UserError::NoDevice.into())
     }
 
     pub fn info(&self) -> Result<DeviceInfo> {
-        list()?.into_iter().find(|d| d.device == *self).ok_or_else(|| anyhow!("устройство не найдено — отключено?"))
+        list()?.into_iter().find(|d| d.device == *self).ok_or_else(|| UserError::DeviceNotFound.into())
     }
 
     /// DoP needs the bit-perfect mixer at `dsd_rate / 16` in an integer format of ≥ 24 bits.
@@ -339,7 +340,7 @@ pub struct Player {
     stream: AudioStream,
     io: Box<IoContext>,
     bit_perfect: bool,
-    failure: Arc<Mutex<Option<String>>>,
+    failure: Arc<Mutex<Option<UserError>>>,
     pub path: SignalPath,
 }
 
@@ -429,7 +430,7 @@ impl Player {
                     AudioCallbackResult::Continue
                 }))
                 .error_callback(Box::new(move |_s, e| {
-                    let msg = if e == AudioError::Disconnected { "устройство отключено".to_string() } else { format!("ошибка вывода: {e}") };
+                    let msg = if e == AudioError::Disconnected { UserError::DeviceUnplugged } else { UserError::OutputFailed { detail: e.to_string() } };
                     *failure.lock().unwrap() = Some(msg);
                     // SAFETY: as above.
                     unsafe { &*(io_addr as *const IoContext) }.playback.set_paused(true);
@@ -441,7 +442,7 @@ impl Player {
                     if bit_perfect {
                         clear_bit_perfect(device.id);
                     }
-                    bail!("не удалось открыть {}: {e}", info.name.trim());
+                    bail!(UserError::OpenFailed { device: info.name.trim().to_string(), detail: e.to_string() });
                 }
             }
         };
@@ -450,7 +451,7 @@ impl Player {
             if bit_perfect {
                 clear_bit_perfect(device.id);
             }
-            bail!("{} открылся в другом формате ({} Гц) — попробуйте ещё раз", info.name.trim(), got);
+            bail!(UserError::OtherFormat { device: info.name.trim().to_string(), khz: got as f64 / 1000.0 });
         }
         let physical = StreamFormat {
             sample_rate: rate as f64,
@@ -460,7 +461,7 @@ impl Player {
             non_mixable: bit_perfect,
         };
         let path = output::signal_path(&track, opts, &plan, rate as f64, Some(physical), format, bit_perfect, info.transport);
-        stream.request_start().map_err(|e| anyhow!("AAudio start: {e}")).context("старт вывода")?;
+        stream.request_start().map_err(|e| anyhow!("AAudio start: {e}")).context("starting output")?;
         Ok(Self { device, stream, io, bit_perfect, failure, path })
     }
 
@@ -469,7 +470,7 @@ impl Player {
     }
 
     /// The device went away (unplugged) or AAudio failed mid-stream; playback is paused.
-    pub fn output_error(&self) -> Option<String> {
+    pub fn output_error(&self) -> Option<UserError> {
         self.failure.lock().unwrap().clone()
     }
 }

@@ -28,6 +28,7 @@ use windows::Win32::System::Threading::AvSetMmThreadCharacteristicsW;
 use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
 use windows::core::w;
 
+use crate::UserError;
 use crate::decode::Track;
 use crate::output::{self, OutBuf, OutFormat, PlayOptions, Playback, SignalPath, StreamFormat, Transport};
 use crate::rate::RateRange;
@@ -55,15 +56,13 @@ fn wasapi_err(e: WasapiError) -> anyhow::Error {
     if let WasapiError::Windows(w) = &e {
         let code = w.code();
         if code == AUDCLNT_E_DEVICE_IN_USE {
-            return anyhow!("устройство занято другим приложением в монопольном режиме");
+            return UserError::DeviceBusy.into();
         }
         if code == AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED {
-            return anyhow!(
-                "монопольный режим запрещён: Параметры звука → устройство → Дополнительно → «Разрешить приложениям использовать устройство в монопольном режиме»"
-            );
+            return UserError::ExclusiveDisabled.into();
         }
         if code == AUDCLNT_E_UNSUPPORTED_FORMAT {
-            return anyhow!("устройство не принимает этот формат");
+            return UserError::FormatRefused.into();
         }
     }
     anyhow!("WASAPI: {e}")
@@ -104,7 +103,7 @@ impl Device {
     fn open(&self) -> Result<wasapi::Device> {
         com();
         let e = wasapi::DeviceEnumerator::new().map_err(wasapi_err)?;
-        e.get_device(&self.id).map_err(|_| anyhow!("устройство не найдено — отключено?"))
+        e.get_device(&self.id).map_err(|_| UserError::DeviceNotFound.into())
     }
 
     pub fn info(&self) -> Result<DeviceInfo> {
@@ -214,7 +213,7 @@ pub struct Player {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     /// Why the stream thread stopped early (device unplugged), if it did.
-    failure: Arc<Mutex<Option<String>>>,
+    failure: Arc<Mutex<Option<UserError>>>,
     pub path: SignalPath,
 }
 
@@ -243,7 +242,7 @@ impl Player {
             std::thread::Builder::new().name("hifi-wasapi".into()).spawn(move || {
                 if let Err(e) = stream_thread(&id, exclusive, target, dop, &fmt_tx, &pb_rx, &stop) {
                     // Before negotiation the error goes back to `start`; after, it's a failure.
-                    let msg = format!("{e:#}");
+                    let msg = UserError::of(&e);
                     if fmt_tx.try_send(Err(e)).is_err() {
                         *failure.lock().unwrap() = Some(msg);
                     }
@@ -284,7 +283,7 @@ impl Player {
     }
 
     /// The device went away mid-stream (unplugged, or taken by another app).
-    pub fn output_error(&self) -> Option<String> {
+    pub fn output_error(&self) -> Option<UserError> {
         self.failure.lock().unwrap().clone()
     }
 }
@@ -315,7 +314,7 @@ fn stream_thread(
 
     let (wf, format, mode) = if exclusive {
         let (wf, format) = exclusive_format(&client, target, 2, dop)
-            .ok_or_else(|| anyhow!("устройство не принимает {} кГц в монопольном режиме", target as f64 / 1000.0))?;
+            .ok_or(UserError::RateRefused { khz: target as f64 / 1000.0 })?;
         let (default_period, _) = client.get_device_period().map_err(wasapi_err)?;
         let period = client.calculate_aligned_period_near(default_period, Some(128), &wf).map_err(wasapi_err)?;
         (wf, format, StreamMode::EventsExclusive { period_hns: period })
@@ -391,17 +390,17 @@ fn stream_thread(
             // No buffer request for 200 ms: the device is gone (or the system is stalling).
             timeouts += 1;
             if timeouts >= 10 {
-                break Err(anyhow!("устройство перестало отвечать"));
+                break Err(UserError::DeviceStalled.into());
             }
             continue;
         }
         timeouts = 0;
         let frames = match client.get_available_space_in_frames() {
             Ok(f) => f as usize,
-            Err(e) => break Err(wasapi_err(e)).context("устройство отключено"),
+            Err(e) => break Err(wasapi_err(e)).context(UserError::DeviceUnplugged),
         };
         if let Err(e) = write(frames.min(buffer_frames)) {
-            break Err(e).context("устройство отключено");
+            break Err(e).context(UserError::DeviceUnplugged);
         }
     };
     let _ = client.stop_stream();

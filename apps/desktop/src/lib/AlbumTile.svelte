@@ -1,21 +1,22 @@
 <script lang="ts">
-  import { coverUrl, resolution, type Album } from "./api";
+  import { artistLabel, coverUrl, resolution, type Album } from "./api";
+  import { t } from "./i18n.svelte";
 
   let { album, playing = false, onopen }: { album: Album; playing?: boolean; onopen: (a: Album) => void } = $props();
   let broken = $state(false);
 </script>
 
-<button class="tile" onclick={() => onopen(album)} title={`${album.artist} — ${album.title}`}>
+<button class="tile" onclick={() => onopen(album)} title={`${artistLabel(album.artist)} — ${album.title}`}>
   <span class="art">
     {#if album.hasCover && !broken}
       <img src={coverUrl(album.id)} alt="" loading="lazy" decoding="async" onerror={() => (broken = true)} />
     {:else}
       <span class="initial" aria-hidden="true">{album.title.slice(0, 1)}</span>
     {/if}
-    {#if playing}<span class="now" aria-label="Играет">Играет</span>{/if}
+    {#if playing}<span class="now">{t("common.playing")}</span>{/if}
   </span>
   <span class="title">{album.title}</span>
-  <span class="artist">{album.artist}</span>
+  <span class="artist">{artistLabel(album.artist)}</span>
   <span class="meta">
     {#if album.year}<span class="num">{album.year}</span>{/if}
     <span class="fmt" class:hi={album.hiRes} class:lossy={album.format === "MP3" || album.format === "AAC" || album.format === "Vorbis"}>
@@ -28,7 +29,7 @@
   .tile {
     display: flex;
     flex-direction: column;
-    text-align: left;
+    text-align: start;
     min-width: 0;
     gap: 2px;
     border-radius: 8px;
@@ -66,7 +67,7 @@
   }
   .now {
     position: absolute;
-    left: 8px;
+    inset-inline-start: 8px;
     bottom: 8px;
     padding: 2px 8px;
     border-radius: 4px;

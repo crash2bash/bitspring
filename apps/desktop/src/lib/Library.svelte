@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, coverUrl, inTauri, isAndroid, isIOS, longDuration, resolution, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
+  import { api, artistLabel, coverUrl, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
+  import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
   import TrackTable, { type SortKey } from "./TrackTable.svelte";
 
@@ -58,18 +59,14 @@
     save("hiResOnly", hiResOnly);
   });
 
-  const collator = new Intl.Collator("ru", { numeric: true, sensitivity: "base" });
-  const UNKNOWN = "Неизвестный исполнитель";
-  /** Artist order, with untagged music always last instead of first among Cyrillic names. */
-  const byArtist = (a: string, b: string) => Number(a === UNKNOWN) - Number(b === UNKNOWN) || collator.compare(a, b);
+  const collator = $derived(makeCollator());
+  /** Groups without a name (untagged artist, no genre): always last. */
+  const NO_GENRE = "\u0000no-genre";
+  const unnamed = (s: string) => s === UNKNOWN_ARTIST || s === NO_GENRE;
+  const byArtist = (a: string, b: string) => Number(unnamed(a)) - Number(unnamed(b)) || collator.compare(a, b);
+  /** A group name as shown. */
+  const groupLabel = (s: string) => (s === NO_GENRE ? t("lib.noGenre") : artistLabel(s));
   const q = $derived(query.trim().toLowerCase());
-
-  function plural(n: number, [one, few, many]: [string, string, string]) {
-    const m10 = n % 10,
-      m100 = n % 100;
-    const w = m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
-    return `${n.toLocaleString("ru-RU")} ${w}`;
-  }
 
   // ---- derived data ---------------------------------------------------------------------------
   let addedAt = $derived.by(() => {
@@ -80,7 +77,7 @@
 
   let visibleAlbums = $derived.by(() => {
     let list = albums.filter((a) => !hiResOnly || a.hiRes);
-    if (q) list = list.filter((a) => `${a.title} ${a.artist} ${a.genre ?? ""} ${a.year ?? ""}`.toLowerCase().includes(q));
+    if (q) list = list.filter((a) => `${a.title} ${artistLabel(a.artist)} ${a.genre ?? ""} ${a.year ?? ""}`.toLowerCase().includes(q));
     const by: Record<AlbumSort, (a: Album, b: Album) => number> = {
       artist: (a, b) => byArtist(a.artist, b.artist) || collator.compare(a.year ?? "", b.year ?? ""),
       title: (a, b) => collator.compare(a.title, b.title),
@@ -105,7 +102,7 @@
     return [...m.entries()].sort((x, y) => byArtist(x[0], y[0]));
   }
   let artists = $derived(groupBy((a) => a.artist));
-  let genres = $derived(groupBy((a) => a.genre ?? "Без жанра"));
+  let genres = $derived(groupBy((a) => a.genre ?? NO_GENRE));
 
   let shelf = $derived(
     view === "artists" && artist
@@ -146,7 +143,7 @@
   });
 
   const same = (a: string | null | undefined, b: string | null | undefined) =>
-    !!a && !!b && a.localeCompare(b, "ru", { sensitivity: "base" }) === 0;
+    !!a && !!b && a.localeCompare(b, i18n.locale.tag, { sensitivity: "base" }) === 0;
 
   function show(g: LibraryGoto) {
     query = "";
@@ -197,7 +194,7 @@
       return;
     }
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({ directory: true, multiple: false, title: "Папка с музыкой" });
+    const picked = await open({ directory: true, multiple: false, title: t("dialog.musicFolder") });
     if (typeof picked === "string") status = await api.libraryAddFolder(picked);
   }
 
@@ -209,95 +206,83 @@
     if (foldersOpen && foldersRoot && !e.composedPath().includes(foldersRoot)) foldersOpen = false;
   }
 
-  const VIEWS: [View, string][] = [
-    ["albums", "Альбомы"],
-    ["artists", "Исполнители"],
-    ["tracks", "Треки"],
-    ["genres", "Жанры"],
-  ];
+  const VIEWS: View[] = ["albums", "artists", "tracks", "genres"];
+  const nothing = $derived(q ? t("lib.nothingFor", { q: query.trim() }) : t("lib.nothing"));
 </script>
 
 <svelte:window onclick={onWindowClick} />
 
-<section class="library" aria-label="Медиатека">
+<section class="library" aria-label={t("lib.label")}>
   <div class="toolbar">
-    <div class="seg" role="tablist" aria-label="Раздел медиатеки">
-      {#each VIEWS as [v, label] (v)}
-        <button role="tab" aria-selected={view === v} class:sel={view === v} onclick={() => ((view = v), (openAlbum = null))}>{label}</button>
+    <div class="seg" role="tablist" aria-label={t("lib.section")}>
+      {#each VIEWS as v (v)}
+        <button role="tab" aria-selected={view === v} class:sel={view === v} onclick={() => ((view = v), (openAlbum = null))}>{t(`lib.${v}`)}</button>
       {/each}
     </div>
 
-    <input class="search" type="search" placeholder="Поиск" bind:value={query} aria-label="Поиск по медиатеке" />
+    <input class="search" type="search" placeholder={t("lib.search")} bind:value={query} aria-label={t("lib.searchLabel")} />
 
     {#if view !== "tracks" && !openAlbum}
       <label class="sort">
-        <select bind:value={albumSort} aria-label="Сортировка альбомов">
-          <option value="artist">по исполнителю</option>
-          <option value="title">по названию</option>
-          <option value="year">по году</option>
-          <option value="added">недавно добавленные</option>
+        <select bind:value={albumSort} aria-label={t("lib.sortLabel")}>
+          {#each ["artist", "title", "year", "added"] as k (k)}
+            <option value={k}>{t(`lib.sort.${k}`)}</option>
+          {/each}
         </select>
       </label>
     {/if}
 
-    <label class="hires"><input type="checkbox" bind:checked={hiResOnly} />Только hi-res</label>
+    <label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>
 
     <div class="folders" bind:this={foldersRoot}>
       <button
         class="folders-btn"
         onclick={() => (foldersOpen = !foldersOpen)}
         aria-expanded={foldersOpen}
-        title={status ? `${plural(status.tracks, ["трек", "трека", "треков"])} в ${plural(status.folders.length, ["папке", "папках", "папках"])}. Нажмите, чтобы изменить папки.` : ""}
+        title={status ? t("lib.foldersTip", { tracks: tn("lib.nTracks", status.tracks), folders: tn("lib.inFolders", status.folders.length) }) : ""}
       >
         {#if status?.scanning}
-          Сканирую {status.scanning[0].toLocaleString("ru-RU")} из {status.scanning[1].toLocaleString("ru-RU")}
+          {t("lib.scanning", { done: num(status.scanning[0]), total: num(status.scanning[1]) })}
         {:else if status}
-          {plural(status.albums, ["альбом", "альбома", "альбомов"])}
+          {tn("lib.nAlbums", status.albums)}
         {/if}
       </button>
       {#if foldersOpen && status}
-        <div class="folders-panel" role="dialog" aria-label="Папки медиатеки">
+        <div class="folders-panel" role="dialog" aria-label={t("lib.foldersDialog")}>
           {#if isAndroid}
-          <p class="fp-title">Музыка на телефоне</p>
-          <p class="fp-empty">
-            Медиатека — папка Music во внутренней памяти телефона. Скопируйте туда альбомы по USB с
-            компьютера или любым файловым менеджером. DSD-файлы (DSF, DFF) Android приложениям из
-            Music не показывает — их кладите в Android/data/dev.local.hifi/files/Music.
-          </p>
+          <p class="fp-title">{t("lib.androidTitle")}</p>
+          <p class="fp-empty">{t("lib.androidHelp")}</p>
           <div class="fp-actions">
-            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>Пересканировать</button>
+            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>{t("common.rescan")}</button>
           </div>
           {:else if isIOS}
-          <p class="fp-title">Музыка на iPhone</p>
-          <p class="fp-empty">
-            Медиатека — это папка приложения: Файлы → На iPhone → Hifi. Скопируйте туда альбомы через
-            «Файлы» или Finder на Mac (iPhone → Файлы), либо добавьте файлы здесь.
-          </p>
+          <p class="fp-title">{t("lib.iosTitle")}</p>
+          <p class="fp-empty">{t("lib.iosHelp")}</p>
           <div class="fp-actions">
-            <button class="primary" onclick={importFiles}>Добавить файлы</button>
-            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>Пересканировать</button>
+            <button class="primary" onclick={importFiles}>{t("common.addFiles")}</button>
+            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>{t("common.rescan")}</button>
           </div>
           {:else}
-          <p class="fp-title">Папки с музыкой</p>
+          <p class="fp-title">{t("lib.foldersTitle")}</p>
           {#if status.folders.length}
             <ul>
               {#each status.folders as f (f)}
                 <li>
                   <span title={f}>{f}</span>
-                  <button onclick={async () => (status = await api.libraryRemoveFolder(f))} aria-label={`Убрать папку ${f}`}>Убрать</button>
+                  <button onclick={async () => (status = await api.libraryRemoveFolder(f))} aria-label={t("lib.removeFolder", { path: f })}>{t("lib.remove")}</button>
                 </li>
               {/each}
             </ul>
           {:else}
-            <p class="fp-empty">Папок пока нет.</p>
+            <p class="fp-empty">{t("lib.noFolders")}</p>
           {/if}
           <div class="fp-actions">
-            <button class="primary" onclick={addFolder}>Добавить папку</button>
-            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>Пересканировать</button>
+            <button class="primary" onclick={addFolder}>{t("lib.addFolder")}</button>
+            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>{t("common.rescan")}</button>
           </div>
           {/if}
           {#if status.failed}
-            <p class="fp-failed">{plural(status.failed, ["файл не прочитан", "файла не прочитаны", "файлов не прочитаны"])} — повреждены или формат не поддерживается.</p>
+            <p class="fp-failed">{tn("lib.failed", status.failed)}</p>
           {/if}
         </div>
       {/if}
@@ -307,55 +292,52 @@
   <div class="body" bind:this={body}>
     {#if isAndroid && status && status.tracks === 0 && !status.scanning}
       <div class="empty">
-        <p class="empty-title">Медиатека пуста</p>
-        <p>
-          Скопируйте альбомы в папку Music во внутренней памяти телефона — по USB с компьютера или
-          файловым менеджером — и нажмите «Пересканировать». Если приложение спрашивало доступ к
-          музыке, его нужно разрешить.
-        </p>
-        <button class="primary" onclick={async () => (status = await api.libraryRescan())}>Пересканировать</button>
+        <p class="empty-title">{t("lib.empty")}</p>
+        <p>{t("lib.emptyAndroid")}</p>
+        <button class="primary" onclick={async () => (status = await api.libraryRescan())}>{t("common.rescan")}</button>
       </div>
     {:else if isIOS && status && status.tracks === 0 && !status.scanning}
       <div class="empty">
-        <p class="empty-title">Медиатека пуста</p>
-        <p>
-          Скопируйте альбомы в Файлы → На iPhone → Hifi (или с Mac через Finder: iPhone → Файлы → Hifi) —
-          медиатека найдёт их сама. Или добавьте файлы отсюда.
-        </p>
-        <button class="primary" onclick={importFiles}>Добавить файлы</button>
+        <p class="empty-title">{t("lib.empty")}</p>
+        <p>{t("lib.emptyIos")}</p>
+        <button class="primary" onclick={importFiles}>{t("common.addFiles")}</button>
       </div>
     {:else if status && status.folders.length === 0}
       <div class="empty">
-        <p class="empty-title">Медиатека пуста</p>
-        <p>Укажите папку с музыкой — например, Музыка в домашней папке или внешний диск. Файлы останутся на месте: приложение только читает теги и обложки.</p>
-        <button class="primary" onclick={addFolder}>Выбрать папку</button>
+        <p class="empty-title">{t("lib.empty")}</p>
+        <p>{t("lib.emptyDesktop")}</p>
+        <button class="primary" onclick={addFolder}>{t("lib.chooseFolder")}</button>
       </div>
     {:else if openAlbum}
       <div class="album">
         <button class="back" onclick={() => (openAlbum = null)}>
           <svg width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M7 1L2 6l5 5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
-          Назад
+          {t("lib.back")}
         </button>
         <div class="album-head">
           <div class="album-art">
             {#if openAlbum.hasCover}
-              <img src={coverUrl(openAlbum.id)} alt={`Обложка альбома ${openAlbum.title}`} />
+              <img src={coverUrl(openAlbum.id)} alt={t("common.cover", { album: openAlbum.title })} />
             {:else}
               <span class="initial" aria-hidden="true">{openAlbum.title.slice(0, 1)}</span>
             {/if}
           </div>
           <div class="album-info">
             <h2>{openAlbum.title}</h2>
-            <button class="artist-link" onclick={() => ((artist = openAlbum!.artist), (view = "artists"), (openAlbum = null))}>{openAlbum.artist}</button>
+            <button class="artist-link" onclick={() => ((artist = openAlbum!.artist), (view = "artists"), (openAlbum = null))}>{artistLabel(openAlbum.artist)}</button>
             <p class="facts">
-              {[openAlbum.year, openAlbum.genre, plural(openAlbum.trackCount, ["трек", "трека", "треков"]), longDuration(openAlbum.duration)].filter(Boolean).join(", ")}
+              {list([openAlbum.year, openAlbum.genre, tn("lib.nTracks", openAlbum.trackCount), longDuration(openAlbum.duration)])}
             </p>
             <p class="facts fmt" class:hi={openAlbum.hiRes}>
-              {openAlbum.format}{openAlbum.maxBits ? `, ${resolution(openAlbum.maxBits, openAlbum.maxRate)}${openAlbum.maxBits === 1 ? "" : " кГц"}` : ""}{openAlbum.hiRes ? ", hi-res" : ""}
+              {list([
+                openAlbum.format,
+                !!openAlbum.maxBits && `${resolution(openAlbum.maxBits, openAlbum.maxRate)}${openAlbum.maxBits === 1 ? "" : ` ${t("unit.khz")}`}`,
+                openAlbum.hiRes && "hi-res",
+              ])}
             </p>
             <div class="album-actions">
-              <button class="primary" onclick={() => playAlbum(openAlbum!)}>Играть</button>
-              <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>В очередь</button>
+              <button class="primary" onclick={() => playAlbum(openAlbum!)}>{t("common.play")}</button>
+              <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("lib.enqueue")}</button>
             </div>
           </div>
         </div>
@@ -377,24 +359,24 @@
           onplay={(list, i) => onplay(list.map((t) => t.path), i)}
         />
       {:else}
-        <p class="none">Ничего не найдено{q ? ` по запросу «${query.trim()}»` : ""}.</p>
+        <p class="none">{nothing}</p>
       {/if}
     {:else}
       <div class="browse" class:split={view === "artists" || view === "genres"}>
         {#if view === "artists" || view === "genres"}
           {@const groups = view === "artists" ? artists : genres}
           {@const picked = view === "artists" ? artist : genre}
-          <ul class="index" aria-label={view === "artists" ? "Исполнители" : "Жанры"}>
+          <ul class="index" aria-label={t(`lib.${view}`)}>
             <li>
               <button class:sel={!picked} onclick={() => (view === "artists" ? (artist = null) : (genre = null))}>
-                {view === "artists" ? "Все исполнители" : "Все жанры"}
+                {t(view === "artists" ? "lib.allArtists" : "lib.allGenres")}
                 <span class="count num">{visibleAlbums.length}</span>
               </button>
             </li>
-            {#each groups as [name, list] (name)}
+            {#each groups as [name, albumsOf] (name)}
               <li>
                 <button class:sel={picked === name} onclick={() => (view === "artists" ? (artist = name) : (genre = name))}>
-                  {name}<span class="count num">{list.length}</span>
+                  {groupLabel(name)}<span class="count num">{albumsOf.length}</span>
                 </button>
               </li>
             {/each}
@@ -407,7 +389,7 @@
             {/each}
           </div>
         {:else}
-          <p class="none">Ничего не найдено{q ? ` по запросу «${query.trim()}»` : ""}.</p>
+          <p class="none">{nothing}</p>
         {/if}
       </div>
     {/if}
@@ -492,7 +474,7 @@
 
   .folders {
     position: relative;
-    margin-left: auto;
+    margin-inline-start: auto;
     min-width: 0;
   }
   .folders-btn {
@@ -509,7 +491,7 @@
   }
   .folders-panel {
     position: absolute;
-    right: 0;
+    inset-inline-end: 0;
     top: calc(100% + 6px);
     width: 380px;
     z-index: 20;
@@ -541,7 +523,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     direction: rtl;
-    text-align: left;
+    text-align: start;
   }
   .folders-panel li button {
     color: var(--mist);
@@ -600,7 +582,7 @@
     display: flex;
     justify-content: space-between;
     gap: 8px;
-    text-align: left;
+    text-align: start;
     padding: 7px 10px;
     border-radius: var(--r-md);
     font-size: var(--t-sm);
@@ -622,6 +604,10 @@
 
   .album {
     padding: 16px 24px 32px;
+  }
+  /* the back chevron points against the reading direction */
+  :global([dir="rtl"]) .back svg {
+    transform: scaleX(-1);
   }
   .back {
     display: inline-flex;

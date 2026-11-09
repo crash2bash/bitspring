@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, inTauri, isMac, isIOS, isAndroid, fileName, trackName, khz, dsdName, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import { api, inTauri, isMac, isIOS, isAndroid, fileName, trackName, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import { i18n, sentences, t } from "$lib/i18n.svelte";
+  import Settings from "$lib/Settings.svelte";
   import Library from "$lib/Library.svelte";
   import DevicePicker from "$lib/DevicePicker.svelte";
   import Display from "$lib/Display.svelte";
@@ -54,7 +56,7 @@
     screen = "library";
   }
   $effect(() => save("screen", screen));
-  /** The library tab on a phone is "Медиатека" alone; a desktop window shows the queue beside everything. */
+  /** The library tab on a phone is the library alone; a desktop window shows the queue beside everything. */
   const phone = typeof window !== "undefined" ? window.matchMedia("(max-width: 700px)") : null;
   onMount(() => {
     const fit = () => {
@@ -74,7 +76,7 @@
         selected = (devices.find((d) => d.isDefault) ?? devices[0])?.uid ?? "";
       }
     } catch (e) {
-      error = `Не удалось получить список устройств: ${e}`;
+      error = t("err.devices", { error: errorText(e) });
     }
   }
 
@@ -90,7 +92,7 @@
       error = null;
       sweepKey++;
     } catch (e) {
-      error = `Не удалось воспроизвести «${fileName(queue[i])}»: ${e}`;
+      error = t("err.play", { name: fileName(queue[i]), error: errorText(e) });
       index = i;
     } finally {
       loading = false;
@@ -100,7 +102,7 @@
   async function addPaths(paths: string[]) {
     const files = await api.expandPaths(paths);
     if (!files.length) {
-      error = "В перетащенном нет аудиофайлов. Поддерживаются FLAC, WAV, AIFF, ALAC, MP3, OGG.";
+      error = t("err.noAudio");
       return;
     }
     const first = queue.length;
@@ -119,11 +121,11 @@
       try {
         await addPaths(await api.importFiles(Array.isArray(picked) ? picked : [picked]));
       } catch (e) {
-        error = `Не удалось добавить файлы: ${e}`;
+        error = t("err.addFiles", { error: errorText(e) });
       }
       return;
     }
-    const picked = await open({ multiple: true, filters: [{ name: "Аудио", extensions: AUDIO_EXTENSIONS }] });
+    const picked = await open({ multiple: true, filters: [{ name: t("dialog.audio"), extensions: AUDIO_EXTENSIONS }] });
     if (picked) await addPaths(Array.isArray(picked) ? picked : [picked]);
   }
 
@@ -181,11 +183,11 @@
       error = null;
       sweepKey++;
       now = {
-        path: "", title: "Проверка каналов", artist: "Сначала низкий тон в левом ухе, затем высокий в правом",
+        path: "", title: t("test.title"), artist: t("test.subtitle"),
         album: null, year: null, cover: null, channels: 2, duration: 3, deviceName, signal, rev: knownRev,
       };
     } catch (e) {
-      error = `Проверка каналов не запустилась: ${e}`;
+      error = t("err.test", { error: errorText(e) });
     }
   }
 
@@ -202,7 +204,7 @@
       }
       error = null;
     } catch (e) {
-      error = `Не удалось применить обработку: ${e}`;
+      error = t("err.dsp", { error: errorText(e) });
       // An unreadable EQ file shouldn't take the rest of the settings down with it.
       if (next.eqPath && next.eqPath !== dsp.eqPath) return;
       if (next.eqPath) await applyDsp({ ...next, eqPath: null });
@@ -212,7 +214,7 @@
   async function pickEq() {
     if (!inTauri) return applyDsp({ ...dsp, eqPath: "/Users/me/AutoEq/Audeze LCD-2 ParametricEQ.txt" });
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({ multiple: false, filters: [{ name: "Профиль AutoEQ", extensions: ["txt"] }] });
+    const picked = await open({ multiple: false, filters: [{ name: t("dialog.autoeq"), extensions: ["txt"] }] });
     if (typeof picked === "string") await applyDsp({ ...dsp, eqPath: picked });
   }
 
@@ -273,12 +275,13 @@
           sweepKey++;
         }
         if (status.queueIndex !== null) index = status.queueIndex;
-        if (status.advanceError) error = status.advanceError;
+        if (status.advanceError) error = t("err.play", { name: status.advanceError.name, error: errorText(status.advanceError.error) });
       }
       // iPhone: the output route changed (DAC unplugged) — pick up the new one; the device
       // effect above then restarts the track there, paused.
-      if (isIOS && status.error && status.error !== lastOutputError) refreshDevices();
-      lastOutputError = status.error;
+      const outputError = status.error && JSON.stringify(status.error);
+      if (isIOS && outputError && outputError !== lastOutputError) refreshDevices();
+      lastOutputError = outputError;
       if (status.finished && testing && !advancing) {
         advancing = true;
         testing = false;
@@ -313,23 +316,24 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="app" class:drag-over={dragOver}>
-  <header data-tauri-drag-region class:mac={isMac}>
+  <header data-tauri-drag-region class:mac={isMac} class:chrome-right={isMac && i18n.system.dir === "rtl"}>
     <span class="wordmark" data-tauri-drag-region>Hifi</span>
-    <nav class="tabs" aria-label="Экраны">
-      <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>Сейчас играет</button>
-      <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>Медиатека</button>
+    <nav class="tabs" aria-label={t("nav.screens")}>
+      <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>{t("nav.player")}</button>
+      <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>{t("nav.library")}</button>
     </nav>
     <div class="controls">
       <Enhancers settings={dsp} {eq} onchange={applyDsp} onpickeq={pickEq} />
       <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={refreshDevices} onchanneltest={channelTest} />
+      <Settings />
     </div>
   </header>
 
-  <aside class="queue" class:show={screen === "queue"} aria-label="Очередь">
+  <aside class="queue" class:show={screen === "queue"} aria-label={t("nav.queue")}>
     <div class="q-head">
-      <h2>Очередь</h2>
+      <h2>{t("nav.queue")}</h2>
       {#if queue.length}
-        <button class="q-clear" onclick={clearQueue}>Очистить</button>
+        <button class="q-clear" onclick={clearQueue}>{t("queue.clear")}</button>
       {/if}
     </div>
 
@@ -341,27 +345,27 @@
               <span class="q-n num">{i + 1}</span>
               <span class="q-name">{trackName(path)}</span>
             </button>
-            <button class="q-remove" onclick={() => removeAt(i)} aria-label={`Убрать «${trackName(path)}» из очереди`}>
+            <button class="q-remove" onclick={() => removeAt(i)} aria-label={t("queue.remove", { name: trackName(path) })}>
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.5" /></svg>
             </button>
           </li>
         {/each}
       </ol>
     {:else}
-      <p class="q-empty">{isAndroid ? "Включите альбом в медиатеке." : isIOS ? "Добавьте файлы из «Файлов» или включите альбом в медиатеке." : "Перетащите сюда файлы или папку с альбомом."}</p>
+      <p class="q-empty">{t(isAndroid ? "queue.emptyAndroid" : isIOS ? "queue.emptyIos" : "queue.empty")}</p>
     {/if}
 
     <!-- Android's file picker hands out content:// links, not files: music comes via the Music folder. -->
-    {#if !isAndroid}<button class="q-add" onclick={pickFiles}>Добавить файлы</button>{/if}
+    {#if !isAndroid}<button class="q-add" onclick={pickFiles}>{t("common.addFiles")}</button>{/if}
   </aside>
 
   {#if screen === "player" || screen === "queue"}
   <main class="panel" class:phone-hidden={screen === "queue"}>
     <div class="np">
       {#if now && !testing}
-        <button class="cover" onclick={() => goToLibrary("album")} title="Открыть альбом в медиатеке">
+        <button class="cover" onclick={() => goToLibrary("album")} title={t("np.openAlbum")}>
           {#if now.cover}
-            <img src={now.cover} alt={`Обложка альбома ${now.album ?? now.title}`} />
+            <img src={now.cover} alt={t("common.cover", { album: now.album ?? now.title })} />
           {:else}
             <span class="cover-initial" aria-hidden="true">{(now.album ?? now.title).slice(0, 1)}</span>
           {/if}
@@ -378,36 +382,37 @@
           <h1>{now.title}</h1>
           {#if now.artist}
             <p class="artist">
-              {#if testing}{now.artist}{:else}<button class="link" onclick={() => goToLibrary("artist")} title="Открыть исполнителя в медиатеке">{now.artist}</button>{/if}
+              {#if testing}{now.artist}{:else}<button class="link" onclick={() => goToLibrary("artist")} title={t("np.openArtist")}>{artistLabel(now.artist)}</button>{/if}
             </p>
           {/if}
           {#if now.album}
             <p class="album">
-              {#if testing}{now.album}{:else}<button class="link" onclick={() => goToLibrary("album")} title="Открыть альбом в медиатеке">{now.album}</button>{/if}{now.year ? `, ${now.year}` : ""}
+              {#if testing}{now.album}{:else}<button class="link" onclick={() => goToLibrary("album")} title={t("np.openAlbum")}><bdi>{now.album}</bdi></button>{/if}{now.year ? `${t("list.sep")}${now.year}` : ""}
             </p>
           {/if}
         {:else}
-          <h1 class="idle">Ничего не играет</h1>
-          <p class="album">{isAndroid ? "Выберите альбом в медиатеке." : isIOS ? "Добавьте файлы или выберите альбом в медиатеке." : "Перетащите альбом в окно или добавьте файлы."} Каждый трек целиком загружается в память и уходит в DAC без изменений.</p>
-          {#if !isAndroid}<button class="primary" onclick={pickFiles}>Добавить файлы</button>{/if}
+          <h1 class="idle">{t("np.idle")}</h1>
+          <p class="album">{sentences([t(isAndroid ? "np.hintAndroid" : isIOS ? "np.hintIos" : "np.hint"), t("np.promise")])}</p>
+          {#if !isAndroid}<button class="primary" onclick={pickFiles}>{t("common.addFiles")}</button>{/if}
         {/if}
       </div>
     </div>
 
-    <Display {now} {status} {testing} error={error ?? status.error} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
+    <Display {now} {status} {testing} error={error ?? (status.error && errorText(status.error))} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
 
-    <div class="keys">
-      <button class="key" onclick={prev} aria-label="Предыдущий трек" disabled={!now || testing}>
+    <!-- transport keys keep their tape direction in right-to-left languages -->
+    <div class="keys" dir="ltr">
+      <button class="key" onclick={prev} aria-label={t("common.prev")} disabled={!now || testing}>
         <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 4v14M18 4L8 11l10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
       </button>
-      <button class="play" onclick={togglePause} aria-label={status.active && !status.paused ? "Пауза" : "Играть"} disabled={loading || (!now && !queue.length)}>
+      <button class="play" onclick={togglePause} aria-label={t(status.active && !status.paused ? "common.pause" : "common.play")} disabled={loading || (!now && !queue.length)}>
         {#if status.active && !status.paused}
           <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true"><rect x="6" y="5" width="5" height="16" rx="1" fill="currentColor" /><rect x="15" y="5" width="5" height="16" rx="1" fill="currentColor" /></svg>
         {:else}
           <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true"><path d="M8 4.5v17l14-8.5z" fill="currentColor" /></svg>
         {/if}
       </button>
-      <button class="key" onclick={next} aria-label="Следующий трек" disabled={testing || index >= queue.length - 1}>
+      <button class="key" onclick={next} aria-label={t("common.next")} disabled={testing || index >= queue.length - 1}>
         <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
       </button>
     </div>
@@ -421,52 +426,52 @@
   {#if now && screen !== "player"}
     <div class="mini" style={`--p: ${status.duration ? (status.position / status.duration) * 100 : 0}%`}>
       <div class="mini-np">
-        <button class="mini-art" onclick={() => goToLibrary("album")} title="Открыть альбом" aria-label={`Открыть альбом ${now.album ?? ""}`}>
+        <button class="mini-art" onclick={() => goToLibrary("album")} title={t("mini.openAlbum")} aria-label={now.album ? t("mini.openAlbumNamed", { album: now.album }) : t("mini.openAlbum")}>
           {#if now.cover}<img src={now.cover} alt="" />{/if}
         </button>
         <span class="mini-text">
-          <button class="mini-title" onclick={() => (screen = "player")} title="Открыть плеер">{now.title}</button>
-          {#if now.artist}<button class="mini-artist" onclick={() => goToLibrary("artist")} title="Открыть исполнителя">{now.artist}</button>{/if}
+          <button class="mini-title" onclick={() => (screen = "player")} title={t("mini.openPlayer")}>{now.title}</button>
+          {#if now.artist}<button class="mini-artist" onclick={() => goToLibrary("artist")} title={t("mini.openArtist")}>{artistLabel(now.artist)}</button>{/if}
         </span>
       </div>
       <span class="mini-sig" class:ok={now.signal.bitPerfect}>
-        <i aria-hidden="true"></i>{#if now.signal.dop && now.signal.dsdRate}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {dsdName(now.signal.dsdRate)} DoP{:else}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {khz(now.signal.deviceRate)} кГц{/if}
+        <i aria-hidden="true"></i>{t(now.signal.bitPerfect ? "signal.bitPerfect" : "signal.processing")}{t("list.sep")}{#if now.signal.dop && now.signal.dsdRate}{dsdName(now.signal.dsdRate)} DoP{:else}{khz(now.signal.deviceRate)} {t("unit.khz")}{/if}
       </span>
-      <div class="mini-keys">
-        <button onclick={prev} aria-label="Предыдущий трек" disabled={testing}>
+      <div class="mini-keys" dir="ltr">
+        <button onclick={prev} aria-label={t("common.prev")} disabled={testing}>
           <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 4v14M18 4L8 11l10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
         </button>
-        <button class="mini-play" onclick={togglePause} aria-label={status.active && !status.paused ? "Пауза" : "Играть"}>
+        <button class="mini-play" onclick={togglePause} aria-label={t(status.active && !status.paused ? "common.pause" : "common.play")}>
           {#if status.active && !status.paused}
             <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><rect x="6" y="5" width="5" height="16" rx="1" fill="currentColor" /><rect x="15" y="5" width="5" height="16" rx="1" fill="currentColor" /></svg>
           {:else}
             <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><path d="M8 4.5v17l14-8.5z" fill="currentColor" /></svg>
           {/if}
         </button>
-        <button onclick={next} aria-label="Следующий трек" disabled={testing || index >= queue.length - 1}>
+        <button onclick={next} aria-label={t("common.next")} disabled={testing || index >= queue.length - 1}>
           <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
         </button>
       </div>
     </div>
   {/if}
 
-  <nav class="tabbar" aria-label="Экраны">
+  <nav class="tabbar" aria-label={t("nav.screens")}>
     <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6" /><circle cx="11" cy="11" r="2.2" fill="currentColor" /></svg>
-      Сейчас играет
+      {t("nav.player")}
     </button>
     <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="3" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
-      Медиатека
+      {t("nav.library")}
     </button>
     <button class:sel={screen === "queue"} aria-current={screen === "queue" ? "page" : undefined} onclick={() => (screen = "queue")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 5h16M3 11h16M3 17h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-      Очередь{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
+      {t("nav.queue")}{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
     </button>
   </nav>
 
   {#if dragOver}
-    <div class="drop-hint" aria-hidden="true"><p>Отпустите, чтобы добавить в очередь</p></div>
+    <div class="drop-hint" aria-hidden="true"><p>{t("queue.drop")}</p></div>
   {/if}
 </div>
 
@@ -499,6 +504,11 @@
   header.mac {
     padding-left: 88px;
   }
+  /* macOS in a right-to-left language puts the traffic lights on the right */
+  header.mac.chrome-right {
+    padding-left: 16px;
+    padding-right: 88px;
+  }
   .wordmark {
     font-family: var(--font-display);
     font-weight: 600;
@@ -508,8 +518,8 @@
   .tabs {
     display: flex;
     gap: 4px;
-    margin-left: 28px;
-    margin-right: auto;
+    margin-inline-start: 28px;
+    margin-inline-end: auto;
   }
   .tabs button {
     padding: 6px 12px;
@@ -562,7 +572,7 @@
     align-items: center;
     gap: 12px;
     min-width: 0;
-    text-align: left;
+    text-align: start;
   }
   .mini-art {
     width: 40px;
@@ -590,7 +600,7 @@
   }
   .mini-text button {
     max-width: 100%;
-    text-align: left;
+    text-align: start;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -657,7 +667,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border-right: 1px solid var(--slate-600);
+    border-inline-end: 1px solid var(--slate-600);
     background: var(--slate-900);
   }
   .q-head {
@@ -702,14 +712,15 @@
     display: flex;
     gap: 10px;
     align-items: baseline;
-    text-align: left;
-    padding: 8px 4px 8px 10px;
+    text-align: start;
+    padding-block: 8px;
+    padding-inline: 10px 4px;
   }
   .q-n {
     color: var(--mist-dim);
     font-size: var(--t-sm);
     width: 1.4em;
-    text-align: right;
+    text-align: end;
     flex: none;
   }
   .current .q-n {
@@ -846,7 +857,7 @@
     font-weight: 500;
   }
   .link {
-    text-align: left;
+    text-align: start;
     font: inherit;
     color: inherit;
   }
@@ -961,7 +972,7 @@
       display: none;
     }
     .controls {
-      margin-left: auto;
+      margin-inline-start: auto;
       min-width: 0;
       gap: 8px;
     }
@@ -979,7 +990,7 @@
     }
     .queue {
       display: none;
-      border-right: 0;
+      border-inline-end: 0;
     }
     .queue.show {
       display: flex;
@@ -1024,7 +1035,7 @@
     .badge {
       position: absolute;
       top: 3px;
-      left: calc(50% + 8px);
+      inset-inline-start: calc(50% + 8px);
       min-width: 18px;
       padding: 0 5px;
       border-radius: 9px;

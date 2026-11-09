@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Crossfeed, DspSettings, EqInfo } from "./api";
+  import { list, num, t, tn } from "./i18n.svelte";
 
   let {
     settings,
@@ -17,25 +18,15 @@
   let root: HTMLElement;
 
   let active = $derived(
-    [settings.upsampleKhz && "апсэмплинг", settings.eqPath && "эквалайзер", settings.crossfeed && "кроссфид"].filter(
+    [settings.upsampleKhz && t("enh.on.upsampling"), settings.eqPath && t("enh.on.eq"), settings.crossfeed && t("enh.on.crossfeed")].filter(
       Boolean,
     ) as string[],
   );
 
   let lossyOn = $derived(settings.headroom || settings.restoreHighs);
 
-  const UPSAMPLE: { value: number | null; label: string }[] = [
-    { value: null, label: "Выкл" },
-    { value: 192, label: "до 192" },
-    { value: 384, label: "до 384" },
-    { value: 768, label: "до 768" },
-  ];
-  const CROSSFEED: { value: Crossfeed | null; label: string }[] = [
-    { value: null, label: "Выкл" },
-    { value: "light", label: "Лёгкий" },
-    { value: "medium", label: "Средний" },
-    { value: "strong", label: "Сильный" },
-  ];
+  const UPSAMPLE: (number | null)[] = [null, 192, 384, 768];
+  const CROSSFEED: (Crossfeed | null)[] = [null, "light", "medium", "strong"];
 
   function set(patch: Partial<DspSettings>) {
     onchange({ ...settings, ...patch });
@@ -59,35 +50,32 @@
 
 <div class="enh" bind:this={root}>
   <button class="trigger" class:on={active.length > 0} onclick={() => (open = !open)} aria-expanded={open} aria-haspopup="dialog">
-    <span>Обработка</span>
-    <span class="state">{active.length ? active.join(", ") : lossyOn ? "только MP3 и AAC" : "выключена"}</span>
+    <span>{t("enh.button")}</span>
+    <span class="state">{active.length ? list(active) : t(lossyOn ? "enh.lossyOnly" : "enh.off")}</span>
   </button>
 
   {#if open}
-    <div class="panel" role="dialog" aria-label="Обработка звука">
+    <div class="panel" role="dialog" aria-label={t("enh.dialog")}>
       <fieldset>
-        <legend>Апсэмплинг</legend>
-        <div class="seg" role="radiogroup" aria-label="Апсэмплинг">
-          {#each UPSAMPLE as o (o.label)}
-            <button role="radio" aria-checked={settings.upsampleKhz === o.value} class:sel={settings.upsampleKhz === o.value} onclick={() => set({ upsampleKhz: o.value })}>
-              {o.label}{o.value ? " кГц" : ""}
+        <legend>{t("enh.upsampling")}</legend>
+        <div class="seg" role="radiogroup" aria-label={t("enh.upsampling")}>
+          {#each UPSAMPLE as v (v)}
+            <button role="radio" aria-checked={settings.upsampleKhz === v} class:sel={settings.upsampleKhz === v} onclick={() => set({ upsampleKhz: v })}>
+              {v ? t("enh.upTo", { rate: num(v) }) : t("enh.offShort")}
             </button>
           {/each}
         </div>
-        <p class="help">
-          Пересчитывает трек в самую высокую частоту того же семейства, которую принимает DAC
-          (44,1 → 352,8, 48 → 384). Фильтр с линейной фазой, подавление около 100 дБ.
-        </p>
+        <p class="help">{t("enh.upsamplingHelp", { a: num(44.1), b: num(352.8) })}</p>
       </fieldset>
 
       <fieldset>
-        <legend>Эквалайзер</legend>
+        <legend>{t("enh.eq")}</legend>
         {#if eq}
           <div class="eq-head">
             <span class="eq-name">{eq.name}</span>
-            <span class="eq-meta num">{eq.bands.length} полос, предусиление {eq.preamp.toLocaleString("ru-RU")} дБ</span>
+            <span class="eq-meta num">{t("enh.eqMeta", { bands: tn("enh.bands", eq.bands.length), db: num(eq.preamp) })}</span>
           </div>
-          <svg class="curve" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Кривая эквалайзера">
+          <svg class="curve" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("enh.eqCurve")}>
             {#each [100, 1000, 10000] as f (f)}
               <line x1={x(f)} x2={x(f)} y1="0" y2={H} class="grid" />
               <text x={x(f) + 3} y={H - 4} class="tick">{f >= 1000 ? `${f / 1000}k` : f}</text>
@@ -96,62 +84,49 @@
             <path d={curvePath} class="line" />
           </svg>
           <div class="row">
-            <button class="link" onclick={onpickeq}>Выбрать другой профиль</button>
-            <button class="link" onclick={() => set({ eqPath: null })}>Выключить</button>
+            <button class="link" onclick={onpickeq}>{t("enh.eqOther")}</button>
+            <button class="link" onclick={() => set({ eqPath: null })}>{t("enh.eqOff")}</button>
           </div>
         {:else}
-          <button class="load" onclick={onpickeq}>Загрузить профиль AutoEQ</button>
-          <p class="help">
-            Файл ParametricEQ.txt для вашей модели и ревизии наушников — их публикует проект AutoEQ.
-            У разных ревизий LCD-2 разная АЧХ, поэтому профиль нужен именно под вашу.
-          </p>
+          <button class="load" onclick={onpickeq}>{t("enh.eqLoad")}</button>
+          <p class="help">{t("enh.eqHelp")}</p>
         {/if}
       </fieldset>
 
       <fieldset>
-        <legend>Кроссфид</legend>
-        <div class="seg" role="radiogroup" aria-label="Кроссфид">
-          {#each CROSSFEED as o (o.label)}
-            <button role="radio" aria-checked={settings.crossfeed === o.value} class:sel={settings.crossfeed === o.value} onclick={() => set({ crossfeed: o.value })}>
-              {o.label}
+        <legend>{t("enh.crossfeed")}</legend>
+        <div class="seg" role="radiogroup" aria-label={t("enh.crossfeed")}>
+          {#each CROSSFEED as v (v)}
+            <button role="radio" aria-checked={settings.crossfeed === v} class:sel={settings.crossfeed === v} onclick={() => set({ crossfeed: v })}>
+              {v ? t(`enh.cf.${v}`) : t("enh.offShort")}
             </button>
           {/each}
         </div>
-        <p class="help">
-          Подмешивает в каждое ухо приглушённую копию соседнего канала, как при прослушивании колонок.
-          Убирает ощущение «звука внутри головы» на записях с жёсткой стереопанорамой.
-        </p>
+        <p class="help">{t("enh.crossfeedHelp")}</p>
       </fieldset>
 
       <fieldset>
-        <legend>MP3 и AAC</legend>
+        <legend>{t("enh.lossy")}</legend>
         <label class="toggle">
           <input type="checkbox" role="switch" checked={settings.headroom} onchange={(e) => set({ headroom: e.currentTarget.checked })} />
           <span class="knob" aria-hidden="true"></span>
-          <span class="t-label">Защита от перегрузки</span>
+          <span class="t-label">{t("enh.headroom")}</span>
         </label>
-        <p class="help">
-          После декодирования пики MP3 часто выходят за 0 dBFS, и громкие места хрипят. Плеер
-          измеряет перегрузку по всему треку и снижает уровень ровно на неё — обычно меньше 1 дБ.
-        </p>
+        <p class="help">{t("enh.headroomHelp")}</p>
         <label class="toggle">
           <input type="checkbox" role="switch" checked={settings.restoreHighs} onchange={(e) => set({ restoreHighs: e.currentTarget.checked })} />
           <span class="knob" aria-hidden="true"></span>
-          <span class="t-label">Восстановление верхов</span>
+          <span class="t-label">{t("enh.restore")}</span>
         </label>
-        <p class="help">
-          Находит частоту, на которой кодек срезал верха (16–19 кГц у MP3 128–256 kbps), и достраивает
-          октаву выше по гармоникам соседней полосы. Это правдоподобная дорисовка, а не возврат потерянного.
-          Файлы со срезом выше 20 кГц не трогает.
-        </p>
-        <p class="help">Lossless-файлов эти настройки не касаются — они идут как раньше.</p>
+        <p class="help">{t("enh.restoreHelp")}</p>
+        <p class="help">{t("enh.losslessNote")}</p>
       </fieldset>
 
       <p class="footer" class:pure={active.length === 0}>
         {#if active.length === 0}
-          {lossyOn ? "Lossless-файлы идут в DAC bit-perfect, MP3 и AAC — с исправлениями." : "Всё выключено: сигнал идёт в DAC bit-perfect."}
+          {t(lossyOn ? "enh.footerLossy" : "enh.footerPure")}
         {:else}
-          Обработка отключает bit-perfect. Выключите всё, чтобы вернуть нетронутый сигнал.
+          {t("enh.footerOn")}
         {/if}
       </p>
     </div>
@@ -192,7 +167,7 @@
 
   .panel {
     position: absolute;
-    right: 0;
+    inset-inline-end: 0;
     top: calc(100% + 8px);
     width: 380px;
     max-height: calc(100vh - 80px);
@@ -214,7 +189,7 @@
     padding: 0;
     margin-bottom: 10px;
     font-weight: 600;
-    float: left;
+    float: inline-start;
     width: 100%;
   }
   .seg {
@@ -346,7 +321,7 @@
     content: "";
     position: absolute;
     top: 2px;
-    left: 2px;
+    inset-inline-start: 2px;
     width: 12px;
     height: 12px;
     border-radius: 50%;
@@ -359,6 +334,9 @@
   }
   .toggle input:checked + .knob::after {
     transform: translateX(12px);
+  }
+  :global([dir="rtl"]) .toggle input:checked + .knob::after {
+    transform: translateX(-12px);
     background: var(--violet);
   }
   .toggle input:focus-visible + .knob {

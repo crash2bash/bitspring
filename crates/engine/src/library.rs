@@ -299,7 +299,7 @@ fn stable_id(s: &str) -> String {
     format!("{h:016x}")
 }
 
-pub const UNKNOWN_ARTIST: &str = "Неизвестный исполнитель";
+pub const UNKNOWN_ARTIST: &str = "Unknown artist";
 
 /// Album identity: album artist (or artist), and album title — or, for untagged files, the
 /// folder they sit in, so a folder of loose files still reads as one album.
