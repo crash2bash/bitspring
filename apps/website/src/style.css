@@ -13,8 +13,10 @@
   --brass-soft: rgba(201, 164, 92, 0.16);
   --violet: #8c7ae6;
 
-  --font: "Barlow", system-ui, sans-serif;
-  --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  /* Barlow draws Latin; other scripts fall through to --script-font, set per page below. */
+  --script-font: system-ui;
+  --font: "Barlow", var(--script-font), system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "Barlow", var(--script-font), system-ui, sans-serif;
 
   /* Modular scale, perfect fourth (1.333) from 17px body. */
   --t-sm: 0.875rem;
@@ -29,6 +31,31 @@
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   color-scheme: dark;
+}
+
+[data-font="cyrillic"],
+[data-font="greek"] {
+  --script-font: "IBM Plex Sans";
+}
+
+[data-font="arabic"] {
+  --script-font: "IBM Plex Sans Arabic";
+}
+
+[data-font="sc"] {
+  --script-font: "Noto Sans SC";
+}
+
+[data-font="tc"] {
+  --script-font: "Noto Sans TC";
+}
+
+[data-font="jp"] {
+  --script-font: "Noto Sans JP";
+}
+
+[data-font="kr"] {
+  --script-font: "Noto Sans KR";
 }
 
 * {
@@ -64,6 +91,15 @@ a {
 .num {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 h1,
@@ -149,7 +185,7 @@ main,
 .nav-links {
   display: flex;
   gap: 28px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .nav-links a {
@@ -161,6 +197,49 @@ main,
 
 .nav-links a:hover {
   color: var(--porcelain);
+}
+
+/* Language: a native <select> laid invisibly over a compact label, so every platform gets its
+   own accessible picker (a wheel on iOS, a sheet on Android, a list on desktop). */
+.lang {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 4px;
+  color: var(--mist);
+  font-size: var(--t-sm);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.lang:hover,
+.lang:focus-within {
+  color: var(--porcelain);
+}
+
+.lang:focus-within {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.lang svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.lang-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px; /* stops iOS zooming in on focus */
 }
 
 /* ---- buttons --------------------------------------------------------------------------- */
@@ -244,7 +323,7 @@ main,
   font-weight: 300;
   letter-spacing: -0.035em;
   line-height: 0.86;
-  margin-left: -0.05em;
+  margin-inline-start: -0.05em;
 }
 
 .split-word {
@@ -372,7 +451,7 @@ main,
 .wire {
   position: absolute;
   top: 14px;
-  left: 15px;
+  inset-inline-start: 15px;
   /* From the first number's centre to the third's: two columns plus two gaps. */
   width: calc((100% - 64px) * 2 / 3 + 64px);
   height: 2px;
@@ -384,8 +463,8 @@ main,
 .wire-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, rgba(201, 164, 92, 0.2), var(--brass));
-  transform-origin: left center;
+  background: linear-gradient(to var(--flow-end, right), rgba(201, 164, 92, 0.2), var(--brass));
+  transform-origin: var(--flow-start, left) center;
   transform: scaleX(var(--p, 0));
 }
 
@@ -470,7 +549,9 @@ main,
   min-height: 1.5em;
 }
 
+/* A number scale reads left to right in every language, including Arabic. */
 .dial-scale {
+  direction: ltr;
   position: relative;
   margin-top: 28px;
   height: 64px;
@@ -579,13 +660,14 @@ main,
 .enhance-list li {
   display: grid;
   gap: 10px;
-  padding: 36px 0 36px 28px;
-  border-left: 2px solid var(--slate-700);
+  padding-block: 36px;
+  padding-inline-start: 28px;
+  border-inline-start: 2px solid var(--slate-700);
   transition: border-color 0.5s var(--ease);
 }
 
 .enhance-list li.is-on {
-  border-left-color: var(--violet);
+  border-inline-start-color: var(--violet);
 }
 
 .enhance-list h3 {
@@ -653,7 +735,7 @@ main,
   font-weight: 300;
   letter-spacing: -0.035em;
   line-height: 0.88;
-  margin-left: -0.05em;
+  margin-inline-start: -0.05em;
 }
 
 .download-lede {
@@ -673,7 +755,8 @@ main,
 .platforms li {
   display: grid;
   gap: 2px;
-  padding: 20px 20px 0 0;
+  padding-block-start: 20px;
+  padding-inline-end: 20px;
 }
 
 .platforms li span:first-child {
@@ -712,6 +795,56 @@ main,
   color: var(--porcelain);
 }
 
+/* ---- scripts ----------------------------------------------------------------------------- */
+
+/* Right to left: the signal still flows from the first step to the last, which is now leftward. */
+[dir="rtl"] {
+  --flow-start: right;
+  --flow-end: left;
+}
+
+/* Negative tracking breaks Arabic joins, and its tall ascenders need room. */
+[data-font="arabic"] :is(h1, h2, h3, .dial-readout) {
+  letter-spacing: 0;
+}
+
+[data-font="arabic"] :is(.hero-title, .download-title) {
+  line-height: 1.25;
+  font-weight: 400;
+}
+
+[data-font="arabic"] body {
+  line-height: 1.75;
+}
+
+/* CJK: glyphs are square and twice as wide as a digit, so measure in em, not ch; no faux
+   tracking; Korean breaks between words, not syllables. */
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) :is(h1, h2, h3) {
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) :is(.hero-title, .download-title) {
+  line-height: 1.05;
+  font-size: clamp(3.4rem, 11vw, 10rem);
+}
+
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) .section-title {
+  max-width: 13em;
+}
+
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) body {
+  line-height: 1.75;
+}
+
+[data-font="kr"] {
+  word-break: keep-all;
+}
+
+[data-font="jp"] {
+  line-break: strict;
+}
+
 /* ---- small screens ----------------------------------------------------------------------- */
 
 @media (max-width: 900px) {
@@ -719,8 +852,8 @@ main,
     display: none;
   }
 
-  .nav .btn-small {
-    margin-left: auto;
+  .lang {
+    margin-inline-start: auto;
   }
 
   .hero-body,
@@ -743,8 +876,7 @@ main,
   .wire {
     top: 15px;
     bottom: 15px;
-    left: 14px;
-    right: auto;
+    inset-inline-start: 14px;
     width: 2px;
     height: auto;
   }
@@ -761,6 +893,10 @@ main,
 
   .platforms li {
     padding-bottom: 12px;
+  }
+
+  .nav {
+    gap: 12px;
   }
 }
 

@@ -10,9 +10,88 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
 
 import { LINKS } from "./config";
+import { localeUrl, LOCALES, type FontGroup } from "./i18n/locales";
 import { createField, HERO, type FieldState } from "./scene";
 
 gsap.registerPlugin(ScrollTrigger);
+
+// ---- language ------------------------------------------------------------------------------
+// The page arrives already translated (see src/i18n/render.ts); only strings that JS writes at
+// runtime come from this inline dictionary.
+
+const root = document.documentElement;
+const runtime = JSON.parse(document.getElementById("i18n")?.textContent ?? "{}") as {
+  numbers?: string;
+  strings?: Record<string, string>;
+};
+const t = (key: string) => runtime.strings?.[key] ?? key;
+const numberLocale = runtime.numbers ?? root.lang;
+const isRtl = root.dir === "rtl";
+
+// Barlow covers Latin only. Other scripts fall back to a companion face (see --script-font in
+// style.css); each page loads just its own, and CJK faces arrive in small unicode-range slices.
+const SCRIPT_FONTS: Record<FontGroup, () => Promise<unknown>> = {
+  latin: async () => {},
+  cyrillic: () =>
+    Promise.all([
+      import("@fontsource/ibm-plex-sans/cyrillic-300.css"),
+      import("@fontsource/ibm-plex-sans/cyrillic-400.css"),
+      import("@fontsource/ibm-plex-sans/cyrillic-500.css"),
+    ]),
+  greek: () =>
+    Promise.all([
+      import("@fontsource/ibm-plex-sans/greek-300.css"),
+      import("@fontsource/ibm-plex-sans/greek-400.css"),
+      import("@fontsource/ibm-plex-sans/greek-500.css"),
+    ]),
+  arabic: () =>
+    Promise.all([
+      import("@fontsource/ibm-plex-sans-arabic/arabic-300.css"),
+      import("@fontsource/ibm-plex-sans-arabic/arabic-400.css"),
+      import("@fontsource/ibm-plex-sans-arabic/arabic-500.css"),
+    ]),
+  sc: () =>
+    Promise.all([
+      import("@fontsource/noto-sans-sc/300.css"),
+      import("@fontsource/noto-sans-sc/400.css"),
+      import("@fontsource/noto-sans-sc/500.css"),
+    ]),
+  tc: () =>
+    Promise.all([
+      import("@fontsource/noto-sans-tc/300.css"),
+      import("@fontsource/noto-sans-tc/400.css"),
+      import("@fontsource/noto-sans-tc/500.css"),
+    ]),
+  jp: () =>
+    Promise.all([
+      import("@fontsource/noto-sans-jp/300.css"),
+      import("@fontsource/noto-sans-jp/400.css"),
+      import("@fontsource/noto-sans-jp/500.css"),
+    ]),
+  kr: () =>
+    Promise.all([
+      import("@fontsource/noto-sans-kr/300.css"),
+      import("@fontsource/noto-sans-kr/400.css"),
+      import("@fontsource/noto-sans-kr/500.css"),
+    ]),
+};
+const fontGroup = (root.dataset.font ?? "latin") as FontGroup;
+const fontsReady = (SCRIPT_FONTS[fontGroup] ?? SCRIPT_FONTS.latin)();
+
+const langSelect = document.querySelector<HTMLSelectElement>("[data-lang-select]");
+const langCurrent = document.querySelector<HTMLElement>("[data-lang-current]");
+if (langSelect && langCurrent) {
+  const current = LOCALES.find((l) => l.tag === root.lang) ?? LOCALES[0];
+  langCurrent.textContent = (current.path || "en").split("-")[0].toUpperCase();
+  langSelect.addEventListener("change", () => {
+    const next = LOCALES.find((l) => l.path === langSelect.value);
+    if (!next) return;
+    try {
+      localStorage.setItem("lang", next.path); // the root page stops auto-redirecting
+    } catch {}
+    location.href = localeUrl(next) + location.hash;
+  });
+}
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const $ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
@@ -27,7 +106,7 @@ for (const a of $$<HTMLAnchorElement>("[data-store]")) {
     a.href = url;
     a.rel = "noopener";
   } else {
-    a.textContent = a.dataset.store === "appStore" ? "Скоро в Mac App Store" : "Скоро для Windows";
+    a.textContent = t(a.dataset.store === "appStore" ? "cta.appstore_soon" : "cta.windows_soon");
     a.setAttribute("aria-disabled", "true");
   }
 }
@@ -67,7 +146,7 @@ ScrollTrigger.create({
 
 // ---- 3D field --------------------------------------------------------------------------------
 
-const field = createField($<HTMLCanvasElement>(".field"));
+const field = createField($<HTMLCanvasElement>(".field"), { mirror: isRtl });
 
 if (field) {
   field.setMotion(!reduceMotion);
@@ -83,8 +162,12 @@ if (field) {
 
 // ---- headline letters ------------------------------------------------------------------------
 
+// Arabic letters join to their neighbours; wrapping each in its own box would break the
+// joins, so those headlines animate word by word instead.
+const SPLIT_WORDS = fontGroup === "arabic";
+
 function split(el: HTMLElement): HTMLElement[] {
-  const text = el.textContent ?? "";
+  const text = (el.textContent ?? "").trim();
   el.setAttribute("aria-label", text.replace(/ /g, " "));
   el.textContent = "";
   const chars: HTMLElement[] = [];
@@ -96,7 +179,7 @@ function split(el: HTMLElement): HTMLElement[] {
     const word = document.createElement("span");
     word.className = "split-word";
     word.setAttribute("aria-hidden", "true");
-    for (const ch of part) {
+    for (const ch of SPLIT_WORDS ? [part] : Array.from(part)) {
       const mask = document.createElement("span");
       mask.className = "split-mask";
       const c = document.createElement("span");
@@ -174,23 +257,31 @@ if (field) {
 const PATH: FieldState = { ...HERO, camX: 0, camY: 0.35, camZ: 12, lookX: 0, lookY: 0, lookZ: 0, focus: 1 };
 // Side-on, a few rows only: denser sampling and the 1-bit DSD pulses read at a glance.
 const FORMATS_START: FieldState = { ...HERO, camX: 0, camY: 1.4, camZ: 12.5, lookX: 0, lookY: -0.9, lookZ: 0, focus: 0.8 };
-const RATES = [
-  { v: "44,1", unit: "кГц", caption: "Качество CD", density: 1, levels: 7 },
-  { v: "48", unit: "кГц", caption: "Видео и студийная запись", density: 1.08, levels: 7 },
-  { v: "88,2", unit: "кГц", caption: "Hi-Res, кратно CD", density: 1.45, levels: 8 },
-  { v: "96", unit: "кГц", caption: "Hi-Res, самый частый", density: 1.52, levels: 8 },
-  { v: "176,4", unit: "кГц", caption: "Студийный мастер", density: 2.1, levels: 9 },
-  { v: "192", unit: "кГц", caption: "Студийный мастер", density: 2.2, levels: 9 },
-  { v: "352,8", unit: "кГц", caption: "DXD", density: 3.0, levels: 10 },
-  { v: "384", unit: "кГц", caption: "DXD", density: 3.1, levels: 10 },
-  { v: "705,6", unit: "кГц", caption: "Предел современных ЦАП", density: 4.2, levels: 11 },
-  { v: "768", unit: "кГц", caption: "Предел современных ЦАП", density: 4.4, levels: 11 },
-  { v: "DSD64", unit: "", caption: "Один бит, 2,8 МГц", density: 5.2, levels: 1 },
-  { v: "DSD128", unit: "", caption: "Один бит, 5,6 МГц", density: 5.8, levels: 1 },
-  { v: "DSD256", unit: "", caption: "Один бит, 11,2 МГц", density: 6.4, levels: 1 },
-  { v: "DSD512", unit: "", caption: "Один бит, 22,6 МГц", density: 7.0, levels: 1 },
-  { v: "DSD1024", unit: "", caption: "Один бит, 45,2 МГц", density: 7.6, levels: 1 },
+// Densities are visual (stems per wave cycle), not literal: the jump to DSD would not fit a screen.
+const RATE_STEPS: { hz: number; caption: string; density: number; levels: number; dsd?: number }[] = [
+  { hz: 44.1, caption: "rates.cd", density: 1, levels: 7 },
+  { hz: 48, caption: "rates.video", density: 1.08, levels: 7 },
+  { hz: 88.2, caption: "rates.hires_cd", density: 1.45, levels: 8 },
+  { hz: 96, caption: "rates.hires_common", density: 1.52, levels: 8 },
+  { hz: 176.4, caption: "rates.master", density: 2.1, levels: 9 },
+  { hz: 192, caption: "rates.master", density: 2.2, levels: 9 },
+  { hz: 352.8, caption: "rates.dxd", density: 3.0, levels: 10 },
+  { hz: 384, caption: "rates.dxd", density: 3.1, levels: 10 },
+  { hz: 705.6, caption: "rates.limit", density: 4.2, levels: 11 },
+  { hz: 768, caption: "rates.limit", density: 4.4, levels: 11 },
+  { hz: 0, caption: "rates.dsd", density: 5.2, levels: 1, dsd: 64 },
+  { hz: 0, caption: "rates.dsd", density: 5.8, levels: 1, dsd: 128 },
+  { hz: 0, caption: "rates.dsd", density: 6.4, levels: 1, dsd: 256 },
+  { hz: 0, caption: "rates.dsd", density: 7.0, levels: 1, dsd: 512 },
+  { hz: 0, caption: "rates.dsd", density: 7.6, levels: 1, dsd: 1024 },
 ];
+const decimal = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 });
+const RATES = RATE_STEPS.map((r) => ({
+  ...r,
+  v: r.dsd ? `DSD${r.dsd}` : decimal.format(r.hz),
+  unit: r.dsd ? "" : t("rates.khz"),
+  caption: t(r.caption).replace("{mhz}", decimal.format(((r.dsd ?? 0) * 44.1) / 1000)),
+}));
 const ENHANCE: FieldState = {
   ...HERO,
   camX: 7,
@@ -214,7 +305,7 @@ function travel(trigger: string, to: FieldState, start = "top bottom", end = "to
 const pathNodes = $$(".chain-node");
 const samplesEl = $("[data-samples]");
 const SAMPLES_PER_TRACK = 96_000 * 2 * 245; // 24/96 stereo, a four-minute track
-const fmt = new Intl.NumberFormat("ru-RU");
+const fmt = new Intl.NumberFormat(numberLocale);
 
 travel(".path", PATH);
 gsap
@@ -338,4 +429,4 @@ if (!reduceMotion) {
 }
 
 // Fonts change line breaks and therefore every trigger position.
-document.fonts?.ready.then(() => ScrollTrigger.refresh());
+fontsReady.then(() => document.fonts?.ready).then(() => ScrollTrigger.refresh());

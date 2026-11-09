@@ -163,7 +163,9 @@ export interface Field {
   resize(): void;
 }
 
-export function createField(canvas: HTMLCanvasElement): Field | null {
+/** `mirror`: right-to-left pages put the copy on the right, so the camera swings the other way. */
+export function createField(canvas: HTMLCanvasElement, opts: { mirror?: boolean } = {}): Field | null {
+  const flip = opts.mirror ? -1 : 1;
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -266,8 +268,8 @@ export function createField(canvas: HTMLCanvasElement): Field | null {
     uniforms.uAmp.value = state.amp;
     uniforms.uVisible.value = state.visible;
 
-    camera.position.set(state.camX + eased.x * 0.9 * sway, state.camY - eased.y * 0.5 * sway, state.camZ);
-    look.set(state.lookX, state.lookY, state.lookZ);
+    camera.position.set(flip * state.camX + eased.x * 0.9 * sway, state.camY - eased.y * 0.5 * sway, state.camZ);
+    look.set(flip * state.lookX, state.lookY, state.lookZ);
     camera.lookAt(look);
     renderer.render(scene, camera);
   }

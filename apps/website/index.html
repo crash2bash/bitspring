@@ -1,24 +1,26 @@
 <!doctype html>
-<html lang="ru">
+<!-- Template: rendered once per language by src/i18n/render.ts (see the syntax there). -->
+<html>
   <head>
     <meta charset="UTF-8" />
+    <!--@redirect-->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hifi — бесплатный bit-perfect плеер для macOS и Windows</title>
-    <meta
-      name="description"
-      content="Бесплатный музыкальный плеер: ЦАП получает ровно то, что записано в файле. FLAC, ALAC, WAV, DSD до DSD1024, до 768 кГц. Эквалайзер, кроссфид и апсэмплинг — по желанию."
-    />
+    <title>{{meta.title}}</title>
+    <meta name="description" content="{{meta.description}}" />
     <meta name="theme-color" content="#121d23" />
-    <meta property="og:title" content="Hifi — бит в бит" />
-    <meta property="og:description" content="Бесплатный bit-perfect плеер для macOS и Windows." />
-    <meta property="og:image" content="/og.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{meta.og_title}}" />
+    <meta property="og:description" content="{{meta.og_description}}" />
+    <!--@og-->
+    <!--@alternates-->
     <link rel="icon" href="/favicon.png" />
+    <!--@runtime-->
   </head>
   <body>
     <canvas class="field" aria-hidden="true"></canvas>
 
     <header class="nav">
-      <a class="nav-logo" href="#top" aria-label="Hifi, наверх">
+      <a class="nav-logo" href="#top" aria-label="{{nav.home_label}}">
         <svg viewBox="0 0 28 20" aria-hidden="true">
           <g fill="currentColor">
             <rect x="1" y="9" width="2" height="9" rx="1" />
@@ -30,82 +32,83 @@
         </svg>
         Hifi
       </a>
-      <nav class="nav-links" aria-label="Разделы">
-        <a href="#path">Как это работает</a>
-        <a href="#formats">Форматы</a>
-        <a href="#enhance">Улучшения</a>
+      <nav class="nav-links" aria-label="{{nav.sections_label}}">
+        <a href="#path">{{nav.how}}</a>
+        <a href="#formats">{{nav.formats}}</a>
+        <a href="#enhance">{{nav.enhance}}</a>
       </nav>
-      <a class="btn btn-small" href="#download">Скачать</a>
+      <label class="lang">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="8" />
+          <path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2z" />
+        </svg>
+        <span class="lang-current" data-lang-current></span>
+        <span class="visually-hidden">{{nav.language}}</span>
+        <select class="lang-select" data-lang-select><!--@lang-options--></select>
+      </label>
+      <a class="btn btn-small" href="#download">{{nav.download}}</a>
     </header>
 
     <main>
       <section class="hero" id="top">
-        <h1 class="hero-title" data-split>Бит в&nbsp;бит</h1>
+        <h1 class="hero-title" data-split>{{hero.title}}</h1>
         <div class="hero-body">
-          <p class="hero-lede">
-            Бесплатный музыкальный плеер для macOS и Windows. Ваш ЦАП получает ровно то, что записано в файле:
-            без пересчёта частоты, без системного микшера, без сюрпризов.
-          </p>
+          <p class="hero-lede">{{hero.lede}}</p>
           <div class="cta-row">
-            <a class="btn btn-primary" data-store="appStore" href="#download">Скачать в Mac App Store</a>
-            <a class="btn" data-store="windows" href="#download">Скачать для Windows</a>
+            <a class="btn btn-primary" data-store="appStore" href="#download">{{cta.appstore}}</a>
+            <a class="btn" data-store="windows" href="#download">{{cta.windows}}</a>
           </div>
         </div>
       </section>
 
       <section class="path" id="path" aria-labelledby="path-title">
         <div class="path-inner">
-          <h2 class="section-title" id="path-title">От файла до ЦАП не меняется ни один бит</h2>
+          <h2 class="section-title" id="path-title">{{path.title}}</h2>
 
           <div class="chain-wrap">
-          <div class="wire" aria-hidden="true"><span class="wire-fill"></span></div>
-          <ol class="chain">
-            <li class="chain-node" data-step="0">
-              <span class="chain-name">Файл</span>
-              <span class="chain-detail">FLAC, 24 бита, 96 кГц. Сэмплы читаются как есть.</span>
-            </li>
-            <li class="chain-node" data-step="1">
-              <span class="chain-name">Плеер</span>
-              <span class="chain-detail">Не пересчитывает частоту, не трогает громкость, не смешивает с системными звуками.</span>
-            </li>
-            <li class="chain-node" data-step="2">
-              <span class="chain-name">ЦАП</span>
-              <span class="chain-detail">Плеер берёт его в монопольное владение и переключает на 96 кГц — частоту файла.</span>
-            </li>
-          </ol>
+            <div class="wire" aria-hidden="true"><span class="wire-fill"></span></div>
+            <ol class="chain">
+              <li class="chain-node">
+                <span class="chain-name">{{path.file}}</span>
+                <span class="chain-detail">{{path.file_detail}}</span>
+              </li>
+              <li class="chain-node">
+                <span class="chain-name">{{path.player}}</span>
+                <span class="chain-detail">{{path.player_detail}}</span>
+              </li>
+              <li class="chain-node">
+                <span class="chain-name">{{path.dac}}</span>
+                <span class="chain-detail">{{path.dac_detail}}</span>
+              </li>
+            </ol>
           </div>
 
           <dl class="meter">
             <div>
-              <dt>Передано сэмплов</dt>
+              <dt>{{path.samples}}</dt>
               <dd class="num" data-samples>0</dd>
             </div>
             <div>
-              <dt>Изменено бит</dt>
+              <dt>{{path.changed}}</dt>
               <dd class="num meter-zero">0</dd>
             </div>
           </dl>
-          <p class="path-foot">
-            На macOS — монопольный режим CoreAudio и целочисленный формат, на Windows — WASAPI Exclusive.
-          </p>
+          <p class="path-foot">{{path.foot}}</p>
         </div>
       </section>
 
       <section class="formats" id="formats" aria-labelledby="formats-title">
         <div class="formats-inner">
           <div class="formats-head">
-            <h2 class="section-title" id="formats-title">От CD до 768&nbsp;кГц</h2>
-            <p>
-              Плеер переключает ЦАП на частоту каждого трека. Если ЦАП её не поддерживает, звук аккуратно
-              пересчитывается — и плеер прямо пишет об этом.
-            </p>
+            <h2 class="section-title" id="formats-title">{{formats.title}}</h2>
+            <p>{{formats.lede}}</p>
           </div>
 
           <div class="dial">
-            <p class="dial-readout num" aria-live="off">
-              <span data-rate>44,1</span><span class="dial-unit" data-unit>кГц</span>
+            <p class="dial-readout num">
+              <span data-rate></span><span class="dial-unit" data-unit></span>
             </p>
-            <p class="dial-caption" data-caption>Качество CD</p>
+            <p class="dial-caption" data-caption></p>
             <div class="dial-scale" aria-hidden="true">
               <div class="dial-ticks" data-ticks></div>
               <span class="dial-needle" data-needle></span>
@@ -113,78 +116,66 @@
           </div>
 
           <div class="formats-foot">
-            <p>
-              DSD — нативно через DoP, если ЦАП умеет, или в PCM 176,4&nbsp;кГц, если нет.
-            </p>
-            <p class="formats-files">FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg&nbsp;Vorbis</p>
+            <p>{{formats.dsd}}</p>
+            <p class="formats-files">{{formats.files}}</p>
           </div>
         </div>
       </section>
 
       <section class="enhance" id="enhance" aria-labelledby="enhance-title">
         <div class="enhance-head">
-          <h2 class="section-title" id="enhance-title">Хочется другого звука? Пожалуйста</h2>
-          <p>
-            Улучшения выключены по умолчанию. Включите любое — индикатор в плеере сменит «Bit-perfect» на
-            «Обработка» и перечислит, что именно происходит со звуком.
-          </p>
+          <h2 class="section-title" id="enhance-title">{{enhance.title}}</h2>
+          <p>{{enhance.lede}}</p>
         </div>
         <ul class="enhance-list">
           <li>
-            <h3>Апсэмплинг</h3>
-            <p>До 192, 384 или 768&nbsp;кГц — для ЦАП, которые лучше звучат на высокой частоте.</p>
+            <h3>{{enhance.upsampling}}</h3>
+            <p>{{enhance.upsampling_detail}}</p>
           </li>
           <li>
-            <h3>Эквалайзер</h3>
-            <p>Загрузите профиль AutoEQ для своих наушников. Фильтры считаются с 64-битной точностью.</p>
+            <h3>{{enhance.eq}}</h3>
+            <p>{{enhance.eq_detail}}</p>
           </li>
           <li>
-            <h3>Кроссфид</h3>
-            <p>Лёгкий, средний или сильный. Убирает ощущение, что музыка звучит внутри головы.</p>
+            <h3>{{enhance.crossfeed}}</h3>
+            <p>{{enhance.crossfeed_detail}}</p>
           </li>
           <li>
-            <h3>Для MP3 и AAC</h3>
-            <p>Запас от перегрузки включается сам, а верха выше среза кодека можно бережно достроить.</p>
+            <h3>{{enhance.lossy}}</h3>
+            <p>{{enhance.lossy_detail}}</p>
           </li>
         </ul>
       </section>
 
       <section class="app" id="app" aria-labelledby="app-title">
         <div class="app-head">
-          <h2 class="section-title" id="app-title">Всё, что происходит со звуком, — на виду</h2>
-          <p>Формат файла, частота ЦАП и каждый шаг обработки показаны прямо на главном экране.</p>
+          <h2 class="section-title" id="app-title">{{app.title}}</h2>
+          <p>{{app.lede}}</p>
         </div>
         <figure class="app-shot">
-          <img
-            src="/app.webp"
-            width="2240"
-            height="1480"
-            alt="Окно плеера: библиотека альбомов, панель воспроизведения и индикатор Bit-perfect"
-            loading="lazy"
-            decoding="async"
-          />
+          <img src="/app.webp" width="2240" height="1480" alt="{{app.alt}}" loading="lazy" decoding="async" />
         </figure>
       </section>
 
       <section class="download" id="download" aria-labelledby="download-title">
-        <h2 class="download-title" id="download-title" data-split>Бесплатно</h2>
-        <p class="download-lede">Без подписки, рекламы и аккаунта. Просто плеер.</p>
+        <h2 class="download-title" id="download-title" data-split>{{download.title}}</h2>
+        <p class="download-lede">{{download.lede}}</p>
         <div class="cta-row">
-          <a class="btn btn-primary" data-store="appStore" href="#download">Скачать в Mac App Store</a>
-          <a class="btn" data-store="windows" href="#download">Скачать для Windows</a>
+          <a class="btn btn-primary" data-store="appStore" href="#download">{{cta.appstore}}</a>
+          <a class="btn" data-store="windows" href="#download">{{cta.windows}}</a>
         </div>
         <ul class="platforms">
-          <li><span>macOS</span><span>Mac App Store</span></li>
-          <li><span>Windows 10 и 11</span><span>Установщик</span></li>
-          <li class="is-soon"><span>iOS</span><span>В работе</span></li>
-          <li class="is-soon"><span>Android</span><span>В работе</span></li>
+          <li><span>{{platforms.macos}}</span><span>{{platforms.appstore}}</span></li>
+          <li><span>{{platforms.windows}}</span><span>{{platforms.installer}}</span></li>
+          <li class="is-soon"><span>{{platforms.ios}}</span><span>{{platforms.soon}}</span></li>
+          <li class="is-soon"><span>{{platforms.android}}</span><span>{{platforms.soon}}</span></li>
         </ul>
       </section>
     </main>
 
     <footer class="footer">
       <span>© 2026 Hifi</span>
-      <a href="#top">Наверх</a>
+      <a href="#top">{{footer.top}}</a>
     </footer>
 
     <script type="module" src="/src/main.ts"></script>
