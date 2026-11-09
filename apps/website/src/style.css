@@ -1,0 +1,1139 @@
+/* Same hardware-panel palette as the app: slate housing, porcelain legends,
+   brass for an untouched signal, violet for a processed one. */
+:root {
+  --slate-950: #0e171c;
+  --slate-900: #121d23;
+  --slate-800: #16232a;
+  --slate-700: #1f3039;
+  --slate-600: #2b414c;
+  --porcelain: #e8edea;
+  --mist: #8fa3a8;
+  --mist-dim: #62777d;
+  --brass: #c9a45c;
+  --brass-soft: rgba(201, 164, 92, 0.16);
+  --violet: #8c7ae6;
+
+  /* Barlow draws Latin; other scripts fall through to --script-font, set per page below. */
+  --script-font: system-ui;
+  --font: "Barlow", var(--script-font), system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "Barlow", var(--script-font), system-ui, sans-serif;
+
+  /* Modular scale, perfect fourth (1.333) from 17px body. */
+  --t-sm: 0.875rem;
+  --t-md: 1.0625rem;
+  --t-lg: 1.42rem;
+  --t-xl: 1.89rem;
+  --t-2xl: clamp(2.2rem, 4.6vw, 3.9rem);
+  --t-hero: clamp(4.6rem, 17vw, 17rem);
+
+  --gutter: clamp(16px, 4vw, 56px);
+  --max: 1360px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: dark;
+}
+
+[data-font="cyrillic"],
+[data-font="greek"] {
+  --script-font: "IBM Plex Sans";
+}
+
+[data-font="arabic"] {
+  --script-font: "IBM Plex Sans Arabic";
+}
+
+[data-font="sc"] {
+  --script-font: "Noto Sans SC";
+}
+
+[data-font="tc"] {
+  --script-font: "Noto Sans TC";
+}
+
+[data-font="jp"] {
+  --script-font: "Noto Sans JP";
+}
+
+[data-font="kr"] {
+  --script-font: "Noto Sans KR";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--slate-900);
+}
+
+body {
+  margin: 0;
+  background: var(--slate-900);
+  color: var(--porcelain);
+  font-family: var(--font);
+  font-size: var(--t-md);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* Copy sits over the moving field: a soft halo of the background keeps it legible. */
+main p,
+main h3 {
+  text-shadow:
+    0 0 3px var(--slate-900),
+    0 0 18px var(--slate-900);
+}
+
+/* ---- backdrop -------------------------------------------------------------------------- */
+
+.field {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+main,
+.footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- nav ------------------------------------------------------------------------------- */
+
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 18px var(--gutter);
+  transition:
+    background-color 0.4s var(--ease),
+    backdrop-filter 0.4s var(--ease);
+}
+
+.nav.is-solid {
+  background: rgba(18, 29, 35, 0.72);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.nav-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.3rem;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.nav-logo svg {
+  width: 26px;
+  height: 19px;
+  color: var(--brass);
+}
+
+.nav-links {
+  display: flex;
+  gap: 28px;
+  margin-inline-start: auto;
+}
+
+.nav-links a {
+  color: var(--mist);
+  text-decoration: none;
+  font-size: var(--t-sm);
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: var(--porcelain);
+}
+
+/* Language: a native <select> laid invisibly over a compact label, so every platform gets its
+   own accessible picker (a wheel on iOS, a sheet on Android, a list on desktop). */
+.lang {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 4px;
+  color: var(--mist);
+  font-size: var(--t-sm);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.lang:hover,
+.lang:focus-within {
+  color: var(--porcelain);
+}
+
+.lang:focus-within {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.lang svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.lang-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px; /* stops iOS zooming in on focus */
+}
+
+/* ---- buttons --------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 26px;
+  border-radius: 999px;
+  border: 1px solid var(--slate-600);
+  background: rgba(22, 35, 42, 0.6);
+  color: var(--porcelain);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    border-color 0.25s var(--ease),
+    background-color 0.25s var(--ease),
+    transform 0.25s var(--ease);
+}
+
+.btn:hover {
+  border-color: var(--mist-dim);
+  background: rgba(31, 48, 57, 0.85);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--slate-900);
+}
+
+.btn-primary:hover {
+  background: #d6b46f;
+  border-color: #d6b46f;
+}
+
+.btn-small {
+  min-height: 40px;
+  padding: 0 18px;
+  font-size: var(--t-sm);
+}
+
+.btn[aria-disabled="true"] {
+  cursor: default;
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* ---- shared section bits ----------------------------------------------------------------- */
+
+.section-title {
+  font-size: var(--t-2xl);
+  max-width: 16ch;
+}
+
+/* ---- hero ------------------------------------------------------------------------------ */
+
+.hero {
+  min-height: 100svh;
+  display: grid;
+  align-content: end;
+  gap: clamp(28px, 4vw, 48px);
+  padding: 120px var(--gutter) clamp(40px, 7vh, 88px);
+  max-width: var(--max);
+  margin: 0 auto;
+}
+
+.hero-title {
+  font-size: var(--t-hero);
+  font-weight: 300;
+  letter-spacing: -0.035em;
+  line-height: 0.86;
+  margin-inline-start: -0.05em;
+}
+
+.split-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.split-char {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* Clip each letter so it rises from its own baseline. */
+.split-mask {
+  display: inline-block;
+  overflow: clip;
+  overflow-clip-margin: 0.08em;
+  padding-bottom: 0.06em;
+  margin-bottom: -0.06em;
+  vertical-align: bottom;
+}
+
+.hero-body {
+  display: grid;
+  grid-template-columns: minmax(0, 34rem) auto;
+  align-items: end;
+  justify-content: space-between;
+  gap: 28px 48px;
+}
+
+.hero-lede {
+  font-size: var(--t-lg);
+  line-height: 1.45;
+  color: var(--porcelain);
+  max-width: 34rem;
+}
+
+/* ---- signal path ------------------------------------------------------------------------- */
+
+.path {
+  min-height: 100svh;
+}
+
+.path-inner {
+  min-height: 100svh;
+  display: grid;
+  align-content: center;
+  gap: clamp(32px, 5vh, 56px);
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 96px var(--gutter) 56px;
+}
+
+.chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  counter-reset: step;
+}
+
+.chain-wrap {
+  position: relative;
+}
+
+.chain-node {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  color: var(--mist-dim);
+  transition: color 0.5s var(--ease);
+}
+
+.chain-node.is-lit {
+  color: var(--porcelain);
+}
+
+.chain-name {
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The step number is real: the signal goes file → player → DAC in this order. */
+.chain-name::before {
+  counter-increment: step;
+  content: counter(step);
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--slate-600);
+  background: var(--slate-900);
+  font-size: var(--t-sm);
+  color: var(--mist);
+  transition:
+    border-color 0.5s var(--ease),
+    color 0.5s var(--ease),
+    background-color 0.5s var(--ease);
+}
+
+.chain-node.is-lit .chain-name::before {
+  border-color: var(--brass);
+  background: var(--brass);
+  color: var(--slate-900);
+}
+
+.chain-detail {
+  max-width: 28ch;
+  transition: color 0.5s var(--ease);
+}
+
+.chain-node.is-lit .chain-detail {
+  color: var(--mist);
+}
+
+/* Runs behind the step numbers, so the signal visibly travels from one to the next. */
+.wire {
+  position: absolute;
+  top: 14px;
+  inset-inline-start: 15px;
+  /* From the first number's centre to the third's: two columns plus two gaps. */
+  width: calc((100% - 64px) * 2 / 3 + 64px);
+  height: 2px;
+  background: var(--slate-700);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.wire-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(to var(--flow-end, right), rgba(201, 164, 92, 0.2), var(--brass));
+  transform-origin: var(--flow-start, left) center;
+  transform: scaleX(var(--p, 0));
+}
+
+.meter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 72px;
+  margin: 0;
+}
+
+.meter dt {
+  color: var(--mist);
+  font-size: var(--t-sm);
+}
+
+.meter dd {
+  margin: 4px 0 0;
+  font-size: clamp(2.4rem, 6vw, 4.6rem);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.meter-zero {
+  color: var(--brass);
+}
+
+.path-foot {
+  color: var(--mist-dim);
+  font-size: var(--t-sm);
+  max-width: 60ch;
+}
+
+/* ---- formats ----------------------------------------------------------------------------- */
+
+.formats-inner {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 32px;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 104px var(--gutter) 48px;
+}
+
+.formats-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
+  gap: 24px 48px;
+  align-items: end;
+}
+
+.formats-head p {
+  color: var(--mist);
+}
+
+.dial {
+  align-self: center;
+  display: grid;
+  gap: 8px;
+}
+
+.dial-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 0.18em;
+  font-size: clamp(5rem, 16vw, 13rem);
+  font-weight: 300;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+}
+
+.dial-unit {
+  font-size: 0.24em;
+  letter-spacing: 0;
+  color: var(--mist);
+}
+
+.dial-caption {
+  color: var(--brass);
+  font-size: var(--t-lg);
+  min-height: 1.5em;
+}
+
+/* A number scale reads left to right in every language, including Arabic. */
+.dial-scale {
+  direction: ltr;
+  position: relative;
+  margin-top: 28px;
+  height: 64px;
+}
+
+.dial-ticks {
+  position: absolute;
+  inset: 0;
+}
+
+.dial-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 14px;
+  background: var(--slate-600);
+}
+
+.dial-tick.is-major {
+  height: 28px;
+  background: var(--mist-dim);
+}
+
+.dial-tick.is-major span {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: var(--t-sm);
+  color: var(--mist-dim);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.dial-tick.is-major.is-on span {
+  color: var(--porcelain);
+}
+
+/* Keep the end labels inside the scale. */
+.dial-tick.is-major:first-child span {
+  transform: none;
+  left: 0;
+}
+
+.dial-tick.is-major:last-child span {
+  transform: translateX(-100%);
+  left: 1px;
+}
+
+.dial-needle {
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 2px;
+  height: 76px;
+  background: var(--brass);
+  box-shadow: 0 0 18px var(--brass);
+  border-radius: 2px;
+}
+
+.formats-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 48px;
+  color: var(--mist);
+}
+
+.formats-files {
+  color: var(--porcelain);
+  font-family: var(--font-display);
+}
+
+/* ---- enhancers --------------------------------------------------------------------------- */
+
+.enhance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px clamp(32px, 6vw, 112px);
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(120px, 22vh, 240px) var(--gutter);
+}
+
+.enhance-head {
+  position: sticky;
+  top: 120px;
+  align-self: start;
+  display: grid;
+  gap: 24px;
+}
+
+.enhance-head p {
+  color: var(--mist);
+  max-width: 30rem;
+}
+
+.enhance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.enhance-list li {
+  display: grid;
+  gap: 10px;
+  padding-block: 36px;
+  padding-inline-start: 28px;
+  border-inline-start: 2px solid var(--slate-700);
+  transition: border-color 0.5s var(--ease);
+}
+
+.enhance-list li.is-on {
+  border-inline-start-color: var(--violet);
+}
+
+.enhance-list h3 {
+  font-size: var(--t-xl);
+}
+
+.enhance-list p {
+  color: var(--mist);
+  max-width: 34ch;
+}
+
+/* ---- app --------------------------------------------------------------------------------- */
+
+.app {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(80px, 14vh, 160px) var(--gutter);
+  display: grid;
+  gap: 48px;
+}
+
+.app-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+  gap: 24px 48px;
+  align-items: end;
+}
+
+.app-head p {
+  color: var(--mist);
+}
+
+.app-shot {
+  margin: 0;
+  perspective: 1600px;
+}
+
+.app-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--slate-600);
+  box-shadow:
+    0 40px 120px -30px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(0, 0, 0, 0.3);
+  transform-origin: 50% 0%;
+  background: var(--slate-800);
+}
+
+/* ---- download ---------------------------------------------------------------------------- */
+
+.download {
+  min-height: 100svh;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 140px var(--gutter) 80px;
+  display: grid;
+  align-content: center;
+  gap: 32px;
+}
+
+.download-title {
+  font-size: clamp(4rem, 14vw, 14rem);
+  font-weight: 300;
+  letter-spacing: -0.035em;
+  line-height: 0.88;
+  margin-inline-start: -0.05em;
+}
+
+.download-lede {
+  font-size: var(--t-lg);
+  max-width: 30rem;
+}
+
+.platforms {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--slate-700);
+}
+
+.platforms a {
+  display: grid;
+  gap: 2px;
+  padding-block-start: 20px;
+  padding-inline-end: 20px;
+  text-decoration: none;
+}
+
+.platforms a span:first-child {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.platforms a span:last-child {
+  color: var(--brass);
+  font-size: var(--t-sm);
+}
+
+.platforms a:hover span:first-child {
+  color: var(--brass);
+}
+
+.platforms li.is-soon span {
+  color: var(--mist-dim);
+}
+
+/* ---- footer ------------------------------------------------------------------------------ */
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 28px var(--gutter) 40px;
+  color: var(--mist-dim);
+  font-size: var(--t-sm);
+}
+
+.footer a {
+  text-decoration: none;
+}
+
+.footer a:hover {
+  color: var(--porcelain);
+}
+
+/* ---- download page ----------------------------------------------------------------------- */
+
+.lang-end {
+  margin-inline-start: auto;
+}
+
+.dl {
+  position: relative;
+  z-index: 1;
+  max-width: var(--max);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: clamp(120px, 18vh, 180px) var(--gutter) 96px;
+  display: grid;
+  align-content: start;
+  gap: 40px;
+}
+
+.dl-title {
+  font-size: clamp(3.4rem, 10vw, 9rem);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 0.92;
+  margin-inline-start: -0.04em;
+}
+
+.dl-redirect {
+  color: var(--brass);
+  font-size: var(--t-lg);
+}
+
+.dl-featured:empty {
+  display: none;
+}
+
+.dl-other-title {
+  font-size: var(--t-lg);
+  color: var(--mist);
+  margin-top: 24px;
+}
+
+.dl-list {
+  display: grid;
+}
+
+/* One row per platform in the list: name on one side, its downloads on the other. */
+.dl-platform {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 48px;
+  padding-block: 24px;
+  border-top: 1px solid var(--slate-700);
+}
+
+.dl-platform h3 {
+  font-size: var(--t-xl);
+  padding-top: 10px;
+}
+
+.dl-for {
+  display: none;
+}
+
+.dl-options {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 12px;
+}
+
+.dl-option {
+  display: grid;
+  gap: 4px;
+  padding: 14px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--slate-600);
+  background: rgba(22, 35, 42, 0.88);
+  text-decoration: none;
+  transition:
+    border-color 0.25s var(--ease),
+    background-color 0.25s var(--ease),
+    transform 0.25s var(--ease);
+}
+
+a.dl-option[href]:hover {
+  border-color: var(--mist-dim);
+  background: rgba(31, 48, 57, 0.85);
+}
+
+a.dl-option[href]:active {
+  transform: scale(0.99);
+}
+
+.dl-option-label {
+  font-weight: 500;
+}
+
+.dl-option-note {
+  color: var(--mist);
+  font-size: var(--t-sm);
+}
+
+.dl-option.is-soon {
+  cursor: default;
+  border-style: dashed;
+  background: rgba(18, 29, 35, 0.88);
+}
+
+.dl-option.is-soon .dl-option-label {
+  color: var(--mist);
+}
+
+/* The visitor's own platform: big, first, with the choice laid out side by side. */
+.dl-platform.is-featured {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding: 0;
+  border: 0;
+}
+
+.is-featured h3 {
+  display: none;
+}
+
+.is-featured .dl-for {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  color: var(--brass);
+}
+
+.is-featured .dl-options {
+  grid-column: 1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  max-width: 52rem;
+}
+
+.is-featured .dl-option {
+  padding: 22px 26px;
+  border-radius: 20px;
+}
+
+.is-featured .dl-option-label {
+  font-size: var(--t-lg);
+}
+
+.is-featured a.dl-option[href]:first-child {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--slate-900);
+}
+
+.is-featured a.dl-option[href]:first-child .dl-option-note {
+  color: rgba(18, 29, 35, 0.72);
+}
+
+.is-featured a.dl-option[href]:first-child:hover {
+  background: #d6b46f;
+  border-color: #d6b46f;
+}
+
+.dl-stems {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  height: 34vh;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mask-image: linear-gradient(to top, black 30%, transparent);
+}
+
+.dl-stems path {
+  fill: none;
+  stroke: var(--brass);
+  vector-effect: non-scaling-stroke;
+}
+
+.dl-stems .stems {
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+.dl-stems .heads {
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.dl-page .footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- scripts ----------------------------------------------------------------------------- */
+
+/* Right to left: the signal still flows from the first step to the last, which is now leftward. */
+[dir="rtl"] {
+  --flow-start: right;
+  --flow-end: left;
+}
+
+/* Negative tracking breaks Arabic joins, and its tall ascenders need room. */
+[data-font="arabic"] :is(h1, h2, h3, .dial-readout) {
+  letter-spacing: 0;
+}
+
+[data-font="arabic"] :is(.hero-title, .download-title) {
+  line-height: 1.25;
+  font-weight: 400;
+}
+
+[data-font="arabic"] body {
+  line-height: 1.75;
+}
+
+/* CJK: glyphs are square and twice as wide as a digit, so measure in em, not ch; no faux
+   tracking; Korean breaks between words, not syllables. */
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) :is(h1, h2, h3) {
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) :is(.hero-title, .download-title) {
+  line-height: 1.05;
+  font-size: clamp(3.4rem, 11vw, 10rem);
+}
+
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) .section-title {
+  max-width: 13em;
+}
+
+:is([data-font="sc"], [data-font="tc"], [data-font="jp"], [data-font="kr"]) body {
+  line-height: 1.75;
+}
+
+[data-font="kr"] {
+  word-break: keep-all;
+}
+
+[data-font="jp"] {
+  line-break: strict;
+}
+
+/* ---- small screens ----------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .nav-links {
+    display: none;
+  }
+
+  .lang {
+    margin-inline-start: auto;
+  }
+
+  .hero-body,
+  .formats-head,
+  .app-head,
+  .enhance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .enhance-head {
+    position: static;
+  }
+
+  .chain {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  /* Vertical chain: the wire runs down through the numbers instead. */
+  .wire {
+    top: 15px;
+    bottom: 15px;
+    inset-inline-start: 14px;
+    width: 2px;
+    height: auto;
+  }
+
+  .wire-fill {
+    transform-origin: center top;
+    transform: scaleY(var(--p, 0));
+    background: linear-gradient(180deg, rgba(201, 164, 92, 0.2), var(--brass));
+  }
+
+  .platforms {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platforms a {
+    padding-bottom: 12px;
+  }
+
+  .dl-platform {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-options {
+    grid-column: 1;
+  }
+
+  .dl-platform h3 {
+    padding-top: 0;
+  }
+
+  .nav {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .cta-row .btn {
+    flex: 1 1 100%;
+  }
+
+  /* No room for every label: show only the rate the needle is on. */
+  .dial-tick.is-major span {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .dial-tick.is-major.is-on span {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

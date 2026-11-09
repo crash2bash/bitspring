@@ -1,0 +1,111 @@
+<!doctype html>
+<!-- Template: rendered once per language by src/i18n/render.ts (see the syntax there). -->
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!--@redirect-->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{dl.meta_title}}</title>
+    <meta name="description" content="{{dl.meta_description}}" />
+    <meta name="theme-color" content="#121d23" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{dl.meta_title}}" />
+    <meta property="og:description" content="{{dl.meta_description}}" />
+    <!--@og-->
+    <!--@alternates-->
+    <link rel="icon" href="/favicon.png" />
+    <!--@runtime-->
+  </head>
+  <body class="dl-page">
+    <svg class="dl-stems" data-stems aria-hidden="true"></svg>
+
+    <header class="nav">
+      <a class="nav-logo" href="{{@home}}" aria-label="{{dl.back}}">
+        <svg viewBox="0 0 28 20" aria-hidden="true">
+          <g fill="currentColor">
+            <rect x="1" y="9" width="2" height="9" rx="1" />
+            <rect x="7" y="3" width="2" height="15" rx="1" />
+            <rect x="13" y="6" width="2" height="12" rx="1" />
+            <rect x="19" y="1" width="2" height="17" rx="1" />
+            <rect x="25" y="11" width="2" height="7" rx="1" />
+          </g>
+        </svg>
+        Hifi
+      </a>
+      <label class="lang lang-end">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="8" />
+          <path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2z" />
+        </svg>
+        <span class="lang-current" data-lang-current></span>
+        <span class="visually-hidden">{{nav.language}}</span>
+        <select class="lang-select" data-lang-select><!--@lang-options--></select>
+      </label>
+    </header>
+
+    <main class="dl">
+      <h1 class="dl-title">{{dl.title}}</h1>
+      <p class="dl-redirect" data-redirect hidden>{{dl.redirecting}}</p>
+
+      <div class="dl-featured" data-featured></div>
+
+      <h2 class="dl-other-title" data-other-title>{{dl.other}}</h2>
+      <div class="dl-list">
+        <section class="dl-platform" id="mac" aria-labelledby="dl-mac">
+          <h3 id="dl-mac">{{platforms.macos}}</h3>
+          <p class="dl-for">{{dl.for_mac}}</p>
+          <div class="dl-options">
+            <a class="dl-option" data-link="macAppStore">
+              <span class="dl-option-label">{{cta.appstore}}</span>
+              <span class="dl-option-note">{{dl.appstore_note}}</span>
+            </a>
+            <a class="dl-option" data-link="macFile">
+              <span class="dl-option-label">{{dl.mac_file}}</span>
+              <span class="dl-option-note">{{dl.mac_file_note}}</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="dl-platform" id="windows" aria-labelledby="dl-windows">
+          <h3 id="dl-windows">Windows</h3>
+          <p class="dl-for">{{dl.for_windows}}</p>
+          <div class="dl-options">
+            <a class="dl-option" data-link="windowsFile">
+              <span class="dl-option-label">{{dl.windows_file}}</span>
+              <span class="dl-option-note">{{dl.windows_file_note}}</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="dl-platform" id="ios" aria-labelledby="dl-ios">
+          <h3 id="dl-ios">{{platforms.ios}}</h3>
+          <p class="dl-for">{{dl.for_ios}}</p>
+          <div class="dl-options">
+            <a class="dl-option" data-link="iosAppStore">
+              <span class="dl-option-label">{{cta.ios}}</span>
+              <span class="dl-option-note">{{dl.ios_note}}</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="dl-platform" id="android" aria-labelledby="dl-android">
+          <h3 id="dl-android">{{platforms.android}}</h3>
+          <p class="dl-for">{{dl.for_android}}</p>
+          <div class="dl-options">
+            <a class="dl-option" data-link="android">
+              <span class="dl-option-label">{{cta.android}}</span>
+              <span class="dl-option-note">{{dl.android_note}}</span>
+            </a>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>© 2026 Hifi</span>
+      <a href="{{@home}}">{{dl.back}}</a>
+    </footer>
+
+    <script type="module" src="/src/download.ts"></script>
+  </body>
+</html>

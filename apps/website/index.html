@@ -1,0 +1,191 @@
+<!doctype html>
+<!-- Template: rendered once per language by src/i18n/render.ts (see the syntax there). -->
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!--@redirect-->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{meta.title}}</title>
+    <meta name="description" content="{{meta.description}}" />
+    <meta name="theme-color" content="#121d23" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{meta.og_title}}" />
+    <meta property="og:description" content="{{meta.og_description}}" />
+    <!--@og-->
+    <!--@alternates-->
+    <link rel="icon" href="/favicon.png" />
+    <!--@runtime-->
+  </head>
+  <body>
+    <canvas class="field" aria-hidden="true"></canvas>
+
+    <header class="nav">
+      <a class="nav-logo" href="#top" aria-label="{{nav.home_label}}">
+        <svg viewBox="0 0 28 20" aria-hidden="true">
+          <g fill="currentColor">
+            <rect x="1" y="9" width="2" height="9" rx="1" />
+            <rect x="7" y="3" width="2" height="15" rx="1" />
+            <rect x="13" y="6" width="2" height="12" rx="1" />
+            <rect x="19" y="1" width="2" height="17" rx="1" />
+            <rect x="25" y="11" width="2" height="7" rx="1" />
+          </g>
+        </svg>
+        Hifi
+      </a>
+      <nav class="nav-links" aria-label="{{nav.sections_label}}">
+        <a href="#path">{{nav.how}}</a>
+        <a href="#formats">{{nav.formats}}</a>
+        <a href="#enhance">{{nav.enhance}}</a>
+      </nav>
+      <label class="lang">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="8" />
+          <path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2z" />
+        </svg>
+        <span class="lang-current" data-lang-current></span>
+        <span class="visually-hidden">{{nav.language}}</span>
+        <select class="lang-select" data-lang-select><!--@lang-options--></select>
+      </label>
+      <a class="btn btn-small" href="{{@download}}">{{nav.download}}</a>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <h1 class="hero-title" data-split>{{hero.title}}</h1>
+        <div class="hero-body">
+          <p class="hero-lede">{{hero.lede}}</p>
+          <div class="cta-row">
+            <a class="btn btn-primary" data-download-primary href="{{@download}}">{{cta.all_platforms}}</a>
+            <a class="btn" href="{{@download}}#all">{{cta.other_platforms}}</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="path" id="path" aria-labelledby="path-title">
+        <div class="path-inner">
+          <h2 class="section-title" id="path-title">{{path.title}}</h2>
+
+          <div class="chain-wrap">
+            <div class="wire" aria-hidden="true"><span class="wire-fill"></span></div>
+            <ol class="chain">
+              <li class="chain-node">
+                <span class="chain-name">{{path.file}}</span>
+                <span class="chain-detail">{{path.file_detail}}</span>
+              </li>
+              <li class="chain-node">
+                <span class="chain-name">{{path.player}}</span>
+                <span class="chain-detail">{{path.player_detail}}</span>
+              </li>
+              <li class="chain-node">
+                <span class="chain-name">{{path.dac}}</span>
+                <span class="chain-detail">{{path.dac_detail}}</span>
+              </li>
+            </ol>
+          </div>
+
+          <dl class="meter">
+            <div>
+              <dt>{{path.samples}}</dt>
+              <dd class="num" data-samples>0</dd>
+            </div>
+            <div>
+              <dt>{{path.changed}}</dt>
+              <dd class="num meter-zero">0</dd>
+            </div>
+          </dl>
+          <p class="path-foot">{{path.foot}}</p>
+        </div>
+      </section>
+
+      <section class="formats" id="formats" aria-labelledby="formats-title">
+        <div class="formats-inner">
+          <div class="formats-head">
+            <h2 class="section-title" id="formats-title">{{formats.title}}</h2>
+            <p>{{formats.lede}}</p>
+          </div>
+
+          <div class="dial">
+            <p class="dial-readout num">
+              <span data-rate></span><span class="dial-unit" data-unit></span>
+            </p>
+            <p class="dial-caption" data-caption></p>
+            <div class="dial-scale" aria-hidden="true">
+              <div class="dial-ticks" data-ticks></div>
+              <span class="dial-needle" data-needle></span>
+            </div>
+          </div>
+
+          <div class="formats-foot">
+            <p>{{formats.dsd}}</p>
+            <p class="formats-files">{{formats.files}}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="enhance" id="enhance" aria-labelledby="enhance-title">
+        <div class="enhance-head">
+          <h2 class="section-title" id="enhance-title">{{enhance.title}}</h2>
+          <p>{{enhance.lede}}</p>
+        </div>
+        <ul class="enhance-list">
+          <li>
+            <h3>{{enhance.upsampling}}</h3>
+            <p>{{enhance.upsampling_detail}}</p>
+          </li>
+          <li>
+            <h3>{{enhance.eq}}</h3>
+            <p>{{enhance.eq_detail}}</p>
+          </li>
+          <li>
+            <h3>{{enhance.crossfeed}}</h3>
+            <p>{{enhance.crossfeed_detail}}</p>
+          </li>
+          <li>
+            <h3>{{enhance.lossy}}</h3>
+            <p>{{enhance.lossy_detail}}</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="app" id="app" aria-labelledby="app-title">
+        <div class="app-head">
+          <h2 class="section-title" id="app-title">{{app.title}}</h2>
+          <p>{{app.lede}}</p>
+        </div>
+        <figure class="app-shot">
+          <img src="/app.webp" width="2240" height="1480" alt="{{app.alt}}" loading="lazy" decoding="async" />
+        </figure>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-title">
+        <h2 class="download-title" id="download-title" data-split>{{download.title}}</h2>
+        <p class="download-lede">{{download.lede}}</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" data-download-primary href="{{@download}}">{{cta.all_platforms}}</a>
+          <a class="btn" href="{{@download}}#all">{{cta.other_platforms}}</a>
+        </div>
+        <ul class="platforms">
+          <li data-platform="mac">
+            <a href="{{@download}}#mac"><span>{{platforms.macos}}</span><span data-status>{{platforms.appstore}}</span></a>
+          </li>
+          <li data-platform="windows">
+            <a href="{{@download}}#windows"><span>{{platforms.windows}}</span><span data-status>{{platforms.installer}}</span></a>
+          </li>
+          <li data-platform="ios">
+            <a href="{{@download}}#ios"><span>{{platforms.ios}}</span><span data-status>App Store</span></a>
+          </li>
+          <li data-platform="android">
+            <a href="{{@download}}#android"><span>{{platforms.android}}</span><span data-status>Android</span></a>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>© 2026 Hifi</span>
+      <a href="#top">{{footer.top}}</a>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
