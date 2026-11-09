@@ -204,7 +204,8 @@ if (field) {
   });
 }
 
-const PATH: FieldState = { ...HERO, camX: 0, camY: 0.35, camZ: 12, lookX: 0, lookY: 0, lookZ: 0, focus: 1 };
+// Dimmed and lowered: the field runs behind the steps' text here, which has to stay readable.
+const PATH: FieldState = { ...HERO, camX: 0, camY: 0.35, camZ: 12, lookX: 0, lookY: 1.1, lookZ: 0, focus: 1, visible: 0.45 };
 // Side-on, a few rows only: denser sampling and the 1-bit DSD pulses read at a glance.
 const FORMATS_START: FieldState = { ...HERO, camX: 0, camY: 1.4, camZ: 12.5, lookX: 0, lookY: -0.9, lookZ: 0, focus: 0.8 };
 // Densities are visual (stems per wave cycle), not literal: the jump to DSD would not fit a screen.

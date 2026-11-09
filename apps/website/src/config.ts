@@ -17,10 +17,10 @@ export const LINKS: {
   android: string | null;
 } = {
   macAppStore: null,
-  macFile: null,
+  macFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-mac.dmg",
   iosAppStore: null,
   windowsFile: null,
-  android: null,
+  android: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-android.apk",
 };
 
 // Public origin of the site, e.g. "https://hifi.example". Used at build time for hreflang,
