@@ -56,6 +56,34 @@ pub enum UserError {
     CopyFailed { name: String, detail: String },
     /// iOS: the app has no folder to keep music in.
     NoAppFolder,
+    /// The playlist isn't there (deleted elsewhere).
+    PlaylistNotFound,
+    /// A playlist file or pasted text couldn't be read or understood.
+    PlaylistUnreadable { detail: String },
+    /// The playlist file holds no tracks.
+    PlaylistNoTracks,
+    /// Export: the file name ends in no format we write (.m3u8, .pls, .xspf, .csv).
+    PlaylistFormat,
+    /// A file couldn't be written (`detail`: the OS's reason).
+    WriteFailed { detail: String },
+    /// This build has no streaming services (App Store builds).
+    StreamingOff,
+    /// Not signed in to `service` (Qobuz, TIDAL).
+    SignInNeeded { service: String },
+    /// The sign-in to `service` has run out.
+    SignInExpired { service: String },
+    /// The sign-in window was closed before signing in.
+    SignInCancelled,
+    /// `service` gives only a 30-second preview of this track (the plan doesn't cover it).
+    StreamPreview { service: String },
+    /// `service` gives this track only encrypted, which the player doesn't decode.
+    StreamEncrypted { service: String },
+    /// `service` doesn't offer this track in the account's country or plan.
+    StreamRestricted { service: String },
+    /// `service` changed its player in a way this app doesn't follow yet.
+    StreamChanged { service: String },
+    /// `service` couldn't be reached (`detail`: the network's reason).
+    ServiceUnreachable { service: String, detail: String },
     /// Anything else, in the words of whatever failed.
     Other { message: String },
 }
@@ -112,6 +140,20 @@ impl fmt::Display for UserError {
             ),
             CopyFailed { name, detail } => write!(f, "couldn't copy {name}: {detail}"),
             NoAppFolder => write!(f, "the app has no music folder"),
+            PlaylistNotFound => write!(f, "playlist not found"),
+            PlaylistUnreadable { detail } => write!(f, "couldn't read the playlist: {detail}"),
+            PlaylistNoTracks => write!(f, "the playlist has no tracks"),
+            PlaylistFormat => write!(f, "unknown playlist format: use .m3u8, .pls, .xspf or .csv"),
+            WriteFailed { detail } => write!(f, "couldn't write the file: {detail}"),
+            StreamingOff => write!(f, "this version of the app has no streaming services"),
+            SignInNeeded { service } => write!(f, "sign in to {service}"),
+            SignInExpired { service } => write!(f, "the {service} sign-in has expired; sign in again"),
+            SignInCancelled => write!(f, "sign-in cancelled"),
+            StreamPreview { service } => write!(f, "{service} gives only a 30-second preview of this track: your plan doesn't cover it"),
+            StreamEncrypted { service } => write!(f, "{service} gives this track only encrypted, which the player doesn't play"),
+            StreamRestricted { service } => write!(f, "{service} doesn't offer this track in your country or plan"),
+            StreamChanged { service } => write!(f, "{service} changed its player; this app needs an update"),
+            ServiceUnreachable { service, detail } => write!(f, "couldn't reach {service}: {detail}"),
             Other { message } => f.write_str(message),
         }
     }

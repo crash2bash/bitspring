@@ -2,14 +2,25 @@
   import { artistLabel, coverUrl, resolution, type Album } from "./api";
   import { t } from "./i18n.svelte";
 
-  let { album, playing = false, onopen }: { album: Album; playing?: boolean; onopen: (a: Album) => void } = $props();
+  let {
+    album,
+    playing = false,
+    src = undefined,
+    onopen,
+  }: {
+    album: Album;
+    playing?: boolean;
+    /** Cover URL (streaming albums); library albums use the cover:// protocol. */
+    src?: string | null;
+    onopen: (a: Album) => void;
+  } = $props();
   let broken = $state(false);
 </script>
 
 <button class="tile" onclick={() => onopen(album)} title={`${artistLabel(album.artist)} — ${album.title}`}>
   <span class="art">
     {#if album.hasCover && !broken}
-      <img src={coverUrl(album.id)} alt="" loading="lazy" decoding="async" onerror={() => (broken = true)} />
+      <img src={src ?? coverUrl(album.id)} alt="" loading="lazy" decoding="async" onerror={() => (broken = true)} />
     {:else}
       <span class="initial" aria-hidden="true">{album.title.slice(0, 1)}</span>
     {/if}
@@ -20,7 +31,7 @@
   <span class="meta">
     {#if album.year}<span class="num">{album.year}</span>{/if}
     <span class="fmt" class:hi={album.hiRes} class:lossy={album.format === "MP3" || album.format === "AAC" || album.format === "Vorbis"}>
-      {album.hiRes || album.maxBits ? resolution(album.maxBits, album.maxRate) : album.format}
+      {(album.hiRes || album.maxBits) && album.maxRate ? resolution(album.maxBits, album.maxRate) : album.format}
     </span>
   </span>
 </button>

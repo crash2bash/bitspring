@@ -8,6 +8,11 @@ mod android_media;
 #[cfg(target_os = "ios")]
 mod ios_media;
 mod library;
+mod playlists;
+/// Qobuz and TIDAL: the real thing outside the App Store, a stand-in inside it.
+#[cfg_attr(all(feature = "streaming", not(target_os = "ios")), path = "stream_on.rs")]
+#[cfg_attr(not(all(feature = "streaming", not(target_os = "ios"))), path = "stream_off.rs")]
+mod stream;
 /// Lock screen / notification player and remote controls, per phone OS.
 #[cfg(target_os = "android")]
 use android_media as media;
@@ -359,8 +364,12 @@ fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: b
     (if note.is_none() { DsdMode::Dop } else { DsdMode::Pcm }, note)
 }
 
+/// Open a library file — or a Qobuz/TIDAL track, whose "path" is its id (`qobuz:track:…`).
 fn open_for(path: &std::path::Path, mode: DsdMode) -> CmdResult<Arc<Track>> {
-    open_file(path, mode).map_err(err)
+    match path.to_str().filter(|p| stream::is_uri(p)) {
+        Some(uri) => stream::open(uri).map_err(|e| UserError::of(&e)),
+        None => open_file(path, mode).map_err(err),
+    }
 }
 
 /// The OS's preferred UI languages, best first (BCP 47, e.g. "de-DE", "zh-Hant-TW"). The web
@@ -758,6 +767,20 @@ pub fn run() {
             use tauri::Manager;
             let lib = library::Library::load(app.handle());
             app.manage(lib);
+            app.manage(playlists::Playlists::default());
+            stream::init(app.handle());
+            // Android: the main window is made here rather than from the config (see
+            // tauri.android.conf.json), so a streaming sign-in can run in it.
+            #[cfg(target_os = "android")]
+            {
+                let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned();
+                if let Some(config) = config {
+                    let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+                    #[cfg(feature = "streaming")]
+                    let builder = builder.on_navigation(|u| stream::main_navigation(u));
+                    builder.build()?;
+                }
+            }
             #[cfg(target_os = "ios")]
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.with_webview(|wv| ios_edge_to_edge(wv.inner()));
@@ -809,7 +832,27 @@ pub fn run() {
             library::library_add_folder,
             library::library_remove_folder,
             library::library_rescan,
-            library::import_files
+            library::import_files,
+            playlists::playlists_list,
+            playlists::playlist_get,
+            playlists::playlist_create,
+            playlists::playlist_update,
+            playlists::playlist_add,
+            playlists::playlist_delete,
+            playlists::playlist_import_file,
+            playlists::playlist_import_text,
+            playlists::playlist_export,
+            stream::streaming_status,
+            stream::streaming_set_quality,
+            stream::streaming_login,
+            stream::streaming_logout,
+            stream::streaming_search,
+            stream::streaming_album,
+            stream::streaming_favorites,
+            stream::streaming_playlists,
+            stream::streaming_playlist,
+            stream::streaming_import_playlist,
+            stream::streaming_find_missing
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

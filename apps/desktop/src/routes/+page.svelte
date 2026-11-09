@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, inTauri, isMac, isIOS, isAndroid, fileName, trackName, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import { api, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
+  import { labels, labelOf } from "$lib/labels.svelte";
+  import AddToPlaylist from "$lib/AddToPlaylist.svelte";
   import Library from "$lib/Library.svelte";
+  import Streaming from "$lib/Streaming.svelte";
   import DevicePicker from "$lib/DevicePicker.svelte";
   import Display from "$lib/Display.svelte";
   import Enhancers from "$lib/Enhancers.svelte";
@@ -46,7 +49,21 @@
   let dragOver = $state(false);
   let sweepKey = $state(0);
   let advancing = false;
-  let screen = $state<"player" | "library" | "queue">(load("screen", "player"));
+  let screen = $state<"player" | "library" | "queue" | "streaming">(load("screen", "player"));
+  /** Qobuz/TIDAL: null until known; `available` is false in App Store builds. */
+  let streaming = $state<StreamingStatus | null>(null);
+  async function refreshStreaming() {
+    try {
+      streaming = await api.streamingStatus();
+    } catch {
+      streaming = null;
+    }
+    if (!streaming?.available && screen === "streaming") screen = "library";
+  }
+  /** The queue as playlist entries (tags come from the library on the Rust side). */
+  function queueEntries(): PlaylistEntry[] {
+    return queue.map((p) => ({ uri: p, title: labelOf(p), artist: labels[p]?.artist ?? null, album: null, duration: null }));
+  }
   let libGoto = $state<LibraryGoto | null>(null);
   let gotoCount = 0;
   /** Open the playing track's artist or album in the library. */
@@ -92,7 +109,7 @@
       error = null;
       sweepKey++;
     } catch (e) {
-      error = t("err.play", { name: fileName(queue[i]), error: errorText(e) });
+      error = t("err.play", { name: labelOf(queue[i]), error: errorText(e) });
       index = i;
     } finally {
       loading = false;
@@ -262,6 +279,7 @@
 
   onMount(() => {
     refreshDevices();
+    refreshStreaming();
     // Restore last session's processing (also loads and validates the EQ file).
     applyDsp(untrack(() => dsp));
     const timer = setInterval(async () => {
@@ -321,6 +339,9 @@
     <nav class="tabs" aria-label={t("nav.screens")}>
       <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>{t("nav.player")}</button>
       <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>{t("nav.library")}</button>
+      {#if streaming?.available}
+        <button class:sel={screen === "streaming"} aria-current={screen === "streaming" ? "page" : undefined} onclick={() => (screen = "streaming")}>{t("nav.streaming")}</button>
+      {/if}
     </nav>
     <div class="controls">
       <Enhancers settings={dsp} {eq} onchange={applyDsp} onpickeq={pickEq} />
@@ -333,7 +354,10 @@
     <div class="q-head">
       <h2>{t("nav.queue")}</h2>
       {#if queue.length}
-        <button class="q-clear" onclick={clearQueue}>{t("queue.clear")}</button>
+        <span class="q-tools">
+          <AddToPlaylist compact label={t("pl.saveQueue")} entries={queueEntries} />
+          <button class="q-clear" onclick={clearQueue}>{t("queue.clear")}</button>
+        </span>
       {/if}
     </div>
 
@@ -341,11 +365,11 @@
       <ol class="q-list">
         {#each queue as path, i (path + i)}
           <li class:current={i === index}>
-            <button class="q-item" onclick={() => playIndex(i)} title={path}>
+            <button class="q-item" onclick={() => playIndex(i)} title={labels[path]?.artist ? `${labels[path].artist} — ${labelOf(path)}` : path}>
               <span class="q-n num">{i + 1}</span>
-              <span class="q-name">{trackName(path)}</span>
+              <span class="q-name">{labelOf(path)}</span>
             </button>
-            <button class="q-remove" onclick={() => removeAt(i)} aria-label={t("queue.remove", { name: trackName(path) })}>
+            <button class="q-remove" onclick={() => removeAt(i)} aria-label={t("queue.remove", { name: labelOf(path) })}>
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.5" /></svg>
             </button>
           </li>
@@ -417,9 +441,13 @@
       </button>
     </div>
   </main>
+  {:else if screen === "streaming" && streaming?.available}
+    <main class="lib">
+      <Streaming status={streaming} currentPath={testing ? null : (now?.path ?? null)} onstatus={refreshStreaming} onplay={playPaths} onenqueue={enqueue} />
+    </main>
   {:else}
     <main class="lib">
-      <Library currentPath={testing ? null : (now?.path ?? null)} goto={libGoto} onplay={playPaths} onenqueue={enqueue} />
+      <Library currentPath={testing ? null : (now?.path ?? null)} goto={libGoto} {streaming} onplay={playPaths} onenqueue={enqueue} />
     </main>
   {/if}
 
@@ -464,6 +492,12 @@
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="3" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
       {t("nav.library")}
     </button>
+    {#if streaming?.available}
+      <button class:sel={screen === "streaming"} aria-current={screen === "streaming" ? "page" : undefined} onclick={() => (screen = "streaming")}>
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 13a8 8 0 0 1 16 0M6.5 13a4.5 4.5 0 0 1 9 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><circle cx="11" cy="14.5" r="1.8" fill="currentColor" /></svg>
+        {t("nav.streaming")}
+      </button>
+    {/if}
     <button class:sel={screen === "queue"} aria-current={screen === "queue" ? "page" : undefined} onclick={() => (screen = "queue")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 5h16M3 11h16M3 17h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
       {t("nav.queue")}{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
@@ -680,6 +714,11 @@
     margin: 0;
     font-size: var(--t-md);
     font-weight: 600;
+  }
+  .q-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
   .q-clear {
     color: var(--mist);

@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+encoding_rs = "0.8.44"
 log = "0.4.35"
+roxmltree = "0.21.2"
 serde = { version = "1.0.229", features = ["derive"] }
 symphonia = { version = "0.6.1", features = ["all"] }
 

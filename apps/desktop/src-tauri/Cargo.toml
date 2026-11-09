@@ -38,3 +38,13 @@ log = "0.4"
 ndk-context = "0.1"
 
 
+
+# Qobuz and TIDAL. On by default (DMG, Windows, Android); the Mac App Store build goes
+# without it: `npm run build:appstore` (= tauri build -- --no-default-features).
+# iOS never gets it (every iPhone build goes through the App Store).
+[features]
+default = ["streaming"]
+streaming = ["dep:hifi-streaming"]
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+hifi-streaming = { path = "../../../crates/streaming", optional = true }

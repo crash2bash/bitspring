@@ -83,6 +83,16 @@ fn phone_music_dirs(_app: &AppHandle) -> Vec<String> {
     Vec::new()
 }
 
+/// Where a phone saves exported playlists: the folder the user reaches from outside the app
+/// (iPhone: Files → Hifi; Android: the app's own Music folder). Desktop: Downloads.
+pub fn export_dir(app: &AppHandle) -> Option<PathBuf> {
+    if cfg!(mobile) {
+        phone_music_dirs(app).last().map(PathBuf::from)
+    } else {
+        app.path().download_dir().ok()
+    }
+}
+
 /// The app's Documents folder, where music copied to the phone lives.
 fn music_dir(app: &AppHandle) -> Option<String> {
     let d = app.path().document_dir().ok()?;
@@ -159,6 +169,11 @@ impl Library {
             g.progress = None;
             g.revision += 1;
         });
+    }
+
+    /// The scanned tracks as they are now.
+    pub fn tracks(&self) -> Arc<Vec<TrackInfo>> {
+        self.0.lock().unwrap().tracks.clone()
     }
 
     fn status(&self) -> LibraryStatus {

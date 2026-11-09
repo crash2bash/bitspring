@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { clock, khz, resolution, type LibTrack } from "./api";
   import { collator as makeCollator, t } from "./i18n.svelte";
 
@@ -14,6 +15,8 @@
     sortKey = $bindable<SortKey>("artist"),
     sortAsc = $bindable(true),
     onplay,
+    actions,
+    dimmed,
   }: {
     tracks: LibTrack[];
     currentPath?: string | null;
@@ -23,6 +26,10 @@
     sortAsc?: boolean;
     /** Play `list` starting at `index` (the list as currently shown). */
     onplay: (list: LibTrack[], index: number) => void;
+    /** Buttons at the end of each row (index = position in `tracks` as given). */
+    actions?: Snippet<[LibTrack, number]>;
+    /** Rows that can't be played (missing files): shown greyed, not playable. */
+    dimmed?: (t: LibTrack) => boolean;
   } = $props();
 
   const collator = $derived(makeCollator());
@@ -87,18 +94,20 @@
           {/if}
         </th>
       {/each}
+      {#if actions}<th class="actions"><span class="th"></span></th>{/if}
     </tr>
   </thead>
   <tbody>
-    {#each sorted as tr, i (tr.path)}
-      <tr class:current={tr.path === currentPath} ondblclick={() => onplay(sorted, i)} onclick={() => touch && onplay(sorted, i)}>
+    {#each sorted as tr, i (tr.path + i)}
+      {@const off = dimmed?.(tr) ?? false}
+      <tr class:current={tr.path === currentPath} class:off ondblclick={() => !off && onplay(sorted, i)} onclick={() => touch && !off && onplay(sorted, i)}>
         {#each columns as c (c)}
           <td class={c}>
             {#if c === "number"}
               {#if tr.path === currentPath}
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-label={t("common.playing")}><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
               {:else}
-                <button class="play-row" onclick={(e) => { e.stopPropagation(); onplay(sorted, i); }} aria-label={t("track.play", { title: tr.title })}>
+                <button class="play-row" disabled={off} onclick={(e) => { e.stopPropagation(); onplay(sorted, i); }} aria-label={t("track.play", { title: tr.title })}>
                   <span class="n num">{tr.trackNumber ?? "–"}</span>
                   <svg class="p" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
                 </button>
@@ -115,11 +124,12 @@
               <span class="num">{clock(tr.duration)}</span>
             {:else if c === "format"}
               <span class="fmt" class:hi={tr.hiRes} class:lossy={!tr.lossless}>
-                {tr.format}{tr.lossless ? (tr.bits ? ` ${resolution(tr.bits, tr.sampleRate)}` : ` ${khz(tr.sampleRate)} ${t("unit.khz")}`) : ""}
+                {tr.format}{tr.lossless && tr.sampleRate ? (tr.bits ? ` ${resolution(tr.bits, tr.sampleRate)}` : ` ${khz(tr.sampleRate)} ${t("unit.khz")}`) : ""}
               </span>
             {/if}
           </td>
         {/each}
+        {#if actions}<td class="actions">{@render actions(tr, sortable ? tracks.indexOf(tr) : i)}</td>{/if}
       </tr>
     {/each}
   </tbody>
@@ -188,6 +198,14 @@
   }
   tr.current td {
     color: var(--brass);
+  }
+  tr.off td {
+    color: var(--mist-dim);
+  }
+  .actions {
+    width: 76px;
+    text-align: right;
+    overflow: visible;
   }
   .number {
     width: 44px;

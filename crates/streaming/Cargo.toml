@@ -1,0 +1,19 @@
+[package]
+name = "hifi-streaming"
+version = "0.1.0"
+edition = "2024"
+description = "Qobuz and TIDAL for the Hifi player (builds outside the App Store only)"
+
+[dependencies]
+anyhow = "1.0.104"
+base64 = "0.23.1"
+getrandom = "0.3"
+hifi-engine = { path = "../engine" }
+log = "0.4.35"
+md-5 = "0.11.0"
+regex = "1.13.1"
+roxmltree = "0.21.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+ureq = "3"

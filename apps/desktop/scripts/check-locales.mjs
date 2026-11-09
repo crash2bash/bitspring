@@ -42,7 +42,8 @@ for (const code of present) {
     for (const f of forms(v)) {
       if (typeof f !== "string" || !f.trim()) fail(code, `${key}: empty`);
       const have = holes(f);
-      const ok = typeof src === "string" ? have === want : have === want || have === want.replace(/(^|,)n(,|$)/, "$1$2").replace(/^,|,$/g, "");
+      const withoutN = want.split(",").filter((h) => h !== "n").join(",");
+      const ok = typeof src === "string" ? have === want : have === want || have === withoutN;
       if (!ok) fail(code, `${key}: placeholders {${have}} instead of {${want}}`);
     }
     if (typeof v === "object") {

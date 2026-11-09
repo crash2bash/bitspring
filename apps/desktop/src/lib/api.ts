@@ -65,9 +65,12 @@ export type EngineError =
   | {
       code:
         | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice"
-        | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder";
+        | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder"
+        | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled";
     }
-  | { code: "audioSetup" | "outputFailed" | "profileUnreadable"; detail: string }
+  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed"; detail: string }
+  | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
+  | { code: "serviceUnreachable"; service: string; detail: string }
   | { code: "noRates"; device: string }
   | { code: "rateRefused"; khz: number }
   | { code: "rateStuck"; khz: number; current: number }
@@ -197,6 +200,138 @@ export interface LibraryGoto {
   n: number;
 }
 
+// --- playlists ---------------------------------------------------------------------------------
+
+export interface PlaylistEntry {
+  /** File path or streaming id (qobuz:track:…); null = not found when imported. */
+  uri: string | null;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  duration: number | null;
+  isrc?: string | null;
+}
+
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+  count: number;
+  duration: number;
+  updated: number;
+}
+
+export interface PlaylistDetail {
+  id: string;
+  name: string;
+  entries: (PlaylistEntry & { available: boolean })[];
+}
+
+export interface Imported {
+  id: string;
+  name: string;
+  total: number;
+  found: number;
+  missing: string[];
+}
+
+// --- streaming -----------------------------------------------------------------------------------
+
+export type Service = "qobuz" | "tidal";
+export type StreamQuality = "cd" | "hires96" | "max";
+
+export interface Account {
+  service: Service;
+  signedIn: boolean;
+  user: string | null;
+  note: string | null;
+}
+
+export interface StreamingStatus {
+  /** This build has the services at all (never in App Store builds). */
+  available: boolean;
+  accounts: Account[];
+  quality: StreamQuality;
+}
+
+export interface STrack {
+  uri: string;
+  service: Service | null;
+  id: string;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  albumId: string | null;
+  albumArtist: string | null;
+  year: string | null;
+  duration: number;
+  trackNumber: number | null;
+  discNumber: number | null;
+  cover: string | null;
+  isrc: string | null;
+  bits: number | null;
+  rate: number | null;
+  hiRes: boolean;
+  streamable: boolean;
+}
+
+export interface SAlbum {
+  id: string;
+  service: Service | null;
+  title: string;
+  artist: string;
+  year: string | null;
+  genre: string | null;
+  cover: string | null;
+  trackCount: number;
+  duration: number;
+  bits: number | null;
+  rate: number | null;
+  hiRes: boolean;
+}
+
+export interface SPlaylist {
+  id: string;
+  service: Service | null;
+  name: string;
+  trackCount: number;
+  cover: string | null;
+  owner: string | null;
+}
+
+export const SERVICE_NAME: Record<Service, string> = { qobuz: "Qobuz", tidal: "TIDAL" };
+
+/** "qobuz" for qobuz:track:…, null for a file. */
+export function serviceOf(path: string | null | undefined): Service | null {
+  const m = path?.match(/^(qobuz|tidal):track:\d+$/);
+  return m ? (m[1] as Service) : null;
+}
+
+/** A streaming track in the shape the track table shows. */
+export function streamToLib(t: STrack): LibTrack {
+  return {
+    path: t.uri, title: t.title, artist: t.artist, albumArtist: t.albumArtist, album: t.album, genre: null, year: t.year,
+    trackNumber: t.trackNumber, discNumber: t.discNumber, duration: t.duration, sampleRate: t.rate ?? 0, bits: t.bits,
+    channels: 2, format: t.rate ? "FLAC" : t.hiRes ? "FLAC hi-res" : "FLAC", lossless: true, hasCover: !!t.cover, size: 0, mtime: 0, albumId: t.albumId ?? "", hiRes: t.hiRes,
+  };
+}
+
+/** A streaming album in the shape the album tiles show. */
+export function streamAlbumToLib(a: SAlbum): Album {
+  return {
+    id: a.id, title: a.title, artist: a.artist, year: a.year, genre: a.genre, tracks: [], duration: a.duration,
+    maxRate: a.rate ?? 0, maxBits: a.bits, format: a.rate ? "FLAC" : a.hiRes ? "Hi-Res" : "FLAC", hiRes: a.hiRes,
+    hasCover: !!a.cover, trackCount: a.trackCount,
+  };
+}
+
+export function entryFromTrack(t: LibTrack): PlaylistEntry {
+  return { uri: t.path, title: t.title, artist: t.artist ?? t.albumArtist, album: t.album, duration: t.duration || null };
+}
+
+export function entryFromStream(t: STrack): PlaylistEntry {
+  return { uri: t.uri, title: t.title, artist: t.artist, album: t.album, duration: t.duration || null, isrc: t.isrc };
+}
+
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
@@ -239,6 +374,26 @@ export const api = {
   libraryRemoveFolder: (path: string) => call<LibraryStatus>("library_remove_folder", { path }),
   libraryRescan: () => call<LibraryStatus>("library_rescan"),
   meter: () => call<[number, number]>("meter"),
+  playlists: () => call<PlaylistSummary[]>("playlists_list"),
+  playlist: (id: string) => call<PlaylistDetail>("playlist_get", { id }),
+  playlistCreate: (name: string, entries: PlaylistEntry[]) => call<PlaylistSummary>("playlist_create", { name, entries }),
+  playlistUpdate: (id: string, name: string | null, entries: PlaylistEntry[] | null) => call<PlaylistSummary>("playlist_update", { id, name, entries }),
+  playlistAdd: (id: string, entries: PlaylistEntry[]) => call<PlaylistSummary>("playlist_add", { id, entries }),
+  playlistDelete: (id: string) => call<void>("playlist_delete", { id }),
+  playlistImportFile: (path: string) => call<Imported[]>("playlist_import_file", { path }),
+  playlistImportText: (text: string, name: string) => call<Imported[]>("playlist_import_text", { text, name }),
+  playlistExport: (id: string, path: string | null, format: string | null = null) => call<string>("playlist_export", { id, path, format }),
+  streamingStatus: () => call<StreamingStatus>("streaming_status"),
+  streamingSetQuality: (quality: StreamQuality) => call<void>("streaming_set_quality", { quality }),
+  streamingLogin: (service: Service) => call<Account[]>("streaming_login", { service }),
+  streamingLogout: (service: Service) => call<void>("streaming_logout", { service }),
+  streamingSearch: (service: Service, query: string) => call<{ albums: SAlbum[]; tracks: STrack[] }>("streaming_search", { service, query }),
+  streamingAlbum: (service: Service, id: string) => call<{ album: SAlbum; tracks: STrack[] }>("streaming_album", { service, id }),
+  streamingFavorites: (service: Service) => call<SAlbum[]>("streaming_favorites", { service }),
+  streamingPlaylists: (service: Service) => call<SPlaylist[]>("streaming_playlists", { service }),
+  streamingPlaylist: (service: Service, id: string) => call<{ playlist: SPlaylist; tracks: STrack[] }>("streaming_playlist", { service, id }),
+  streamingImportPlaylist: (service: Service, id: string) => call<Imported>("streaming_import_playlist", { service, id }),
+  streamingFindMissing: (playlistId: string, service: Service) => call<number>("streaming_find_missing", { playlistId, service }),
   setPaused: (paused: boolean) => call<void>("set_paused", { paused }),
   seek: (seconds: number) => call<void>("seek", { seconds }),
   stop: () => call<void>("stop"),
@@ -368,7 +523,18 @@ export function errorText(e: unknown): string {
       case "audioSetup":
       case "outputFailed":
       case "profileUnreadable":
+      case "playlistUnreadable":
+      case "writeFailed":
         return t(`error.${err.code}`, { detail: err.detail });
+      case "signInNeeded":
+      case "signInExpired":
+      case "streamPreview":
+      case "streamEncrypted":
+      case "streamRestricted":
+      case "streamChanged":
+        return t(`error.${err.code}`, { service: err.service });
+      case "serviceUnreachable":
+        return t("error.serviceUnreachable", { service: err.service, detail: err.detail });
       default:
         return t(`error.${err.code}`);
     }

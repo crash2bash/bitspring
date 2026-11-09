@@ -456,7 +456,25 @@ fn run(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: 
 ///
 /// `expected_secs` sizes the buffer when the container doesn't state its length (streams).
 pub fn open_source(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>) -> Result<Arc<Track>> {
-    let Opened { mut format, mut decoder, track_id, track } = open(source, &hint, None)?;
+    open_stream(source, hint, expected_secs, TrackMeta::default())
+}
+
+/// [`open_source`] for a stream whose tags come from elsewhere (a streaming service's
+/// catalogue): fields set in `meta` win over what the stream itself carries.
+pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta) -> Result<Arc<Track>> {
+    let Opened { mut format, mut decoder, track_id, mut track } = open(source, &hint, None)?;
+    let own = std::mem::take(&mut track.meta);
+    track.meta = TrackMeta {
+        title: meta.title.or(own.title),
+        artist: meta.artist.or(own.artist),
+        album: meta.album.or(own.album),
+        album_artist: meta.album_artist.or(own.album_artist),
+        genre: meta.genre.or(own.genre),
+        year: meta.year.or(own.year),
+        track_number: meta.track_number.or(own.track_number),
+        disc_number: meta.disc_number.or(own.disc_number),
+        cover: meta.cover.or(own.cover),
+    };
     if track.expected.load(Ordering::Relaxed) == 0 {
         if let Some(s) = expected_secs {
             track.expected.store((s * track.sample_rate as f64) as usize, Ordering::Relaxed);

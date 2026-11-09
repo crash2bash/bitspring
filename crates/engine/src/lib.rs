@@ -8,6 +8,7 @@ pub mod dsp;
 pub mod error;
 pub mod library;
 pub mod output;
+pub mod playlist;
 pub mod rate;
 pub mod ring;
 pub mod testsignal;
@@ -22,7 +23,9 @@ pub mod ios_out;
 pub mod android_out;
 
 pub use error::UserError;
-pub use decode::{DsdSource, Track, TrackMeta, load_track, open_source, open_track};
+pub use decode::{DsdSource, Track, TrackMeta, load_track, open_source, open_stream, open_track};
+pub use symphonia::core::formats::probe::Hint;
+pub use symphonia::core::io::MediaSource;
 
 use std::path::Path;
 use std::sync::Arc;

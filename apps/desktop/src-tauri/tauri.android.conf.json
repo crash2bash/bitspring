@@ -1,0 +1,12 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Hifi",
+        "backgroundColor": "#16232a",
+        "create": false
+      }
+    ]
+  }
+}

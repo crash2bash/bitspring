@@ -112,6 +112,24 @@ let paused = false;
 let pausedAt = 0;
 let duration = 0;
 
+// --- playlists and streaming (layout work only) ---
+type MockEntry = { uri: string | null; title: string; artist: string | null; album: string | null; duration: number | null };
+const mockLists: { id: string; name: string; updated: number; entries: MockEntry[] }[] = [];
+let mockSignedIn: Record<string, boolean> = { qobuz: false, tidal: false };
+let mockQuality = "max";
+function mockSAlbum(i: number, svc: string) {
+  const t = ["Kind of Blue", "A Love Supreme", "Blue Train", "Mingus Ah Um", "Time Out", "Moanin'"][i % 6];
+  const a = ["Miles Davis", "John Coltrane", "John Coltrane", "Charles Mingus", "Dave Brubeck", "Art Blakey"][i % 6];
+  return { id: `${svc}-${i}`, service: svc, title: t, artist: a, year: String(1957 + i), genre: "Jazz", cover: mockCover(`m${i}`), trackCount: 6, duration: 2700, bits: i % 2 ? 24 : 16, rate: svc === "tidal" ? null : i % 2 ? 192000 : 44100, hiRes: i % 2 === 1 };
+}
+function mockSTrack(i: number, svc: string, album = mockSAlbum(0, svc)) {
+  const titles = ["So What", "Freddie Freeloader", "Blue in Green", "All Blues", "Flamenco Sketches", "Acknowledgement"];
+  return { uri: `${svc}:track:${1000 + i}`, service: svc, id: String(1000 + i), title: titles[i % 6], artist: album.artist, album: album.title, albumId: album.id, albumArtist: album.artist, year: album.year, duration: 300 + i * 17, trackNumber: i + 1, discNumber: 1, cover: album.cover, isrc: null, bits: album.bits, rate: album.rate, hiRes: album.hiRes, streamable: true };
+}
+function mockSummary(p: (typeof mockLists)[number]) {
+  return { id: p.id, name: p.name, count: p.entries.length, duration: p.entries.reduce((s, e) => s + (e.duration ?? 0), 0), updated: p.updated };
+}
+
 export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
   const now = () => (paused ? pausedAt : (performance.now() - started) / 1000);
   switch (cmd) {
@@ -204,6 +222,76 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     }
     case "channel_test":
       return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, dsdRate: null, dop: false, dsdNote: null, bitPerfect: true } as T;
+    case "playlists_list":
+      return [...mockLists].sort((a, b) => b.updated - a.updated).map(mockSummary) as T;
+    case "playlist_get": {
+      const p = mockLists.find((l) => l.id === args.id)!;
+      return { id: p.id, name: p.name, entries: p.entries.map((e) => ({ ...e, available: !!e.uri })) } as T;
+    }
+    case "playlist_create": {
+      const p = { id: String(Date.now()), name: args.name as string, updated: Date.now(), entries: args.entries as MockEntry[] };
+      mockLists.push(p);
+      return mockSummary(p) as T;
+    }
+    case "playlist_update": {
+      const p = mockLists.find((l) => l.id === args.id)!;
+      if (args.name) p.name = args.name as string;
+      if (args.entries) p.entries = args.entries as MockEntry[];
+      p.updated = Date.now();
+      return mockSummary(p) as T;
+    }
+    case "playlist_add": {
+      const p = mockLists.find((l) => l.id === args.id)!;
+      p.entries.push(...(args.entries as MockEntry[]));
+      return mockSummary(p) as T;
+    }
+    case "playlist_delete":
+      mockLists.splice(mockLists.findIndex((l) => l.id === args.id), 1);
+      return undefined as T;
+    case "playlist_import_file":
+    case "playlist_import_text": {
+      const entries: MockEntry[] = [
+        ...libTracks.slice(0, 5).map((t) => ({ uri: t.path, title: t.title, artist: t.artist, album: t.album, duration: t.duration })),
+        { uri: null, title: "Come Together", artist: "The Beatles", album: "Abbey Road", duration: 259 },
+        { uri: "qobuz:track:19512574", title: "So What", artist: "Miles Davis", album: "Kind of Blue", duration: 562 },
+      ];
+      const p = { id: String(Date.now()), name: (args.name as string) || "Liked Songs", updated: Date.now(), entries };
+      mockLists.push(p);
+      return [{ id: p.id, name: p.name, total: entries.length, found: entries.length - 1, missing: ["The Beatles – Come Together"] }] as T;
+    }
+    case "playlist_export":
+      return "/Users/me/Downloads/playlist.m3u8" as T;
+    case "streaming_status":
+      return { available: !isIOS, quality: mockQuality, accounts: ["qobuz", "tidal"].map((s) => ({ service: s, signedIn: mockSignedIn[s], user: mockSignedIn[s] ? "me@example.com" : null, note: null })) } as T;
+    case "streaming_set_quality":
+      mockQuality = args.quality as string;
+      return undefined as T;
+    case "streaming_login":
+      mockSignedIn = { ...mockSignedIn, [args.service as string]: true };
+      return [] as T;
+    case "streaming_logout":
+      mockSignedIn = { ...mockSignedIn, [args.service as string]: false };
+      return undefined as T;
+    case "streaming_search":
+      return { albums: [0, 1, 2, 3, 4].map((i) => mockSAlbum(i, args.service as string)), tracks: [0, 1, 2, 3].map((i) => mockSTrack(i, args.service as string)) } as T;
+    case "streaming_album": {
+      const i = Number(String(args.id).split("-")[1] ?? 0);
+      const a = mockSAlbum(i, args.service as string);
+      return { album: a, tracks: [0, 1, 2, 3, 4].map((k) => mockSTrack(k, args.service as string, a)) } as T;
+    }
+    case "streaming_favorites":
+      return [1, 3, 5].map((i) => mockSAlbum(i, args.service as string)) as T;
+    case "streaming_playlists":
+      return [{ id: "p1", service: args.service, name: "Late night jazz", trackCount: 42, cover: mockCover("m3"), owner: "me" }] as T;
+    case "streaming_playlist":
+      return { playlist: { id: args.id, service: args.service, name: "Late night jazz", trackCount: 4, cover: mockCover("m3"), owner: "me" }, tracks: [0, 1, 2, 3].map((i) => mockSTrack(i, args.service as string)) } as T;
+    case "streaming_import_playlist": {
+      const p = { id: String(Date.now()), name: "Late night jazz", updated: Date.now(), entries: [0, 1, 2, 3].map((i) => { const t = mockSTrack(i, args.service as string); return { uri: t.uri, title: t.title, artist: t.artist, album: t.album, duration: t.duration }; }) };
+      mockLists.push(p);
+      return { id: p.id, name: p.name, total: 4, found: 4, missing: [] } as T;
+    }
+    case "streaming_find_missing":
+      return 1 as T;
   }
   throw new Error(`mock: unknown command ${cmd}`);
 }

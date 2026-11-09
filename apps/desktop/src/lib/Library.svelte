@@ -1,24 +1,28 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, artistLabel, coverUrl, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
+  import { api, artistLabel, coverUrl, entryFromTrack, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type LibraryGoto, type LibraryStatus, type StreamingStatus } from "./api";
   import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
+  import AddToPlaylist from "./AddToPlaylist.svelte";
+  import Playlists from "./Playlists.svelte";
   import TrackTable, { type SortKey } from "./TrackTable.svelte";
 
   let {
     currentPath = null,
     goto = null,
+    streaming = null,
     onplay,
     onenqueue,
   }: {
     currentPath?: string | null;
+    streaming?: StreamingStatus | null;
     /** Show this artist or album (from a click on the now-playing track). */
     goto?: LibraryGoto | null;
     onplay: (paths: string[], start: number) => void;
     onenqueue: (paths: string[]) => void;
   } = $props();
 
-  type View = "albums" | "artists" | "tracks" | "genres";
+  type View = "albums" | "artists" | "tracks" | "genres" | "playlists";
   type AlbumSort = "artist" | "title" | "year" | "added";
 
   function load<T>(key: string, fallback: T): T {
@@ -206,7 +210,7 @@
     if (foldersOpen && foldersRoot && !e.composedPath().includes(foldersRoot)) foldersOpen = false;
   }
 
-  const VIEWS: View[] = ["albums", "artists", "tracks", "genres"];
+  const VIEWS: View[] = ["albums", "artists", "tracks", "genres", "playlists"];
   const nothing = $derived(q ? t("lib.nothingFor", { q: query.trim() }) : t("lib.nothing"));
 </script>
 
@@ -222,7 +226,7 @@
 
     <input class="search" type="search" placeholder={t("lib.search")} bind:value={query} aria-label={t("lib.searchLabel")} />
 
-    {#if view !== "tracks" && !openAlbum}
+    {#if view !== "tracks" && view !== "playlists" && !openAlbum}
       <label class="sort">
         <select bind:value={albumSort} aria-label={t("lib.sortLabel")}>
           {#each ["artist", "title", "year", "added"] as k (k)}
@@ -232,7 +236,7 @@
       </label>
     {/if}
 
-    <label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>
+    {#if view !== "playlists"}<label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>{/if}
 
     <div class="folders" bind:this={foldersRoot}>
       <button
@@ -290,7 +294,9 @@
   </div>
 
   <div class="body" bind:this={body}>
-    {#if isAndroid && status && status.tracks === 0 && !status.scanning}
+    {#if view === "playlists" && !openAlbum}
+      <Playlists {tracks} {currentPath} {query} {streaming} {onplay} {onenqueue} />
+    {:else if isAndroid && status && status.tracks === 0 && !status.scanning}
       <div class="empty">
         <p class="empty-title">{t("lib.empty")}</p>
         <p>{t("lib.emptyAndroid")}</p>
@@ -338,6 +344,7 @@
             <div class="album-actions">
               <button class="primary" onclick={() => playAlbum(openAlbum!)}>{t("common.play")}</button>
               <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("lib.enqueue")}</button>
+              <AddToPlaylist entries={() => albumTracks.map(entryFromTrack)} />
             </div>
           </div>
         </div>
@@ -347,7 +354,9 @@
           sortable={false}
           columns={["number", "title", "duration", "format"]}
           onplay={(_, i) => playAlbum(openAlbum!, i)}
-        />
+        >
+          {#snippet actions(tr)}<AddToPlaylist compact entries={() => [entryFromTrack(tr)]} />{/snippet}
+        </TrackTable>
       </div>
     {:else if view === "tracks"}
       {#if visibleTracks.length}
@@ -357,7 +366,9 @@
           bind:sortKey={trackSort}
           bind:sortAsc={trackAsc}
           onplay={(list, i) => onplay(list.map((t) => t.path), i)}
-        />
+        >
+          {#snippet actions(tr)}<AddToPlaylist compact entries={() => [entryFromTrack(tr)]} />{/snippet}
+        </TrackTable>
       {:else}
         <p class="none">{nothing}</p>
       {/if}
