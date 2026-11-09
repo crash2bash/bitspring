@@ -69,6 +69,19 @@ fn covers_dir(app: &AppHandle) -> Option<PathBuf> {
     Some(d)
 }
 
+#[cfg(target_os = "ios")]
+fn phone_music_dirs(app: &AppHandle) -> Vec<String> {
+    music_dir(app).into_iter().collect()
+}
+#[cfg(target_os = "android")]
+fn phone_music_dirs(_app: &AppHandle) -> Vec<String> {
+    crate::android_media::music_dirs()
+}
+#[cfg(desktop)]
+fn phone_music_dirs(_app: &AppHandle) -> Vec<String> {
+    Vec::new()
+}
+
 /// The app's Documents folder, where music copied to the phone lives.
 fn music_dir(app: &AppHandle) -> Option<String> {
     let d = app.path().document_dir().ok()?;
@@ -88,19 +101,23 @@ impl Library {
             g.tracks = Arc::new(saved.tracks);
             g.folders = saved.folders;
         }
-        // On iPhone the library is the app's own folder (Files → On My iPhone → Hifi, or Finder
-        // file sharing): it is always there, and the only one the sandbox lets us keep.
-        if cfg!(target_os = "ios")
-            && let Some(docs) = music_dir(app)
-        {
-            let mut g = lib.0.lock().unwrap();
-            g.folders.retain(|f| *f == docs);
-            if g.folders.is_empty() {
-                g.folders.push(docs);
+        // On a phone the library is fixed folders, not ones the user picks: on iPhone the app's
+        // own (Files → On My iPhone → Hifi, or Finder file sharing) — the only one the sandbox
+        // lets us keep; on Android the shared Music folder plus the app's own.
+        if cfg!(mobile) {
+            let dirs = phone_music_dirs(app);
+            if !dirs.is_empty() {
+                lib.0.lock().unwrap().folders = dirs;
             }
         }
         lib.rescan(app.clone());
         lib
+    }
+
+    /// Rescan from outside a command (e.g. storage permission just granted).
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    pub fn rescan_now(&self, app: AppHandle) {
+        self.rescan(app);
     }
 
     fn rescan(&self, app: AppHandle) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { isIOS, khz, TRANSPORT_LABEL, type Device } from "./api";
+  import { isAndroid, isIOS, khz, TRANSPORT_LABEL, type Device } from "./api";
 
   let {
     devices,
@@ -87,10 +87,20 @@
       {:else}
       <label class="option">
         <input type="checkbox" bind:checked={exclusive} />
+        {#if isAndroid}
+          <span>
+            <strong>Bit-perfect для USB-DAC</strong>
+            <small>
+              Android 14+ отдаёт USB-DAC плееру целиком: без микшера Android и системной громкости,
+              частота DAC подстраивается под каждый трек. Громкость — на DAC.
+            </small>
+          </span>
+        {:else}
         <span>
           <strong>Эксклюзивный доступ</strong>
           <small>Другие приложения не подмешивают звук, частота DAC подстраивается под каждый трек.</small>
         </span>
+        {/if}
       </label>
       {/if}
 

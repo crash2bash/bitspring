@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, inTauri, isMac, isIOS, fileName, trackName, khz, dsdName, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import { api, inTauri, isMac, isIOS, isAndroid, fileName, trackName, khz, dsdName, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
   import Library from "$lib/Library.svelte";
   import DevicePicker from "$lib/DevicePicker.svelte";
   import Display from "$lib/Display.svelte";
@@ -348,10 +348,11 @@
         {/each}
       </ol>
     {:else}
-      <p class="q-empty">{isIOS ? "Добавьте файлы из «Файлов» или включите альбом в медиатеке." : "Перетащите сюда файлы или папку с альбомом."}</p>
+      <p class="q-empty">{isAndroid ? "Включите альбом в медиатеке." : isIOS ? "Добавьте файлы из «Файлов» или включите альбом в медиатеке." : "Перетащите сюда файлы или папку с альбомом."}</p>
     {/if}
 
-    <button class="q-add" onclick={pickFiles}>Добавить файлы</button>
+    <!-- Android's file picker hands out content:// links, not files: music comes via the Music folder. -->
+    {#if !isAndroid}<button class="q-add" onclick={pickFiles}>Добавить файлы</button>{/if}
   </aside>
 
   {#if screen === "player" || screen === "queue"}
@@ -387,8 +388,8 @@
           {/if}
         {:else}
           <h1 class="idle">Ничего не играет</h1>
-          <p class="album">{isIOS ? "Добавьте файлы или выберите альбом в медиатеке." : "Перетащите альбом в окно или добавьте файлы."} Каждый трек целиком загружается в память и уходит в DAC без изменений.</p>
-          <button class="primary" onclick={pickFiles}>Добавить файлы</button>
+          <p class="album">{isAndroid ? "Выберите альбом в медиатеке." : isIOS ? "Добавьте файлы или выберите альбом в медиатеке." : "Перетащите альбом в окно или добавьте файлы."} Каждый трек целиком загружается в память и уходит в DAC без изменений.</p>
+          {#if !isAndroid}<button class="primary" onclick={pickFiles}>Добавить файлы</button>{/if}
         {/if}
       </div>
     </div>

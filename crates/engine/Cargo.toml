@@ -31,3 +31,8 @@ coreaudio-sys = { version = "0.2.18", default-features = false, features = ["aud
 objc2 = "0.6"
 objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "AVAudioSession", "AVAudioSessionRoute", "AVAudioSessionTypes"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSError", "NSString"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk = { version = "0.9", default-features = false, features = ["audio", "api-level-28"] }
+ndk-context = "0.1"

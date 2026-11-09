@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, coverUrl, inTauri, isIOS, longDuration, resolution, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
+  import { api, coverUrl, inTauri, isAndroid, isIOS, longDuration, resolution, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
   import AlbumTile from "./AlbumTile.svelte";
   import TrackTable, { type SortKey } from "./TrackTable.svelte";
 
@@ -257,7 +257,17 @@
       </button>
       {#if foldersOpen && status}
         <div class="folders-panel" role="dialog" aria-label="Папки медиатеки">
-          {#if isIOS}
+          {#if isAndroid}
+          <p class="fp-title">Музыка на телефоне</p>
+          <p class="fp-empty">
+            Медиатека — папка Music во внутренней памяти телефона. Скопируйте туда альбомы по USB с
+            компьютера или любым файловым менеджером. DSD-файлы (DSF, DFF) Android приложениям из
+            Music не показывает — их кладите в Android/data/dev.local.hifi/files/Music.
+          </p>
+          <div class="fp-actions">
+            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>Пересканировать</button>
+          </div>
+          {:else if isIOS}
           <p class="fp-title">Музыка на iPhone</p>
           <p class="fp-empty">
             Медиатека — это папка приложения: Файлы → На iPhone → Hifi. Скопируйте туда альбомы через
@@ -295,7 +305,17 @@
   </div>
 
   <div class="body" bind:this={body}>
-    {#if isIOS && status && status.tracks === 0 && !status.scanning}
+    {#if isAndroid && status && status.tracks === 0 && !status.scanning}
+      <div class="empty">
+        <p class="empty-title">Медиатека пуста</p>
+        <p>
+          Скопируйте альбомы в папку Music во внутренней памяти телефона — по USB с компьютера или
+          файловым менеджером — и нажмите «Пересканировать». Если приложение спрашивало доступ к
+          музыке, его нужно разрешить.
+        </p>
+        <button class="primary" onclick={async () => (status = await api.libraryRescan())}>Пересканировать</button>
+      </div>
+    {:else if isIOS && status && status.tracks === 0 && !status.scanning}
       <div class="empty">
         <p class="empty-title">Медиатека пуста</p>
         <p>

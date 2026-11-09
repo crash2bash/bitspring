@@ -49,6 +49,9 @@
         "displayLanguageSelector": false,
         "installMode": "currentUser"
       }
+    },
+    "android": {
+      "minSdkVersion": 28
     }
   }
 }

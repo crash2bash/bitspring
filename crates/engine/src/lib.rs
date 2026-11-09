@@ -17,6 +17,8 @@ pub mod coreaudio;
 pub mod wasapi_out;
 #[cfg(target_os = "ios")]
 pub mod ios_out;
+#[cfg(target_os = "android")]
+pub mod android_out;
 
 pub use decode::{DsdSource, Track, TrackMeta, load_track, open_source, open_track};
 

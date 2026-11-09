@@ -36,6 +36,8 @@
   }
   .art {
     position: relative;
+    /* explicit: older WebViews (Android) don't stretch an aspect-ratio box in a column */
+    width: 100%;
     aspect-ratio: 1;
     border-radius: 6px;
     overflow: hidden;

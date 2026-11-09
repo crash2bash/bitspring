@@ -28,6 +28,8 @@ pub use crate::coreaudio::{Device, DeviceInfo, Player, output_devices};
 pub use crate::wasapi_out::{Device, DeviceInfo, Player, output_devices};
 #[cfg(target_os = "ios")]
 pub use crate::ios_out::{Device, DeviceInfo, Player, dop_blocker, output_devices, system_volume};
+#[cfg(target_os = "android")]
+pub use crate::android_out::{Device, DeviceInfo, Player, output_devices};
 
 /// The system volume (0…1), where the OS may scale our samples with it (iOS). None elsewhere:
 /// on a Mac or PC in exclusive mode the OS volume doesn't touch the stream.
@@ -191,7 +193,7 @@ impl OutFormat {
     }
 
     /// Can carry a DoP word untouched (24 significant bits or more, no rescaling).
-    #[cfg_attr(target_os = "ios", allow(dead_code))]
+    #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
     pub(crate) fn carries_dop(self) -> bool {
         matches!(self, Self::F32 | Self::I24Packed | Self::I32 { bits: 24 | 32 })
     }

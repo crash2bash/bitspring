@@ -31,4 +31,9 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSData", "NSDictionary", "NSString", "NSValue"] }
 objc2-media-player = { version = "0.3", default-features = false, features = ["std", "block2", "MPMediaItem", "MPNowPlayingInfoCenter", "MPRemoteCommand", "MPRemoteCommandCenter", "MPRemoteCommandEvent"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+log = "0.4"
+ndk-context = "0.1"
+
 

@@ -3,9 +3,16 @@
 //! The UI never touches audio directly; it calls these commands and polls `status`.
 //! All playback state lives here, in Rust.
 
+#[cfg(target_os = "android")]
+mod android_media;
 #[cfg(target_os = "ios")]
 mod ios_media;
 mod library;
+/// Lock screen / notification player and remote controls, per phone OS.
+#[cfg(target_os = "android")]
+use android_media as media;
+#[cfg(target_os = "ios")]
+use ios_media as media;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -392,8 +399,8 @@ fn begin(
     let meta = track.meta.clone();
     let (channels, duration) = (track.channels, track.duration_secs());
     let opts = PlayOptions { exclusive, dsp, start_at, start_paused };
-    #[cfg(target_os = "ios")]
-    let lock_screen = ios_media::TrackInfo {
+    #[cfg(mobile)]
+    let lock_screen = media::TrackInfo {
         title: meta.title.clone().unwrap_or_else(|| file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
         artist: meta.artist.clone(),
         album: meta.album.clone(),
@@ -426,9 +433,9 @@ fn begin(
     *state.advance_error.lock().unwrap() = None;
     // Under play_lock: nobody else bumps it between the load above and here.
     state.now_rev.store(rev, Ordering::Release);
-    #[cfg(target_os = "ios")]
+    #[cfg(mobile)]
     if let Some(app) = APP.get() {
-        ios_media::set_track(app, rev, lock_screen);
+        media::set_track(app, rev, lock_screen);
     }
     Ok(now)
 }
@@ -522,7 +529,7 @@ fn advance(state: &AppState) {
 
 /// Next (+1) or previous (−1) track, for controls outside the UI (lock screen, headphones).
 /// "Previous" more than 3 s into a track restarts it, like the UI's button.
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+#[cfg_attr(desktop, allow(dead_code))]
 pub(crate) fn jump(state: &AppState, delta: i64) {
     let _one = state.play_lock.lock().unwrap();
     if delta < 0
@@ -620,9 +627,9 @@ fn stop(state: State<'_, AppState>) {
     drop(state.player.lock().unwrap().take());
     *state.current.lock().unwrap() = None;
     *state.now.lock().unwrap() = None;
-    #[cfg(target_os = "ios")]
+    #[cfg(mobile)]
     if let Some(app) = APP.get() {
-        ios_media::clear(app);
+        media::clear(app);
     }
 }
 
@@ -725,20 +732,20 @@ pub fn run() {
                 let _ = w.with_webview(|wv| ios_edge_to_edge(wv.inner()));
             }
             let _ = APP.set(app.handle().clone());
-            #[cfg(target_os = "ios")]
-            ios_media::install(app.handle());
+            #[cfg(mobile)]
+            media::install(app.handle());
             let handle = app.handle().clone();
             std::thread::Builder::new().name("hifi-queue".into()).spawn(move || {
                 loop {
                     std::thread::sleep(Duration::from_millis(40));
                     let state = handle.state::<AppState>();
                     advance(&state);
-                    #[cfg(target_os = "ios")]
+                    #[cfg(mobile)]
                     {
                         let rev = state.now_rev.load(Ordering::Acquire);
                         let now = state.player.lock().unwrap().as_ref().map(|p| (p.position_secs(), p.is_paused() || p.is_finished()));
                         if let Some((position, paused)) = now {
-                            ios_media::sync(&handle, rev, position, paused);
+                            media::sync(&handle, rev, position, paused);
                         }
                     }
                 }

@@ -170,9 +170,12 @@ export const isIOS =
     (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1) ||
     // layout work in a desktop browser: append ?ios to the URL
     (!("__TAURI_INTERNALS__" in window) && new URLSearchParams(location.search).has("ios")));
-export const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") && !isIOS;
+export const isAndroid =
+  typeof navigator !== "undefined" &&
+  (/Android/.test(navigator.userAgent) || (!("__TAURI_INTERNALS__" in window) && new URLSearchParams(location.search).has("android")));
+export const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") && !isIOS && !isAndroid;
 /** The system mixer that shared mode goes through. */
-export const OS_MIXER = isWindows ? "микшер Windows" : isIOS ? "микшер iOS" : "общий микшер macOS";
+export const OS_MIXER = isWindows ? "микшер Windows" : isIOS ? "микшер iOS" : isAndroid ? "микшер Android" : "общий микшер macOS";
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return inTauri ? invoke<T>(cmd, args) : mock<T>(cmd, args);
@@ -230,8 +233,9 @@ export function trackName(p: string): string {
 /** URL of an album's artwork (served by the backend's cover:// protocol). */
 export function coverUrl(albumId: string): string {
   if (!inTauri) return mockCover(albumId);
-  // Tauri serves custom schemes as scheme://localhost on macOS/Linux, http://scheme.localhost on Windows.
-  return navigator.userAgent.includes("Windows") ? `http://cover.localhost/${albumId}` : `cover://localhost/${albumId}`;
+  // Tauri serves custom schemes as scheme://localhost on Apple platforms and Linux,
+  // http://scheme.localhost on Windows and Android.
+  return isWindows || isAndroid ? `http://cover.localhost/${albumId}` : `cover://localhost/${albumId}`;
 }
 
 /** "DSD64", "DSD256" from a 1-bit rate (Hz). */
