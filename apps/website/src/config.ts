@@ -25,4 +25,4 @@ export const LINKS: {
 
 // Public origin of the site, e.g. "https://hifi.example". Used at build time for hreflang,
 // canonical and og:image URLs, which search engines and link previews want absolute.
-export const SITE_URL = "";
+export const SITE_URL = "https://hifi-player-nu.vercel.app";

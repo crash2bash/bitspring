@@ -6,3 +6,4 @@ node_modules/
 /.svelte-kit/
 /.vite/
 /.claude/
+.vercel
