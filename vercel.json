@@ -4,7 +4,7 @@
   "installCommand": "npm ci --prefix apps/website",
   "buildCommand": "npm run build --prefix apps/website",
   "outputDirectory": "apps/website/dist",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/website vercel.json",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/website vercel.json .vercelignore || exit 1",
   "trailingSlash": true,
   "headers": [
     {
