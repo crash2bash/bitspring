@@ -69,6 +69,9 @@
     );
   });
 
+  /** A touch screen has no double-click: one tap on a row plays it. */
+  const touch = typeof window !== "undefined" && window.matchMedia("(hover: none)").matches;
+
   function sortBy(k: SortKey) {
     if (!sortable) return;
     if (sortKey === k) sortAsc = !sortAsc;
@@ -97,14 +100,14 @@
   </thead>
   <tbody>
     {#each sorted as t, i (t.path)}
-      <tr class:current={t.path === currentPath} ondblclick={() => onplay(sorted, i)}>
+      <tr class:current={t.path === currentPath} ondblclick={() => onplay(sorted, i)} onclick={() => touch && onplay(sorted, i)}>
         {#each columns as c (c)}
           <td class={c}>
             {#if c === "number"}
               {#if t.path === currentPath}
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-label="Играет"><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
               {:else}
-                <button class="play-row" onclick={() => onplay(sorted, i)} aria-label={`Играть «${t.title}»`}>
+                <button class="play-row" onclick={(e) => { e.stopPropagation(); onplay(sorted, i); }} aria-label={`Играть «${t.title}»`}>
                   <span class="n num">{t.trackNumber ?? "–"}</span>
                   <svg class="p" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
                 </button>
@@ -180,8 +183,17 @@
     content-visibility: auto;
     contain-intrinsic-size: auto 33px;
   }
-  tbody tr:hover {
-    background: var(--slate-700);
+  /* hover only where there is a pointer: on a touch screen it sticks after a tap */
+  @media (hover: hover) {
+    tbody tr:hover {
+      background: var(--slate-700);
+    }
+    tr:hover .play-row .n {
+      opacity: 0;
+    }
+    tr:hover .play-row .p {
+      opacity: 1;
+    }
   }
   tr.current td {
     color: var(--brass);
@@ -231,10 +243,6 @@
   .n {
     color: var(--mist-dim);
   }
-  tr:hover .play-row .n {
-    opacity: 0;
-  }
-  tr:hover .play-row .p,
   .play-row:focus-visible .p {
     opacity: 1;
   }
@@ -246,5 +254,18 @@
   }
   .fmt.lossy {
     color: var(--mist-dim);
+  }
+
+  /* phone: number, title, length — the rest is on the album page */
+  @media (max-width: 700px) {
+    .artist,
+    .album,
+    .year,
+    .format {
+      display: none;
+    }
+    td {
+      padding-block: 11px;
+    }
   }
 </style>

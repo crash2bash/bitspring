@@ -380,4 +380,20 @@
   .footer.pure {
     color: var(--brass);
   }
+
+  /* phone: the panel spans the screen under the header */
+  @media (max-width: 700px) {
+    .trigger {
+      max-width: 100%;
+    }
+    .panel {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      top: calc(env(safe-area-inset-top) + 58px);
+      width: auto;
+      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 80px);
+      overflow-y: auto;
+    }
+  }
 </style>

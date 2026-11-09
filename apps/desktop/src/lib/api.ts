@@ -76,6 +76,8 @@ export interface NowPlaying {
   duration: number;
   deviceName: string;
   signal: Signal;
+  /** The status nowRev this track started as. */
+  rev: number;
 }
 
 export interface Status {
@@ -89,6 +91,14 @@ export interface Status {
   buffering: boolean;
   buffered: number;
   error: string | null;
+  /** Queue position of the playing track; the backend moves it on at the end of a track. */
+  queueIndex: number | null;
+  /** Changes whenever a different track starts — then fetch nowPlaying(). */
+  nowRev: number;
+  /** The queue stopped at a track it couldn't play. */
+  advanceError: string | null;
+  /** iOS: system volume 0…1 (below 1 iOS may scale the samples). Null elsewhere. */
+  systemVolume: number | null;
 }
 
 export interface LibraryStatus {
@@ -153,9 +163,16 @@ export interface LibraryGoto {
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
-export const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
+/** iPhone / iPad (an iPad asks for desktop sites and says "Macintosh", but has a touch screen). */
+export const isIOS =
+  typeof navigator !== "undefined" &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1) ||
+    // layout work in a desktop browser: append ?ios to the URL
+    (!("__TAURI_INTERNALS__" in window) && new URLSearchParams(location.search).has("ios")));
+export const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") && !isIOS;
 /** The system mixer that shared mode goes through. */
-export const OS_MIXER = isWindows ? "микшер Windows" : "общий микшер macOS";
+export const OS_MIXER = isWindows ? "микшер Windows" : isIOS ? "микшер iOS" : "общий микшер macOS";
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return inTauri ? invoke<T>(cmd, args) : mock<T>(cmd, args);
@@ -164,8 +181,11 @@ function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
 export const api = {
   listDevices: () => call<Device[]>("list_devices"),
   expandPaths: (paths: string[]) => call<string[]>("expand_paths", { paths }),
-  playFile: (path: string, deviceUid: string, exclusive: boolean, startAt = 0, dop = false) =>
-    call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop }),
+  playFile: (path: string, deviceUid: string, exclusive: boolean, startAt = 0, dop = false, index: number | null = null, paused = false) =>
+    call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop, index, paused }),
+  setQueue: (paths: string[], index: number | null, rev: number) => call<void>("set_queue", { paths, index, rev }),
+  nowPlaying: () => call<NowPlaying | null>("now_playing"),
+  importFiles: (paths: string[]) => call<string[]>("import_files", { paths }),
   setDsp: (s: DspSettings) => call<DspResult>("set_dsp", { ...s }),
   channelTest: (deviceUid: string) => call<Signal>("channel_test", { deviceUid }),
   status: () => call<Status>("status"),

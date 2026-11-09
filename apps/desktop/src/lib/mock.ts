@@ -1,5 +1,6 @@
 // Browser-only stand-in for the Rust backend, so the layout can be built and reviewed
 // without Tauri. Never used inside the app.
+import { isIOS } from "./api";
 import type { Album, Device, DspSettings, EqInfo, LibTrack, NowPlaying, Signal, Status } from "./api";
 
 // ---- library ----------------------------------------------------------------------------------
@@ -100,6 +101,10 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
   };
 }
 
+let mockQueue: string[] = [];
+let mockIndex: number | null = null;
+let mockRev = 0;
+let mockNow: NowPlaying | null = null;
 let started = 0;
 let paused = false;
 let pausedAt = 0;
@@ -132,7 +137,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       lastPath = args.path as string;
       lastDop = !!args.dop;
       const signal = mockSignal(dev, lastExclusive, lastPath, lastDop);
-      started = performance.now() - ((args.startAt as number) ?? 0) * 1000; paused = false; duration = 251;
+      started = performance.now() - ((args.startAt as number) ?? 0) * 1000; paused = !!args.paused; pausedAt = (args.startAt as number) ?? 0; duration = 251;
       const np: NowPlaying = {
         path: args.path as string, ...(() => {
           const t = libTracks.find((x) => x.path === args.path);
@@ -140,16 +145,31 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
             ? { title: t.title, artist: t.artist, album: t.album, year: t.year, cover: t.hasCover ? mockCover(t.albumId) : null }
             : { title: "So What", artist: "Miles Davis", album: "Kind of Blue", year: "1959", cover: null };
         })(),
-        channels: 2, duration, deviceName: dev.name, signal,
+        channels: 2, duration, deviceName: dev.name, signal, rev: ++mockRev,
       };
+      mockNow = np;
+      if (args.index !== null && args.index !== undefined) mockIndex = args.index as number;
       return np as T;
     }
+    case "set_queue":
+      mockQueue = args.paths as string[];
+      if (args.rev === mockRev) mockIndex = args.index as number | null;
+      return undefined as T;
+    case "now_playing":
+      return mockNow as T;
+    case "import_files":
+      return args.paths as T;
     case "status": {
+      // Like the backend: at the end of a track the queue moves on by itself.
+      if (duration > 0 && !paused && now() >= duration && mockIndex !== null && mockIndex + 1 < mockQueue.length && lastDevice) {
+        await mock("play_file", { path: mockQueue[mockIndex + 1], deviceUid: lastDevice.uid, exclusive: lastExclusive, dop: lastDop, index: mockIndex + 1 });
+      }
       const processing = !!(dsp.upsampleKhz || dsp.eqPath || dsp.crossfeed);
       const s: Status = {
         active: duration > 0, position: Math.min(now(), duration), duration, paused,
         finished: now() >= duration && duration > 0, peakDb: processing ? -3.4 : null, underruns: 0,
         buffering: false, buffered: duration, error: null,
+        queueIndex: mockIndex, nowRev: mockRev, advanceError: null, systemVolume: isIOS ? 0.8 : null,
       };
       return s as T;
     }

@@ -50,6 +50,9 @@ body {
   user-select: none;
   -webkit-user-select: none;
   overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 button {

@@ -69,6 +69,13 @@ fn covers_dir(app: &AppHandle) -> Option<PathBuf> {
     Some(d)
 }
 
+/// The app's Documents folder, where music copied to the phone lives.
+fn music_dir(app: &AppHandle) -> Option<String> {
+    let d = app.path().document_dir().ok()?;
+    std::fs::create_dir_all(&d).ok()?;
+    Some(d.to_string_lossy().into_owned())
+}
+
 impl Library {
     /// Load the saved index, then refresh it in the background (new or changed files only).
     pub fn load(app: &AppHandle) -> Self {
@@ -80,6 +87,17 @@ impl Library {
             g.albums = Arc::new(group_albums(&saved.tracks));
             g.tracks = Arc::new(saved.tracks);
             g.folders = saved.folders;
+        }
+        // On iPhone the library is the app's own folder (Files → On My iPhone → Hifi, or Finder
+        // file sharing): it is always there, and the only one the sandbox lets us keep.
+        if cfg!(target_os = "ios")
+            && let Some(docs) = music_dir(app)
+        {
+            let mut g = lib.0.lock().unwrap();
+            g.folders.retain(|f| *f == docs);
+            if g.folders.is_empty() {
+                g.folders.push(docs);
+            }
         }
         lib.rescan(app.clone());
         lib
@@ -231,4 +249,37 @@ pub fn library_remove_folder(app: AppHandle, lib: State<'_, Library>, path: Stri
 pub fn library_rescan(app: AppHandle, lib: State<'_, Library>) -> LibraryStatus {
     lib.rescan(app);
     lib.status()
+}
+
+/// Copy files picked from the Files app into the library folder (the picker hands us
+/// temporary copies that iOS deletes later). Returns the kept copies, in the given order.
+#[tauri::command]
+pub fn import_files(app: AppHandle, lib: State<'_, Library>, paths: Vec<String>) -> Result<Vec<String>, String> {
+    let dir = PathBuf::from(music_dir(&app).ok_or("нет папки приложения")?);
+    let mut kept = Vec::new();
+    for p in paths.iter().map(PathBuf::from) {
+        let Some(name) = p.file_name() else { continue };
+        if p.starts_with(&dir) {
+            kept.push(p.to_string_lossy().into_owned());
+            continue;
+        }
+        let size = std::fs::metadata(&p).map(|m| m.len()).ok();
+        // The same file imported twice is kept once; a different file with the same name
+        // gets a number.
+        let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        let mut target = dir.join(name);
+        let mut n = 2;
+        while target.exists() && std::fs::metadata(&target).map(|m| m.len()).ok() != size {
+            target = dir.join(format!("{stem} {n}{ext}"));
+            n += 1;
+        }
+        if !target.exists() {
+            std::fs::copy(&p, &target).map_err(|e| format!("не удалось скопировать {}: {e}", name.to_string_lossy()))?;
+            let _ = std::fs::remove_file(&p);
+        }
+        kept.push(target.to_string_lossy().into_owned());
+    }
+    lib.rescan(app);
+    Ok(kept)
 }

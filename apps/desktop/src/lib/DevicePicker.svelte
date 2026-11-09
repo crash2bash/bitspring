@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { khz, TRANSPORT_LABEL, type Device } from "./api";
+  import { isIOS, khz, TRANSPORT_LABEL, type Device } from "./api";
 
   let {
     devices,
@@ -79,6 +79,12 @@
         {/each}
       </ul>
 
+      {#if isIOS}
+        <p class="note">
+          iPhone играет через один выход — тот, что подключён сейчас. Подключите DAC по USB-C, и звук
+          пойдёт в него на частоте файла. Другие приложения на это время замолкают.
+        </p>
+      {:else}
       <label class="option">
         <input type="checkbox" bind:checked={exclusive} />
         <span>
@@ -86,6 +92,7 @@
           <small>Другие приложения не подмешивают звук, частота DAC подстраивается под каждый трек.</small>
         </span>
       </label>
+      {/if}
 
       {#if current?.maxDop}
         <label class="option">
@@ -194,6 +201,12 @@
     color: var(--violet);
   }
 
+  .note {
+    margin: 4px 0 0;
+    padding: 10px 14px;
+    color: var(--mist);
+    font-size: var(--t-sm);
+  }
   .option {
     display: flex;
     gap: 10px;
@@ -232,5 +245,21 @@
   .test:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /* phone: the panel spans the screen under the header */
+  @media (max-width: 700px) {
+    .trigger {
+      max-width: 100%;
+    }
+    .panel {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      top: calc(env(safe-area-inset-top) + 58px);
+      width: auto;
+      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 80px);
+      overflow-y: auto;
+    }
   }
 </style>

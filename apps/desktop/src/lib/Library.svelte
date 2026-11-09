@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, coverUrl, inTauri, longDuration, resolution, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
+  import { api, coverUrl, inTauri, isIOS, longDuration, resolution, type Album, type LibTrack, type LibraryGoto, type LibraryStatus } from "./api";
   import AlbumTile from "./AlbumTile.svelte";
   import TrackTable, { type SortKey } from "./TrackTable.svelte";
 
@@ -181,6 +181,16 @@
     body?.scrollTo({ top: 0 });
   }
 
+  /** iPhone: copy files from the Files app into the app's music folder (the library). */
+  async function importFiles() {
+    if (!inTauri) return;
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({ multiple: true });
+    if (!picked) return;
+    await api.importFiles(Array.isArray(picked) ? picked : [picked]);
+    status = await api.libraryStatus();
+  }
+
   async function addFolder() {
     if (!inTauri) {
       status = await api.libraryAddFolder("/Volumes/Music");
@@ -247,6 +257,17 @@
       </button>
       {#if foldersOpen && status}
         <div class="folders-panel" role="dialog" aria-label="Папки медиатеки">
+          {#if isIOS}
+          <p class="fp-title">Музыка на iPhone</p>
+          <p class="fp-empty">
+            Медиатека — это папка приложения: Файлы → На iPhone → Hifi. Скопируйте туда альбомы через
+            «Файлы» или Finder на Mac (iPhone → Файлы), либо добавьте файлы здесь.
+          </p>
+          <div class="fp-actions">
+            <button class="primary" onclick={importFiles}>Добавить файлы</button>
+            <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>Пересканировать</button>
+          </div>
+          {:else}
           <p class="fp-title">Папки с музыкой</p>
           {#if status.folders.length}
             <ul>
@@ -264,6 +285,7 @@
             <button class="primary" onclick={addFolder}>Добавить папку</button>
             <button onclick={async () => (status = await api.libraryRescan())} disabled={!!status.scanning}>Пересканировать</button>
           </div>
+          {/if}
           {#if status.failed}
             <p class="fp-failed">{plural(status.failed, ["файл не прочитан", "файла не прочитаны", "файлов не прочитаны"])} — повреждены или формат не поддерживается.</p>
           {/if}
@@ -273,7 +295,16 @@
   </div>
 
   <div class="body" bind:this={body}>
-    {#if status && status.folders.length === 0}
+    {#if isIOS && status && status.tracks === 0 && !status.scanning}
+      <div class="empty">
+        <p class="empty-title">Медиатека пуста</p>
+        <p>
+          Скопируйте альбомы в Файлы → На iPhone → Hifi (или с Mac через Finder: iPhone → Файлы → Hifi) —
+          медиатека найдёт их сама. Или добавьте файлы отсюда.
+        </p>
+        <button class="primary" onclick={importFiles}>Добавить файлы</button>
+      </div>
+    {:else if status && status.folders.length === 0}
       <div class="empty">
         <p class="empty-title">Медиатека пуста</p>
         <p>Укажите папку с музыкой — например, Музыка в домашней папке или внешний диск. Файлы останутся на месте: приложение только читает теги и обложки.</p>
@@ -679,5 +710,63 @@
     color: var(--mist);
     padding: 24px;
     margin: 0;
+  }
+
+  /* phone: toolbar wraps, sections scroll sideways, album header stacks */
+  @media (max-width: 700px) {
+    .toolbar {
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 12px;
+    }
+    .seg {
+      flex: 1 1 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .seg button {
+      flex: 1;
+      padding: 7px 8px;
+    }
+    .search {
+      flex: 1 1 100%;
+      max-width: none;
+      font-size: 16px; /* below 16px iOS zooms the page on focus */
+    }
+    .folders-panel {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      top: auto;
+      width: auto;
+    }
+    .browse {
+      padding: 14px 12px 24px;
+    }
+    .browse.split {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .index {
+      position: static;
+      display: flex;
+      overflow-x: auto;
+      gap: 4px;
+      scrollbar-width: none;
+    }
+    .index button {
+      white-space: nowrap;
+    }
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px 12px;
+    }
+    .album {
+      padding: 12px 12px 24px;
+    }
+    .album-head {
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 16px;
+    }
   }
 </style>

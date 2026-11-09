@@ -26,6 +26,21 @@ use crate::ring::Ring;
 pub use crate::coreaudio::{Device, DeviceInfo, Player, output_devices};
 #[cfg(windows)]
 pub use crate::wasapi_out::{Device, DeviceInfo, Player, output_devices};
+#[cfg(target_os = "ios")]
+pub use crate::ios_out::{Device, DeviceInfo, Player, dop_blocker, output_devices, system_volume};
+
+/// The system volume (0…1), where the OS may scale our samples with it (iOS). None elsewhere:
+/// on a Mac or PC in exclusive mode the OS volume doesn't touch the stream.
+#[cfg(not(target_os = "ios"))]
+pub fn system_volume() -> Option<f32> {
+    None
+}
+
+/// Why DSD can't go out as DoP right now, if something system-wide prevents it (iOS: volume).
+#[cfg(not(target_os = "ios"))]
+pub fn dop_blocker() -> Option<String> {
+    None
+}
 
 // ---------------------------------------------------------------------------------------------
 // Types shared by every backend
@@ -132,6 +147,7 @@ pub fn format_rates(rates: &[RateRange]) -> String {
 /// Usually float32 on macOS, but a hogged USB DAC may expose its integer format directly
 /// ("integer mode"); WASAPI exclusive mode is always the DAC's own integer format.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(target_os = "ios", allow(dead_code))] // iOS writes float only
 pub(crate) enum OutFormat {
     F32,
     I16,
@@ -175,6 +191,7 @@ impl OutFormat {
     }
 
     /// Can carry a DoP word untouched (24 significant bits or more, no rescaling).
+    #[cfg_attr(target_os = "ios", allow(dead_code))]
     pub(crate) fn carries_dop(self) -> bool {
         matches!(self, Self::F32 | Self::I24Packed | Self::I32 { bits: 24 | 32 })
     }

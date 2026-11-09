@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, inTauri, isMac, fileName, trackName, khz, dsdName, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
+  import { api, inTauri, isMac, isIOS, fileName, trackName, khz, dsdName, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type Status } from "$lib/api";
   import Library from "$lib/Library.svelte";
   import DevicePicker from "$lib/DevicePicker.svelte";
   import Display from "$lib/Display.svelte";
@@ -23,7 +23,8 @@
 
   let devices = $state<Device[]>([]);
   let selected = $state<string>(load("device", ""));
-  let exclusive = $state<boolean>(load("exclusive", true));
+  // iOS has no shared/exclusive choice: our playback session never mixes with other apps.
+  let exclusive = $state<boolean>(isIOS ? true : load("exclusive", true));
   /** Devices the user switched DoP on for (by UID): DSD goes to them as DoP, not PCM. */
   let dopDevices = $state<string[]>(load("dopDevices", []));
   let dop = $derived(dopDevices.includes(selected));
@@ -31,7 +32,10 @@
   let queue = $state<string[]>([]);
   let index = $state(-1);
   let now = $state<NowPlaying | null>(null);
-  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null });
+  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null, queueIndex: null, nowRev: 0, advanceError: null, systemVolume: null });
+  /** The backend's nowRev we are showing; when it moves, the queue went on by itself. */
+  let knownRev = 0;
+  let lastOutputError: string | null = null;
   let dsp = $state<DspSettings>({ upsampleKhz: null, crossfeed: null, eqPath: null, headroom: true, restoreHighs: false, ...load("dsp", {}) });
   let eq = $state<EqInfo | null>(null);
   let error = $state<string | null>(null);
@@ -40,7 +44,7 @@
   let dragOver = $state(false);
   let sweepKey = $state(0);
   let advancing = false;
-  let screen = $state<"player" | "library">(load("screen", "player"));
+  let screen = $state<"player" | "library" | "queue">(load("screen", "player"));
   let libGoto = $state<LibraryGoto | null>(null);
   let gotoCount = 0;
   /** Open the playing track's artist or album in the library. */
@@ -50,6 +54,16 @@
     screen = "library";
   }
   $effect(() => save("screen", screen));
+  /** The library tab on a phone is "Медиатека" alone; a desktop window shows the queue beside everything. */
+  const phone = typeof window !== "undefined" ? window.matchMedia("(max-width: 700px)") : null;
+  onMount(() => {
+    const fit = () => {
+      if (!phone?.matches && screen === "queue") screen = "player";
+    };
+    fit();
+    phone?.addEventListener("change", fit);
+    return () => phone?.removeEventListener("change", fit);
+  });
 
   let deviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? "DAC");
 
@@ -64,12 +78,14 @@
     }
   }
 
-  async function playIndex(i: number, startAt = 0) {
+  async function playIndex(i: number, startAt = 0, paused = false) {
     if (i < 0 || i >= queue.length || !selected) return;
     loading = true;
     testing = false;
     try {
-      now = await api.playFile(queue[i], selected, exclusive, startAt, dop);
+      await api.setQueue($state.snapshot(queue), i, knownRev);
+      now = await api.playFile(queue[i], selected, exclusive, startAt, dop, i, paused);
+      knownRev = now.rev;
       index = i;
       error = null;
       sweepKey++;
@@ -95,6 +111,18 @@
   async function pickFiles() {
     if (!inTauri) return addPaths(["/Music/Miles Davis/Kind of Blue/01 So What.flac", "/Music/Miles Davis/Kind of Blue/02 Freddie Freeloader.flac", "/Music/Miles Davis/Kind of Blue/03 Blue in Green.dsf"]);
     const { open } = await import("@tauri-apps/plugin-dialog");
+    if (isIOS) {
+      // The Files app knows no type for DSF/DFF, so ask for any file and filter afterwards.
+      // The picker hands over temporary copies: keep them in the app's music folder.
+      const picked = await open({ multiple: true });
+      if (!picked) return;
+      try {
+        await addPaths(await api.importFiles(Array.isArray(picked) ? picked : [picked]));
+      } catch (e) {
+        error = `Не удалось добавить файлы: ${e}`;
+      }
+      return;
+    }
     const picked = await open({ multiple: true, filters: [{ name: "Аудио", extensions: AUDIO_EXTENSIONS }] });
     if (picked) await addPaths(Array.isArray(picked) ? picked : [picked]);
   }
@@ -154,7 +182,7 @@
       sweepKey++;
       now = {
         path: "", title: "Проверка каналов", artist: "Сначала низкий тон в левом ухе, затем высокий в правом",
-        album: null, year: null, cover: null, channels: 2, duration: 3, deviceName, signal,
+        album: null, year: null, cover: null, channels: 2, duration: 3, deviceName, signal, rev: knownRev,
       };
     } catch (e) {
       error = `Проверка каналов не запустилась: ${e}`;
@@ -188,6 +216,11 @@
     if (typeof picked === "string") await applyDsp({ ...dsp, eqPath: picked });
   }
 
+  // Mirror the queue to the backend, which starts the next track by itself.
+  $effect(() => {
+    api.setQueue($state.snapshot(queue), index < 0 ? null : index, knownRev);
+  });
+
   // Switching device or access mode mid-track: continue the same track on the new output.
   let lastOutput = untrack(() => `${selected}|${exclusive}`);
   $effect(() => {
@@ -196,7 +229,8 @@
     save("exclusive", exclusive);
     if (key !== lastOutput) {
       lastOutput = key;
-      if (status.active && !testing && index >= 0) playIndex(index, status.position);
+      // Same position, same pause state: switching outputs while paused stays paused.
+      if (status.active && !testing && index >= 0) playIndex(index, status.position, status.paused);
     }
   });
 
@@ -207,7 +241,7 @@
     if (dop !== lastDop) {
       lastDop = dop;
       if (untrack(() => status.active && !testing && index >= 0 && now?.signal.dsdRate !== null))
-        playIndex(index, untrack(() => status.position));
+        playIndex(index, untrack(() => status.position), untrack(() => status.paused));
     }
   });
 
@@ -230,16 +264,27 @@
     applyDsp(untrack(() => dsp));
     const timer = setInterval(async () => {
       status = await api.status();
-      if (status.finished && !advancing) {
-        advancing = true;
-        if (testing) {
-          testing = false;
-          await api.stop();
-          now = null;
-          if (index >= 0) await playIndex(index);
-        } else if (index < queue.length - 1) {
-          await playIndex(index + 1);
+      // The backend moved on to the next track (or stopped at one it couldn't play).
+      if (status.nowRev !== knownRev && !loading) {
+        knownRev = status.nowRev;
+        const n = await api.nowPlaying();
+        if (n && !testing) {
+          now = n;
+          sweepKey++;
         }
+        if (status.queueIndex !== null) index = status.queueIndex;
+        if (status.advanceError) error = status.advanceError;
+      }
+      // iPhone: the output route changed (DAC unplugged) — pick up the new one; the device
+      // effect above then restarts the track there, paused.
+      if (isIOS && status.error && status.error !== lastOutputError) refreshDevices();
+      lastOutputError = status.error;
+      if (status.finished && testing && !advancing) {
+        advancing = true;
+        testing = false;
+        await api.stop();
+        now = null;
+        if (index >= 0) await playIndex(index);
         advancing = false;
       }
     }, 250);
@@ -280,7 +325,7 @@
     </div>
   </header>
 
-  <aside class="queue" aria-label="Очередь">
+  <aside class="queue" class:show={screen === "queue"} aria-label="Очередь">
     <div class="q-head">
       <h2>Очередь</h2>
       {#if queue.length}
@@ -303,14 +348,14 @@
         {/each}
       </ol>
     {:else}
-      <p class="q-empty">Перетащите сюда файлы или папку с альбомом.</p>
+      <p class="q-empty">{isIOS ? "Добавьте файлы из «Файлов» или включите альбом в медиатеке." : "Перетащите сюда файлы или папку с альбомом."}</p>
     {/if}
 
     <button class="q-add" onclick={pickFiles}>Добавить файлы</button>
   </aside>
 
-  {#if screen === "player"}
-  <main class="panel">
+  {#if screen === "player" || screen === "queue"}
+  <main class="panel" class:phone-hidden={screen === "queue"}>
     <div class="np">
       {#if now && !testing}
         <button class="cover" onclick={() => goToLibrary("album")} title="Открыть альбом в медиатеке">
@@ -342,13 +387,13 @@
           {/if}
         {:else}
           <h1 class="idle">Ничего не играет</h1>
-          <p class="album">Перетащите альбом в окно или добавьте файлы. Каждый трек целиком загружается в память и уходит в DAC без изменений.</p>
+          <p class="album">{isIOS ? "Добавьте файлы или выберите альбом в медиатеке." : "Перетащите альбом в окно или добавьте файлы."} Каждый трек целиком загружается в память и уходит в DAC без изменений.</p>
           <button class="primary" onclick={pickFiles}>Добавить файлы</button>
         {/if}
       </div>
     </div>
 
-    <Display {now} {status} {testing} {error} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
+    <Display {now} {status} {testing} error={error ?? status.error} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
 
     <div class="keys">
       <button class="key" onclick={prev} aria-label="Предыдущий трек" disabled={!now || testing}>
@@ -369,39 +414,55 @@
   {:else}
     <main class="lib">
       <Library currentPath={testing ? null : (now?.path ?? null)} goto={libGoto} onplay={playPaths} onenqueue={enqueue} />
-      {#if now}
-        <div class="mini" style={`--p: ${status.duration ? (status.position / status.duration) * 100 : 0}%`}>
-          <div class="mini-np">
-            <button class="mini-art" onclick={() => goToLibrary("album")} title="Открыть альбом" aria-label={`Открыть альбом ${now.album ?? ""}`}>
-              {#if now.cover}<img src={now.cover} alt="" />{/if}
-            </button>
-            <span class="mini-text">
-              <button class="mini-title" onclick={() => (screen = "player")} title="Открыть плеер">{now.title}</button>
-              {#if now.artist}<button class="mini-artist" onclick={() => goToLibrary("artist")} title="Открыть исполнителя">{now.artist}</button>{/if}
-            </span>
-          </div>
-          <span class="mini-sig" class:ok={now.signal.bitPerfect}>
-            <i aria-hidden="true"></i>{#if now.signal.dop && now.signal.dsdRate}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {dsdName(now.signal.dsdRate)} DoP{:else}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {khz(now.signal.deviceRate)} кГц{/if}
-          </span>
-          <div class="mini-keys">
-            <button onclick={prev} aria-label="Предыдущий трек" disabled={testing}>
-              <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 4v14M18 4L8 11l10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
-            </button>
-            <button class="mini-play" onclick={togglePause} aria-label={status.active && !status.paused ? "Пауза" : "Играть"}>
-              {#if status.active && !status.paused}
-                <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><rect x="6" y="5" width="5" height="16" rx="1" fill="currentColor" /><rect x="15" y="5" width="5" height="16" rx="1" fill="currentColor" /></svg>
-              {:else}
-                <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><path d="M8 4.5v17l14-8.5z" fill="currentColor" /></svg>
-              {/if}
-            </button>
-            <button onclick={next} aria-label="Следующий трек" disabled={testing || index >= queue.length - 1}>
-              <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
-            </button>
-          </div>
-        </div>
-      {/if}
     </main>
   {/if}
+
+  {#if now && screen !== "player"}
+    <div class="mini" style={`--p: ${status.duration ? (status.position / status.duration) * 100 : 0}%`}>
+      <div class="mini-np">
+        <button class="mini-art" onclick={() => goToLibrary("album")} title="Открыть альбом" aria-label={`Открыть альбом ${now.album ?? ""}`}>
+          {#if now.cover}<img src={now.cover} alt="" />{/if}
+        </button>
+        <span class="mini-text">
+          <button class="mini-title" onclick={() => (screen = "player")} title="Открыть плеер">{now.title}</button>
+          {#if now.artist}<button class="mini-artist" onclick={() => goToLibrary("artist")} title="Открыть исполнителя">{now.artist}</button>{/if}
+        </span>
+      </div>
+      <span class="mini-sig" class:ok={now.signal.bitPerfect}>
+        <i aria-hidden="true"></i>{#if now.signal.dop && now.signal.dsdRate}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {dsdName(now.signal.dsdRate)} DoP{:else}{now.signal.bitPerfect ? "Bit-perfect" : "Обработка"}, {khz(now.signal.deviceRate)} кГц{/if}
+      </span>
+      <div class="mini-keys">
+        <button onclick={prev} aria-label="Предыдущий трек" disabled={testing}>
+          <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 4v14M18 4L8 11l10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+        </button>
+        <button class="mini-play" onclick={togglePause} aria-label={status.active && !status.paused ? "Пауза" : "Играть"}>
+          {#if status.active && !status.paused}
+            <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><rect x="6" y="5" width="5" height="16" rx="1" fill="currentColor" /><rect x="15" y="5" width="5" height="16" rx="1" fill="currentColor" /></svg>
+          {:else}
+            <svg width="16" height="16" viewBox="0 0 26 26" aria-hidden="true"><path d="M8 4.5v17l14-8.5z" fill="currentColor" /></svg>
+          {/if}
+        </button>
+        <button onclick={next} aria-label="Следующий трек" disabled={testing || index >= queue.length - 1}>
+          <svg width="14" height="14" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  <nav class="tabbar" aria-label="Экраны">
+    <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6" /><circle cx="11" cy="11" r="2.2" fill="currentColor" /></svg>
+      Сейчас играет
+    </button>
+    <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="3" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
+      Медиатека
+    </button>
+    <button class:sel={screen === "queue"} aria-current={screen === "queue" ? "page" : undefined} onclick={() => (screen = "queue")}>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 5h16M3 11h16M3 17h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+      Очередь{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
+    </button>
+  </nav>
 
   {#if dragOver}
     <div class="drop-hint" aria-hidden="true"><p>Отпустите, чтобы добавить в очередь</p></div>
@@ -412,8 +473,17 @@
   .app {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
-    grid-template-rows: 52px minmax(0, 1fr);
+    grid-template-rows: 52px minmax(0, 1fr) auto;
     height: 100vh;
+  }
+  .queue {
+    grid-row: 2 / 4;
+  }
+  .mini {
+    grid-column: 2;
+  }
+  .tabbar {
+    display: none;
   }
 
   header {
@@ -867,7 +937,136 @@
     color: var(--brass);
   }
 
-  @media (max-width: 1000px) {
+  /* touch screens have no hover to reveal controls */
+  @media (hover: none) {
+    .q-remove {
+      opacity: 1;
+    }
+  }
+
+  /* --- phone: one screen at a time, tab bar at the bottom --- */
+  @media (max-width: 700px) {
+    .app {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr) auto auto;
+      height: 100dvh;
+    }
+    header {
+      gap: 10px;
+      padding: env(safe-area-inset-top) 12px 0;
+      min-height: calc(54px + env(safe-area-inset-top));
+    }
+    header .tabs {
+      display: none;
+    }
+    .controls {
+      margin-left: auto;
+      min-width: 0;
+      gap: 8px;
+    }
+    header :global(.enh .state) {
+      display: none;
+    }
+    header :global(.picker),
+    header :global(.picker .trigger) {
+      min-width: 0;
+    }
+    main,
+    .queue {
+      grid-row: 2;
+      grid-column: 1;
+    }
+    .queue {
+      display: none;
+      border-right: 0;
+    }
+    .queue.show {
+      display: flex;
+    }
+    .phone-hidden {
+      display: none !important;
+    }
+    .q-item {
+      padding-block: 12px;
+    }
+    .mini {
+      grid-column: 1;
+      grid-row: 3;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 8px 12px;
+    }
+    .mini-sig {
+      display: none;
+    }
+    .tabbar {
+      grid-row: 4;
+      display: flex;
+      background: var(--slate-900);
+      border-top: 1px solid var(--slate-600);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tabbar button {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 8px 0 6px;
+      font-size: var(--t-xs);
+      color: var(--mist);
+    }
+    .tabbar button.sel {
+      color: var(--brass);
+    }
+    .badge {
+      position: absolute;
+      top: 3px;
+      left: calc(50% + 8px);
+      min-width: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--slate-600);
+      color: var(--porcelain);
+      font-size: 11px;
+      line-height: 18px;
+    }
+    .panel {
+      gap: 18px;
+      padding: 20px 20px 24px;
+    }
+    .np {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+      text-align: center;
+      gap: 18px;
+    }
+    .np .cover {
+      width: min(100%, 280px, 34dvh);
+    }
+    /* transport right under the title, within thumb reach; the signal readout below */
+    .keys {
+      order: 1;
+    }
+    .panel > :global(:not(.np):not(.keys)) {
+      order: 2;
+    }
+    .np-info {
+      width: 100%;
+    }
+    .link {
+      text-align: center;
+    }
+    h1 {
+      font-size: var(--t-xl);
+    }
+    .album {
+      margin-inline: auto;
+    }
+  }
+
+  @media (min-width: 701px) and (max-width: 1000px) {
     .app {
       grid-template-columns: 220px minmax(0, 1fr);
     }
@@ -875,7 +1074,7 @@
       padding: 22px 24px;
     }
   }
-  @media (max-height: 700px) {
+  @media (min-width: 701px) and (max-height: 700px) {
     .panel {
       gap: 14px;
       padding-block: 18px;

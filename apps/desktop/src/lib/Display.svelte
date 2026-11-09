@@ -67,6 +67,9 @@
     if (!signal || !links) return "Добавьте музыку в очередь — здесь появится путь сигнала до наушников.";
     if (testing) return "Сначала низкий тон в левом ухе, затем высокий в правом. Если наоборот — перепутаны каналы.";
     if (signal.bitPerfect && signal.dop) return "DAC получает DSD-поток из файла бит в бит, упакованным в DoP.";
+    // iOS may scale the samples by the system volume (unless the DAC takes the volume itself).
+    if (signal.bitPerfect && status.systemVolume !== null && status.systemVolume < 0.999)
+      return "DAC получает сэмплы файла, но громкость iPhone ниже максимума — iOS может их пересчитывать. Для бит-в-бит поставьте громкость iPhone на максимум и регулируйте её на DAC.";
     if (signal.bitPerfect) return "DAC получает ровно те сэмплы, что записаны в файле.";
     const reasons = [links.decode, links.toDac, links.out].filter(Boolean).join(", ");
     if (!reasons && signal.sourceLossy) return "Файл сжат с потерями. DAC получает декодированный сигнал без изменений.";
@@ -486,6 +489,15 @@
     .readout {
       grid-template-columns: 1fr;
       gap: 14px;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .node {
+      max-width: 84px;
+    }
+    .link {
+      margin: 0 6px;
     }
   }
 </style>

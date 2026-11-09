@@ -15,6 +15,8 @@ pub mod testsignal;
 pub mod coreaudio;
 #[cfg(windows)]
 pub mod wasapi_out;
+#[cfg(target_os = "ios")]
+pub mod ios_out;
 
 pub use decode::{DsdSource, Track, TrackMeta, load_track, open_source, open_track};
 
