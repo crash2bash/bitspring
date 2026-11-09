@@ -382,6 +382,14 @@ impl Playback {
     pub(crate) fn new(track: Arc<Track>, opts: &PlayOptions, plan: &Plan, device_rate: f64) -> Result<Self> {
         let (ring, render) = if plan.processing {
             let channels = track.channels;
+            // Check against the rate the device actually settled on — it can differ from the
+            // one planned — so the resampler is never built for a ratio it refuses.
+            let out_rate = device_rate.round() as u32;
+            if out_rate != track.sample_rate
+                && crate::dsp::resample::phases(track.sample_rate, out_rate) > crate::dsp::resample::MAX_PHASES
+            {
+                bail!("не могу пересчитать частоту {} Гц в {} Гц", track.sample_rate, out_rate);
+            }
             let rs = Arc::new(RingState {
                 // ~0.5 s of audio: enough to ride out scheduling hiccups, short enough that
                 // a seek or a settings change is heard promptly.
