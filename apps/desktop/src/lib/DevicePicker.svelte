@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { isAndroid, isIOS, khz, TRANSPORT_LABEL, type Device } from "./api";
+  import { deviceLabel, isAndroid, isIOS, khz, transportLabel, type Device } from "./api";
+  import { list, t } from "./i18n.svelte";
 
   let {
     devices,
@@ -39,7 +40,7 @@
   }
 
   function maxRate(d: Device) {
-    return d.rates.length ? `до ${khz(Math.max(...d.rates))} кГц` : "";
+    return d.rates.length ? t("dev.upTo", { rate: khz(Math.max(...d.rates)) }) : "";
   }
 
   function onWindowClick(e: MouseEvent) {
@@ -55,14 +56,14 @@
 <div class="picker" bind:this={root}>
   <button class="trigger" onclick={toggle} aria-expanded={open} aria-haspopup="dialog">
     <span class="dot" class:warn={current && !current.bitPerfectCapable}></span>
-    <span class="name">{current?.name ?? "Выберите выход"}</span>
-    {#if current}<span class="rate num">{khz(current.nominalRate)} кГц</span>{/if}
+    <span class="name">{current ? deviceLabel(current.name) : t("dev.choose")}</span>
+    {#if current}<span class="rate num">{khz(current.nominalRate)} {t("unit.khz")}</span>{/if}
     <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
   </button>
 
   {#if open}
-    <div class="panel" role="dialog" aria-label="Выход звука">
-      <ul class="list" role="listbox" aria-label="Устройства">
+    <div class="panel" role="dialog" aria-label={t("dev.dialog")}>
+      <ul class="list" role="listbox" aria-label={t("dev.list")}>
         {#each devices as d (d.uid)}
           <li>
             <button
@@ -72,33 +73,27 @@
               aria-selected={d.uid === selected}
               onclick={() => choose(d.uid)}
             >
-              <span class="d-name">{d.name}{d.isDefault ? " (системный)" : ""}</span>
-              <span class="d-meta">{TRANSPORT_LABEL[d.transport] ?? d.transport}, {maxRate(d)}{#if !d.bitPerfectCapable}<em>, без bit-perfect</em>{/if}</span>
+              <span class="d-name">{d.isDefault ? t("dev.default", { name: deviceLabel(d.name) }) : deviceLabel(d.name)}</span>
+              <span class="d-meta">{list([transportLabel(d.transport), maxRate(d)])}{#if !d.bitPerfectCapable}<em>{t("list.sep")}{t("dev.noBitPerfect")}</em>{/if}</span>
             </button>
           </li>
         {/each}
       </ul>
 
       {#if isIOS}
-        <p class="note">
-          iPhone играет через один выход — тот, что подключён сейчас. Подключите DAC по USB-C, и звук
-          пойдёт в него на частоте файла. Другие приложения на это время замолкают.
-        </p>
+        <p class="note">{t("dev.iosNote")}</p>
       {:else}
       <label class="option">
         <input type="checkbox" bind:checked={exclusive} />
         {#if isAndroid}
           <span>
-            <strong>Bit-perfect для USB-DAC</strong>
-            <small>
-              Android 14+ отдаёт USB-DAC плееру целиком: без микшера Android и системной громкости,
-              частота DAC подстраивается под каждый трек. Громкость — на DAC.
-            </small>
+            <strong>{t("dev.androidExclusive")}</strong>
+            <small>{t("dev.androidExclusiveHelp")}</small>
           </span>
         {:else}
         <span>
-          <strong>Эксклюзивный доступ</strong>
-          <small>Другие приложения не подмешивают звук, частота DAC подстраивается под каждый трек.</small>
+          <strong>{t("dev.exclusive")}</strong>
+          <small>{t("dev.exclusiveHelp")}</small>
         </span>
         {/if}
       </label>
@@ -108,18 +103,15 @@
         <label class="option">
           <input type="checkbox" checked={dop} onchange={(e) => setDop(e.currentTarget.checked)} />
           <span>
-            <strong>DSD через DoP</strong>
-            <small>
-              DSD-файлы уходят в {current.name} как есть, до DSD{current.maxDop}. Включайте, только если DAC
-              поддерживает DoP: иначе вместо музыки будет тихий шум. Выключено — DSD переводится в PCM.
-            </small>
+            <strong>{t("dev.dop")}</strong>
+            <small>{t("dev.dopHelp", { device: deviceLabel(current.name), max: current.maxDop })}</small>
           </span>
         </label>
       {/if}
 
       <button class="test" onclick={() => { open = false; onchanneltest(); }} disabled={!current}>
-        Проверить левый и правый канал
-        <small>Сначала низкий тон слева, затем высокий справа.</small>
+        {t("dev.test")}
+        <small>{t("dev.testHelp")}</small>
       </button>
     </div>
   {/if}
@@ -151,6 +143,7 @@
   }
   .rate {
     color: var(--mist);
+    white-space: nowrap;
   }
   .dot {
     width: 7px;
@@ -167,7 +160,7 @@
 
   .panel {
     position: absolute;
-    right: 0;
+    inset-inline-end: 0;
     top: calc(100% + 8px);
     width: 360px;
     z-index: 20;
@@ -184,19 +177,20 @@
   }
   .device {
     width: 100%;
-    text-align: left;
-    padding: 10px 12px 10px 14px;
+    text-align: start;
+    padding-block: 10px;
+    padding-inline: 14px 12px;
     border-radius: var(--r-md);
     display: flex;
     flex-direction: column;
     gap: 1px;
-    border-left: 3px solid transparent;
+    border-inline-start: 3px solid transparent;
   }
   .device:hover {
     background: var(--slate-600);
   }
   .device.on {
-    border-left-color: var(--brass);
+    border-inline-start-color: var(--brass);
     background: var(--slate-600);
   }
   .d-name {
@@ -243,7 +237,7 @@
   }
   .test {
     width: 100%;
-    text-align: left;
+    text-align: start;
     padding: 12px 14px;
     border-top: 1px solid var(--slate-600);
     font-weight: 600;

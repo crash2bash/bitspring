@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import { clock, khz, resolution, type LibTrack } from "./api";
+  import { collator as makeCollator, t } from "./i18n.svelte";
 
   let {
     tracks,
@@ -24,17 +25,7 @@
     onplay: (list: LibTrack[], index: number) => void;
   } = $props();
 
-  const LABEL: Record<SortKey, string> = {
-    number: "№",
-    title: "Название",
-    artist: "Исполнитель",
-    album: "Альбом",
-    year: "Год",
-    duration: "Время",
-    format: "Формат",
-  };
-
-  const collator = new Intl.Collator("ru", { numeric: true, sensitivity: "base" });
+  const collator = $derived(makeCollator());
   const artistOf = (t: LibTrack) => t.albumArtist ?? t.artist ?? "";
   /** Empty values (untagged files) sort last, whichever direction. */
   const filledFirst = (a: string, b: string) => Number(!a) - Number(!b);
@@ -89,42 +80,42 @@
         <th class={c} aria-sort={sortable && sortKey === c ? (sortAsc ? "ascending" : "descending") : undefined}>
           {#if sortable}
             <button onclick={() => sortBy(c)}>
-              {LABEL[c]}{#if sortKey === c}<span class="arrow" aria-hidden="true">{sortAsc ? "▲" : "▼"}</span>{/if}
+              {t(`col.${c}`)}{#if sortKey === c}<span class="arrow" aria-hidden="true">{sortAsc ? "▲" : "▼"}</span>{/if}
             </button>
           {:else}
-            <span class="th">{LABEL[c]}</span>
+            <span class="th">{t(`col.${c}`)}</span>
           {/if}
         </th>
       {/each}
     </tr>
   </thead>
   <tbody>
-    {#each sorted as t, i (t.path)}
-      <tr class:current={t.path === currentPath} ondblclick={() => onplay(sorted, i)} onclick={() => touch && onplay(sorted, i)}>
+    {#each sorted as tr, i (tr.path)}
+      <tr class:current={tr.path === currentPath} ondblclick={() => onplay(sorted, i)} onclick={() => touch && onplay(sorted, i)}>
         {#each columns as c (c)}
           <td class={c}>
             {#if c === "number"}
-              {#if t.path === currentPath}
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-label="Играет"><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
+              {#if tr.path === currentPath}
+                <svg width="10" height="10" viewBox="0 0 10 10" aria-label={t("common.playing")}><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
               {:else}
-                <button class="play-row" onclick={(e) => { e.stopPropagation(); onplay(sorted, i); }} aria-label={`Играть «${t.title}»`}>
-                  <span class="n num">{t.trackNumber ?? "–"}</span>
+                <button class="play-row" onclick={(e) => { e.stopPropagation(); onplay(sorted, i); }} aria-label={t("track.play", { title: tr.title })}>
+                  <span class="n num">{tr.trackNumber ?? "–"}</span>
                   <svg class="p" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1v8l7-4z" fill="currentColor" /></svg>
                 </button>
               {/if}
             {:else if c === "title"}
-              {t.title}
+              {tr.title}
             {:else if c === "artist"}
-              {t.artist ?? "—"}
+              {tr.artist ?? "—"}
             {:else if c === "album"}
-              {t.album ?? "—"}
+              {tr.album ?? "—"}
             {:else if c === "year"}
-              <span class="num">{t.year ?? ""}</span>
+              <span class="num">{tr.year ?? ""}</span>
             {:else if c === "duration"}
-              <span class="num">{clock(t.duration)}</span>
+              <span class="num">{clock(tr.duration)}</span>
             {:else if c === "format"}
-              <span class="fmt" class:hi={t.hiRes} class:lossy={!t.lossless}>
-                {t.format}{t.lossless ? (t.bits ? ` ${resolution(t.bits, t.sampleRate)}` : ` ${khz(t.sampleRate)} кГц`) : ""}
+              <span class="fmt" class:hi={tr.hiRes} class:lossy={!tr.lossless}>
+                {tr.format}{tr.lossless ? (tr.bits ? ` ${resolution(tr.bits, tr.sampleRate)}` : ` ${khz(tr.sampleRate)} ${t("unit.khz")}`) : ""}
               </span>
             {/if}
           </td>
@@ -146,7 +137,7 @@
     top: 0;
     z-index: 1;
     background: var(--slate-800);
-    text-align: left;
+    text-align: start;
     font-weight: 500;
     color: var(--mist);
     padding: 0;
@@ -168,7 +159,7 @@
   }
   .arrow {
     font-size: 8px;
-    margin-left: 5px;
+    margin-inline-start: 5px;
     vertical-align: 1px;
   }
   td {
@@ -200,22 +191,22 @@
   }
   .number {
     width: 44px;
-    text-align: right;
+    text-align: end;
   }
   th.number button,
   th.number .th {
-    text-align: right;
+    text-align: end;
   }
   .year {
     width: 60px;
   }
   .duration {
     width: 64px;
-    text-align: right;
+    text-align: end;
   }
   th.duration button,
   th.duration .th {
-    text-align: right;
+    text-align: end;
   }
   .format {
     width: 120px;

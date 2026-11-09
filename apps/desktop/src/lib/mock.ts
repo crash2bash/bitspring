@@ -4,13 +4,15 @@ import { isIOS } from "./api";
 import type { Album, Device, DspSettings, EqInfo, LibTrack, NowPlaying, Signal, Status } from "./api";
 
 // ---- library ----------------------------------------------------------------------------------
+/** The engine's name for untagged music (api.ts UNKNOWN_ARTIST; not imported: api.ts imports this file). */
+const UNKNOWN_ARTIST = "Неизвестный исполнитель";
 const LIB: [string, string, string | null, string | null, string, number, number | null, string | null, string[]][] = [
   ["Ada Marlow", "Paper Moons", "2017", "Folk", "ALAC", 48000, 24, "#6b5d2e", ["Kite Strings", "Harbour", "Paper Moons"]],
   ["Echo Field", "Signal Path", "2020", "Electronic", "MP3", 44100, null, null, ["Carrier", "Sideband", "Noise Floor"]],
   ["Halvorsen Quartet", "Strings in Winter", "2021", "Classical", "FLAC", 192000, 24, "#2e3b6b", ["I. Allegro", "II. Adagio", "III. Scherzo", "IV. Finale"]],
   ["Northern Lights Trio", "Quiet Hours", "2019", "Jazz", "FLAC", 96000, 24, "#2b4a5c", ["Morning Glass", "Slow Current", "Blue Hour", "Afterglow"]],
   ["Northern Lights Trio", "City Rain", "2022", "Jazz", "FLAC", 44100, 16, "#5c3a2b", ["Neon Puddles", "Last Tram", "Umbrella Song"]],
-  ["Неизвестный исполнитель", "Untitled Sketches", null, null, "WAV", 44100, 16, null, ["01 sketch one", "02 sketch two"]],
+  [UNKNOWN_ARTIST, "Untitled Sketches", null, null, "WAV", 44100, 16, null, ["01 sketch one", "02 sketch two"]],
 ];
 const libTracks: LibTrack[] = [];
 const libAlbums: Album[] = LIB.map(([artist, title, year, genre, format, rate, bits, color, names], ai) => {
@@ -18,7 +20,7 @@ const libAlbums: Album[] = LIB.map(([artist, title, year, genre, format, rate, b
   const idx = names.map((name, n) => {
     libTracks.push({
       path: `/Music/${artist}/${title}/${String(n + 1).padStart(2, "0")} ${name}.${format.toLowerCase()}`,
-      title: name, artist: artist === "Неизвестный исполнитель" ? null : artist, albumArtist: null, album: title, genre, year,
+      title: name, artist: artist === UNKNOWN_ARTIST ? null : artist, albumArtist: null, album: title, genre, year,
       trackNumber: n + 1, discNumber: null, duration: 27 + n * 7 + ai * 31, sampleRate: rate, bits, channels: 2, format,
       lossless: format !== "MP3", hasCover: !!color, size: 0, mtime: 1700000000 + ai * 1000, albumId: id,
       hiRes: format !== "MP3" && (rate > 48000 || (bits ?? 0) > 16),
@@ -79,7 +81,7 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
     const dop = dopWanted && exclusive && !!dev.maxDop && !dspOn;
     const maxRate = Math.max(...dev.rates);
     const deviceRate = dop ? 176400 : Math.min(176400, maxRate);
-    const dsdNote = !dopWanted || dop ? null : !exclusive ? "DoP работает только в эксклюзивном режиме" : dspOn ? "эквалайзер и кроссфид работают с PCM" : `${dev.name} не работает на 176,4 кГц, нужных для DoP DSD64`;
+    const dsdNote: Signal["dsdNote"] = !dopWanted || dop ? null : !exclusive ? { kind: "exclusive" } : dspOn ? { kind: "dsp" } : { kind: "rate", device: dev.name, khz: 176.4, dsd: "DSD64" };
     return {
       sourceRate: 176400, sourceBits: dop ? 1 : null, deviceRate, dacBits: 32, dacFloat: air, integerMode: !air,
       exclusive, transport: dev.transport, resampled: deviceRate !== 176400,
@@ -115,6 +117,8 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
   switch (cmd) {
     case "list_devices":
       return devices as T;
+    case "system_locales":
+      return [...navigator.languages] as T;
     case "library_status":
     case "library_rescan":
       return { folders: libFolders, scanning: null, albums: libAlbums.length, tracks: libTracks.length, failed: 0, revision: 1 } as T;

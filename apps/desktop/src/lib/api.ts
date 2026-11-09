@@ -2,6 +2,7 @@
 // Outside Tauri (plain browser, for layout work) it falls back to mock data.
 import { invoke } from "@tauri-apps/api/core";
 import { mock, mockCover } from "./mock";
+import { num, t } from "./i18n.svelte";
 
 export interface Device {
   uid: string;
@@ -37,11 +38,24 @@ export interface Signal {
   /** DSD goes to the DAC as DoP (otherwise it was converted to PCM). */
   dop: boolean;
   /** Why DoP was asked for but this file plays as PCM. */
-  dsdNote: string | null;
+  dsdNote: DsdNote | null;
   bitPerfect: boolean;
 }
 
 export type Crossfeed = "light" | "medium" | "strong";
+
+/** Why a DSD file plays as PCM although DoP was asked for (worded by dsdNoteText). */
+export type DsdNote =
+  | { kind: "exclusive" }
+  | { kind: "volume" }
+  | { kind: "dsp" }
+  | { kind: "rate"; device: string; khz: number; dsd: string };
+
+/** The queue stopped at a track it couldn't play. */
+export interface AdvanceError {
+  name: string;
+  error: string;
+}
 
 export interface EqInfo {
   name: string;
@@ -96,7 +110,7 @@ export interface Status {
   /** Changes whenever a different track starts — then fetch nowPlaying(). */
   nowRev: number;
   /** The queue stopped at a track it couldn't play. */
-  advanceError: string | null;
+  advanceError: AdvanceError | null;
   /** iOS: system volume 0…1 (below 1 iOS may scale the samples). Null elsewhere. */
   systemVolume: number | null;
 }
@@ -175,7 +189,9 @@ export const isAndroid =
   (/Android/.test(navigator.userAgent) || (!("__TAURI_INTERNALS__" in window) && new URLSearchParams(location.search).has("android")));
 export const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") && !isIOS && !isAndroid;
 /** The system mixer that shared mode goes through. */
-export const OS_MIXER = isWindows ? "микшер Windows" : isIOS ? "микшер iOS" : isAndroid ? "микшер Android" : "общий микшер macOS";
+export function osMixer(): string {
+  return t(isWindows ? "mixer.windows" : isIOS ? "mixer.ios" : isAndroid ? "mixer.android" : "mixer.mac");
+}
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return inTauri ? invoke<T>(cmd, args) : mock<T>(cmd, args);
@@ -183,6 +199,7 @@ function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
 
 export const api = {
   listDevices: () => call<Device[]>("list_devices"),
+  systemLocales: () => call<string[]>("system_locales"),
   expandPaths: (paths: string[]) => call<string[]>("expand_paths", { paths }),
   playFile: (path: string, deviceUid: string, exclusive: boolean, startAt = 0, dop = false, index: number | null = null, paused = false) =>
     call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop, index, paused }),
@@ -212,7 +229,7 @@ export function isAudioPath(p: string): boolean {
 }
 
 export function khz(hz: number): string {
-  return (hz / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+  return num(hz / 1000);
 }
 
 export function clock(secs: number): string {
@@ -252,23 +269,49 @@ export function resolution(bits: number | null, rate: number): string {
 
 export function longDuration(secs: number): string {
   const m = Math.round(secs / 60);
-  return m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;
+  return m >= 60 ? t("dur.hm", { h: num(Math.floor(m / 60)), m: num(m % 60) }) : t("dur.m", { m: num(m) });
 }
 
-export const CROSSFEED_LABEL: Record<Crossfeed, string> = {
-  light: "лёгкий",
-  medium: "средний",
-  strong: "сильный",
+/** The library's name for music without an artist tag (set by the engine). */
+export const UNKNOWN_ARTIST = "Неизвестный исполнитель";
+
+/** An artist name as shown: the untagged placeholder in the UI language. */
+export function artistLabel(name: string): string {
+  return name === UNKNOWN_ARTIST ? t("lib.unknownArtist") : name;
+}
+
+/** Built-in outputs the phone backends name themselves (the rest carry the OS's own names). */
+const DEVICE_KEYS: Record<string, string> = {
+  Динамик: "dev.speaker",
+  Наушники: "dev.headphones",
+  "Док-станция": "dev.dock",
+  Аудиовыход: "dev.output",
 };
 
-export const TRANSPORT_LABEL: Record<string, string> = {
+/** A device name as shown. */
+export function deviceLabel(name: string): string {
+  const key = DEVICE_KEYS[name.trim()];
+  return key ? t(key) : name;
+}
+
+/** Transports whose names are the same in every language; the others are translated. */
+const TRANSPORT_NAMES: Record<string, string> = {
   Usb: "USB",
-  BuiltIn: "Встроенный",
   Bluetooth: "Bluetooth",
   Hdmi: "HDMI",
   DisplayPort: "DisplayPort",
   Thunderbolt: "Thunderbolt",
   AirPlay: "AirPlay",
-  Aggregate: "Агрегатное",
-  Virtual: "Виртуальное",
 };
+const TRANSPORT_KEYS = new Set(["BuiltIn", "Aggregate", "Virtual"]);
+
+/** "USB", "Built-in" … for a device's transport. */
+export function transportLabel(transport: string): string {
+  return TRANSPORT_NAMES[transport] ?? (TRANSPORT_KEYS.has(transport) ? t(`transport.${transport}`) : transport);
+}
+
+/** Why DoP isn't used, in the UI language. */
+export function dsdNoteText(n: DsdNote): string {
+  if (n.kind === "rate") return t("dsd.rate", { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  return t(`dsd.${n.kind}`);
+}

@@ -24,6 +24,7 @@ hifi-engine = { version = "0.1.0", path = "../../../crates/engine" }
 tauri-plugin-dialog = "2.8.4"
 anyhow = "1.0.104"
 base64 = "0.23.1"
+sys-locale = "0.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 block2 = "0.6"
