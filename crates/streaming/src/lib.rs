@@ -244,7 +244,7 @@ impl Streaming {
         match svc {
             Service::Qobuz => {
                 let app = self.qobuz_app()?;
-                Ok(qobuz::login_start(&app, redirect_port))
+                Ok(qobuz::login_start(&app, redirect_port, &nonce()))
             }
             Service::Tidal => {
                 let (start, pending) = tidal::login_start();
@@ -444,6 +444,13 @@ impl Streaming {
         c.insert(url.to_string(), b.clone());
         Some(b)
     }
+}
+
+/// 128 random bits as hex.
+fn nonce() -> String {
+    let mut b = [0u8; 16];
+    getrandom::fill(&mut b).expect("system randomness");
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 pub fn split_uri(uri: &str) -> Result<(Service, &str)> {

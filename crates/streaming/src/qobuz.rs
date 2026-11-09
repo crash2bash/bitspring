@@ -116,8 +116,10 @@ pub fn web_app(cached: Option<&WebApp>) -> Result<WebApp> {
     Ok(WebApp { bundle, app_id, secrets })
 }
 
-pub fn login_start(app: &WebApp, port: u16) -> LoginStart {
-    let redirect = format!("http://localhost:{port}");
+/// `nonce` goes into the redirect's path: only a request that knows it is taken as the answer,
+/// so nothing else on this computer can slip its own sign-in code into ours.
+pub fn login_start(app: &WebApp, port: u16, nonce: &str) -> LoginStart {
+    let redirect = format!("http://localhost:{port}/{nonce}");
     LoginStart {
         url: format!("https://www.qobuz.com/signin/oauth?ext_app_id={}&redirect_url={}", app.app_id, http::enc(&redirect)),
         redirect,

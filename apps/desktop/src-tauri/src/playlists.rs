@@ -144,9 +144,20 @@ fn is_stream(uri: &str) -> bool {
     crate::stream::is_uri(uri)
 }
 
-fn available(uri: &str) -> bool {
+/// The paths the library has scanned (its own folders, network shares included).
+type Known<'a> = std::collections::HashSet<&'a str>;
+
+fn known(tracks: &[TrackInfo]) -> Known<'_> {
+    tracks.iter().map(|t| t.path.as_str()).collect()
+}
+
+/// Playable here and now. A network path counts only if the library scanned it: one from an
+/// imported playlist is never looked up (see `playlist::is_network_path`).
+fn available(uri: &str, library: &Known) -> bool {
     if is_stream(uri) {
         crate::stream::ENABLED
+    } else if playlist::is_network_path(uri) {
+        library.contains(uri)
     } else {
         Path::new(uri).is_file()
     }
@@ -207,10 +218,11 @@ fn resolve(entries: &[Entry], tracks: &[TrackInfo], base: Option<&Path>) -> Vec<
 
 /// Missing or moved entries looked up again in the current library.
 fn heal(entries: &mut [PlaylistEntry], tracks: &[TrackInfo]) -> bool {
+    let lib = known(tracks);
     let lost: Vec<usize> = entries
         .iter()
         .enumerate()
-        .filter(|(_, e)| e.uri.as_deref().is_none_or(|u| !is_stream(u) && !Path::new(u).is_file()))
+        .filter(|(_, e)| e.uri.as_deref().is_none_or(|u| !is_stream(u) && !available(u, &lib)))
         .map(|(i, _)| i)
         .collect();
     if lost.is_empty() || tracks.is_empty() {
@@ -240,14 +252,14 @@ fn enrich(entries: Vec<PlaylistEntry>, tracks: &[TrackInfo]) -> Vec<PlaylistEntr
         .collect()
 }
 
-fn dto(p: &Playlist) -> PlaylistDto {
+fn dto(p: &Playlist, lib: &Known) -> PlaylistDto {
     PlaylistDto {
         id: p.id.clone(),
         name: p.name.clone(),
         entries: p
             .entries
             .iter()
-            .map(|e| EntryDto { available: e.uri.as_deref().is_some_and(available), entry: e.clone() })
+            .map(|e| EntryDto { available: e.uri.as_deref().is_some_and(|u| available(u, lib)), entry: e.clone() })
             .collect(),
     }
 }
@@ -313,9 +325,11 @@ pub fn add_playlist(app: &AppHandle, name: &str, entries: Vec<PlaylistEntry>) ->
 #[cfg_attr(not(all(feature = "streaming", not(target_os = "ios"))), allow(dead_code))]
 pub fn fill_missing(app: &AppHandle, id: &str, mut find: impl FnMut(&PlaylistEntry) -> Option<PlaylistEntry>) -> Result<usize, UserError> {
     let store = app.state::<Playlists>();
+    let tracks = app.state::<Library>().tracks();
+    let lib = known(&tracks);
     let missing: Vec<(usize, PlaylistEntry)> = store.with(app, |list| {
         let p = list.iter().find(|p| p.id == id).ok_or(UserError::PlaylistNotFound)?;
-        Ok::<_, UserError>(p.entries.iter().cloned().enumerate().filter(|(_, e)| e.uri.as_deref().is_none_or(|u| !available(u))).collect())
+        Ok::<_, UserError>(p.entries.iter().cloned().enumerate().filter(|(_, e)| e.uri.as_deref().is_none_or(|u| !available(u, &lib))).collect())
     })?;
     // Network lookups happen outside the lock; the results go in by position afterwards.
     let found: Vec<(usize, PlaylistEntry)> = missing.into_iter().filter_map(|(i, e)| find(&e).map(|f| (i, f))).collect();
@@ -358,7 +372,7 @@ pub fn playlist_get(app: AppHandle, store: State<'_, Playlists>, lib: State<'_, 
     if healed {
         store.change(&app, |_| ())?;
     }
-    store.with(&app, |list| list.iter().find(|p| p.id == id).map(dto).ok_or(UserError::PlaylistNotFound))
+    store.with(&app, |list| list.iter().find(|p| p.id == id).map(|p| dto(p, &known(&tracks))).ok_or(UserError::PlaylistNotFound))
 }
 
 #[tauri::command]

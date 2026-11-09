@@ -597,14 +597,30 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// A path on another machine: `\\server\share\…`, `//server/share/…`. Looking at one makes
+/// Windows connect to that server and offer the user's credentials (NTLM), so a path from an
+/// imported playlist must never reach the file system — such entries only count when the
+/// library itself already has that exact path.
+pub fn is_network_path(p: &str) -> bool {
+    let p = p.trim();
+    p.starts_with("\\\\") || p.starts_with("//") || p.starts_with("\\/") || p.starts_with("/\\")
+}
+
 /// A playlist location as a path on this computer (relative ones against the playlist's
-/// folder). None for web links.
+/// folder). None for web links. A `file://server/…` URL comes back as `//server/…`: see
+/// [`is_network_path`].
 pub fn local_path(location: &str, base: Option<&Path>) -> Option<PathBuf> {
     let l = location.trim();
     let lower = l.to_ascii_lowercase();
     let p = if lower.starts_with("file:") {
         let rest = &l[5..];
-        let rest = rest.strip_prefix("//localhost").or_else(|| rest.strip_prefix("//")).unwrap_or(rest);
+        let rest = match rest.strip_prefix("//") {
+            // file:///path and file://localhost/path are this computer; file://host/path is not.
+            Some(after) if after.starts_with('/') => after,
+            Some(after) if after.to_ascii_lowercase().starts_with("localhost/") => &after["localhost".len()..],
+            Some(_) => rest,
+            None => rest,
+        };
         let mut p = percent_decode(rest);
         // file:///C:/Music → C:/Music
         if p.len() > 3 && p.starts_with('/') && p.as_bytes()[2] == b':' {
@@ -796,7 +812,7 @@ pub fn resolve(entries: &[Entry], index: &Index, base: Option<&Path>) -> Vec<Opt
                     if let Some(i) = index.by_location(&p) {
                         return Some(Found::Library(i));
                     }
-                    if p.is_file() {
+                    if !is_network_path(&p.to_string_lossy()) && p.is_file() {
                         return Some(Found::File(p.to_string_lossy().into_owned()));
                     }
                 }
@@ -1104,6 +1120,20 @@ mod tests {
         let idx = Index::new(&lib);
         assert_eq!(idx.by_location(Path::new("/elsewhere/01 Intro.flac")), None);
         assert_eq!(idx.by_location(Path::new("/elsewhere/Else/Intro/01 Intro.flac")), Some(5));
+    }
+
+    #[test]
+    fn network_paths_never_touch_the_file_system() {
+        for p in [r"\\evil\share\a.flac", "//evil/share/a.flac", "file://evil/share/a.flac"] {
+            let l = local_path(p, Some(Path::new("/Music"))).unwrap();
+            assert!(is_network_path(&l.to_string_lossy()), "{p} -> {l:?}");
+        }
+        assert_eq!(local_path("file:///Music/a.flac", None).unwrap(), PathBuf::from("/Music/a.flac"));
+        assert_eq!(local_path("file://localhost/Music/a.flac", None).unwrap(), PathBuf::from("/Music/a.flac"));
+        // Not found (and never looked up): the library doesn't have it.
+        let lib = library();
+        let e = Entry { location: Some(r"\\evil\share\x.flac".into()), ..Default::default() };
+        assert_eq!(resolve(&[e], &Index::new(&lib), None)[0], None);
     }
 
     #[test]

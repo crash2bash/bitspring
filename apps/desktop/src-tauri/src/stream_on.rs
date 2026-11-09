@@ -179,10 +179,13 @@ fn loopback() -> std::io::Result<(u16, Vec<TcpListener>)> {
     Err(last.unwrap_or_else(|| std::io::Error::other("no free port")))
 }
 
-/// Answer the redirect if it does reach us, and pass its address on.
-fn serve_redirect(listeners: Vec<TcpListener>, port: u16, tx: mpsc::Sender<Option<String>>, stop: Arc<AtomicBool>) {
+/// Answer the redirect if it does reach us, and pass its address on — only a request for
+/// exactly `redirect` (whose path holds the sign-in's random nonce) with a code in it.
+fn serve_redirect(listeners: Vec<TcpListener>, redirect: &str, tx: mpsc::Sender<Option<String>>, stop: Arc<AtomicBool>) {
+    let expected = redirect.split_once("://").and_then(|(_, rest)| rest.find('/').map(|i| rest[i..].to_string())).unwrap_or_else(|| "/".into());
+    let origin = redirect.trim_end_matches(expected.as_str()).to_string();
     for l in listeners {
-        let (tx, stop) = (tx.clone(), stop.clone());
+        let (tx, stop, expected, origin) = (tx.clone(), stop.clone(), expected.clone(), origin.clone());
         let _ = l.set_nonblocking(true);
         std::thread::spawn(move || {
             while !stop.load(Ordering::Relaxed) {
@@ -196,8 +199,9 @@ fn serve_redirect(listeners: Vec<TcpListener>, port: u16, tx: mpsc::Sender<Optio
                         let path = head.lines().next().and_then(|l| l.split_whitespace().nth(1)).unwrap_or("/");
                         let body = "<!doctype html><meta charset=utf-8><title>Hifi</title><p style=\"font:16px system-ui;margin:40px\">&#10003;</p>";
                         let _ = write!(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
-                        if path.contains("code") {
-                            let _ = tx.send(Some(format!("http://localhost:{port}{path}")));
+                        let (route, query) = path.split_once('?').unwrap_or((path, ""));
+                        if route == expected && query.split('&').any(|kv| kv.starts_with("code_autorisation=") || kv.starts_with("code=")) {
+                            let _ = tx.send(Some(format!("{origin}{path}")));
                         }
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(100)),
@@ -215,16 +219,15 @@ pub async fn streaming_login(app: AppHandle, service: String) -> Res<Vec<Account
         let s = svc(&app);
         let (tx, rx) = mpsc::channel::<Option<String>>();
         let stop = Arc::new(AtomicBool::new(false));
-        let port = match service {
-            Service::Qobuz => {
-                let (port, listeners) = loopback().map_err(UserError::other)?;
-                serve_redirect(listeners, port, tx.clone(), stop.clone());
-                port
-            }
-            Service::Tidal => 0,
+        let listeners = match service {
+            Service::Qobuz => Some(loopback().map_err(UserError::other)?),
+            Service::Tidal => None,
         };
         let result = (|| {
-            let start = s.start_login(service, port).map_err(|e| UserError::of(&e))?;
+            let start = s.start_login(service, listeners.as_ref().map_or(0, |(port, _)| *port)).map_err(|e| UserError::of(&e))?;
+            if let Some((_, ls)) = listeners {
+                serve_redirect(ls, &start.redirect, tx.clone(), stop.clone());
+            }
             match wait_for_redirect(&app, service.name(), &start.url, &start.redirect, tx, rx)? {
                 Some(url) => s.finish_login(service, &url).map_err(|e| UserError::of(&e)),
                 None => Err(UserError::SignInCancelled),
@@ -335,5 +338,35 @@ pub fn fill_tags(entries: &mut [PlaylistEntry]) {
         if let Ok(t) = s.track(&uri) {
             *e = entry(&t);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpStream;
+
+    fn get(port: u16, path: &str) {
+        let mut c = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(c, "GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n").unwrap();
+        let mut answer = String::new();
+        let _ = c.read_to_string(&mut answer);
+    }
+
+    #[test]
+    fn redirect_needs_the_nonce_path_and_a_code() {
+        let (port, listeners) = loopback().unwrap();
+        let (tx, rx) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let redirect = format!("http://localhost:{port}/0123abcd");
+        serve_redirect(listeners, &redirect, tx, stop.clone());
+        get(port, "/?code_autorisation=evil");
+        get(port, "/0123abcdX?code_autorisation=evil");
+        get(port, "/0123abcd?state=nothing");
+        get(port, "/0123abcd?code_autorisation=good");
+        let got = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(got.as_deref(), Some(format!("{redirect}?code_autorisation=good").as_str()));
+        assert!(rx.try_recv().is_err());
+        stop.store(true, Ordering::Relaxed);
     }
 }
