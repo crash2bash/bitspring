@@ -752,22 +752,28 @@ main,
   border-top: 1px solid var(--slate-700);
 }
 
-.platforms li {
+.platforms a {
   display: grid;
   gap: 2px;
   padding-block-start: 20px;
   padding-inline-end: 20px;
+  text-decoration: none;
 }
 
-.platforms li span:first-child {
+.platforms a span:first-child {
   font-family: var(--font-display);
   font-size: var(--t-lg);
   font-weight: 500;
+  transition: color 0.2s;
 }
 
-.platforms li span:last-child {
+.platforms a span:last-child {
   color: var(--brass);
   font-size: var(--t-sm);
+}
+
+.platforms a:hover span:first-child {
+  color: var(--brass);
 }
 
 .platforms li.is-soon span {
@@ -793,6 +799,201 @@ main,
 
 .footer a:hover {
   color: var(--porcelain);
+}
+
+/* ---- download page ----------------------------------------------------------------------- */
+
+.lang-end {
+  margin-inline-start: auto;
+}
+
+.dl {
+  position: relative;
+  z-index: 1;
+  max-width: var(--max);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: clamp(120px, 18vh, 180px) var(--gutter) 96px;
+  display: grid;
+  align-content: start;
+  gap: 40px;
+}
+
+.dl-title {
+  font-size: clamp(3.4rem, 10vw, 9rem);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 0.92;
+  margin-inline-start: -0.04em;
+}
+
+.dl-redirect {
+  color: var(--brass);
+  font-size: var(--t-lg);
+}
+
+.dl-featured:empty {
+  display: none;
+}
+
+.dl-other-title {
+  font-size: var(--t-lg);
+  color: var(--mist);
+  margin-top: 24px;
+}
+
+.dl-list {
+  display: grid;
+}
+
+/* One row per platform in the list: name on one side, its downloads on the other. */
+.dl-platform {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 48px;
+  padding-block: 24px;
+  border-top: 1px solid var(--slate-700);
+}
+
+.dl-platform h3 {
+  font-size: var(--t-xl);
+  padding-top: 10px;
+}
+
+.dl-for {
+  display: none;
+}
+
+.dl-options {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 12px;
+}
+
+.dl-option {
+  display: grid;
+  gap: 4px;
+  padding: 14px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--slate-600);
+  background: rgba(22, 35, 42, 0.88);
+  text-decoration: none;
+  transition:
+    border-color 0.25s var(--ease),
+    background-color 0.25s var(--ease),
+    transform 0.25s var(--ease);
+}
+
+a.dl-option[href]:hover {
+  border-color: var(--mist-dim);
+  background: rgba(31, 48, 57, 0.85);
+}
+
+a.dl-option[href]:active {
+  transform: scale(0.99);
+}
+
+.dl-option-label {
+  font-weight: 500;
+}
+
+.dl-option-note {
+  color: var(--mist);
+  font-size: var(--t-sm);
+}
+
+.dl-option.is-soon {
+  cursor: default;
+  border-style: dashed;
+  background: rgba(18, 29, 35, 0.88);
+}
+
+.dl-option.is-soon .dl-option-label {
+  color: var(--mist);
+}
+
+/* The visitor's own platform: big, first, with the choice laid out side by side. */
+.dl-platform.is-featured {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding: 0;
+  border: 0;
+}
+
+.is-featured h3 {
+  display: none;
+}
+
+.is-featured .dl-for {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  color: var(--brass);
+}
+
+.is-featured .dl-options {
+  grid-column: 1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  max-width: 52rem;
+}
+
+.is-featured .dl-option {
+  padding: 22px 26px;
+  border-radius: 20px;
+}
+
+.is-featured .dl-option-label {
+  font-size: var(--t-lg);
+}
+
+.is-featured a.dl-option[href]:first-child {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--slate-900);
+}
+
+.is-featured a.dl-option[href]:first-child .dl-option-note {
+  color: rgba(18, 29, 35, 0.72);
+}
+
+.is-featured a.dl-option[href]:first-child:hover {
+  background: #d6b46f;
+  border-color: #d6b46f;
+}
+
+.dl-stems {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  height: 34vh;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mask-image: linear-gradient(to top, black 30%, transparent);
+}
+
+.dl-stems path {
+  fill: none;
+  stroke: var(--brass);
+  vector-effect: non-scaling-stroke;
+}
+
+.dl-stems .stems {
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+.dl-stems .heads {
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.dl-page .footer {
+  position: relative;
+  z-index: 1;
 }
 
 /* ---- scripts ----------------------------------------------------------------------------- */
@@ -891,8 +1092,20 @@ main,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .platforms li {
+  .platforms a {
     padding-bottom: 12px;
+  }
+
+  .dl-platform {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-options {
+    grid-column: 1;
+  }
+
+  .dl-platform h3 {
+    padding-top: 0;
   }
 
   .nav {

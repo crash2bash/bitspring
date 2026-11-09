@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "У роботі",
 
-  "footer.top": "Нагору"
+  "footer.top": "Нагору",
+
+  "cta.mac": "Завантажити для Mac",
+  "cta.mac_soon": "Незабаром для Mac",
+  "cta.ios": "Завантажте в App Store",
+  "cta.ios_soon": "Незабаром в App Store",
+  "cta.android": "Завантажити для Android",
+  "cta.android_soon": "Незабаром для Android",
+  "cta.other_platforms": "Інші платформи",
+  "cta.all_platforms": "Завантажити",
+
+  "dl.meta_title": "Завантажити Hifi для macOS, Windows, iPhone і Android",
+  "dl.meta_description": "Безкоштовний bit-perfect плеєр для вашого пристрою.",
+  "dl.title": "Завантажити Hifi",
+  "dl.for_mac": "Для вашого Mac",
+  "dl.for_windows": "Для вашого комп’ютера з Windows",
+  "dl.for_ios": "Для вашого iPhone або iPad",
+  "dl.for_android": "Для вашого Android-пристрою",
+  "dl.choose": "Оберіть платформу",
+  "dl.appstore_note": "Встановлення й оновлення через App Store.",
+  "dl.mac_file": "Завантажити файл .dmg",
+  "dl.mac_file_note": "Відкрийте його й перетягніть Hifi у «Програми».",
+  "dl.windows_file": "Завантажити інсталятор (.exe)",
+  "dl.windows_file_note": "Для Windows 10 і 11.",
+  "dl.ios_note": "Для iPhone і iPad.",
+  "dl.android_note": "Для телефонів і планшетів.",
+  "dl.redirecting": "Відкриваємо App Store…",
+  "dl.soon": "Незабаром",
+  "dl.other": "Інші платформи",
+  "dl.back": "Повернутися на сайт"
 }

@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "开发中",
 
-  "footer.top": "回到顶部"
+  "footer.top": "回到顶部",
+
+  "cta.mac": "下载 Mac 版",
+  "cta.mac_soon": "Mac 版即将推出",
+  "cta.ios": "在 App Store 下载",
+  "cta.ios_soon": "即将登陆 App Store",
+  "cta.android": "下载 Android 版",
+  "cta.android_soon": "Android 版即将推出",
+  "cta.other_platforms": "其他平台",
+  "cta.all_platforms": "下载",
+
+  "dl.meta_title": "下载 Hifi，支持 macOS、Windows、iPhone 和 Android",
+  "dl.meta_description": "为你的设备下载免费的比特完美音乐播放器。",
+  "dl.title": "下载 Hifi",
+  "dl.for_mac": "适用于你的 Mac",
+  "dl.for_windows": "适用于你的 Windows 电脑",
+  "dl.for_ios": "适用于你的 iPhone 或 iPad",
+  "dl.for_android": "适用于你的 Android 设备",
+  "dl.choose": "选择你的平台",
+  "dl.appstore_note": "通过 App Store 安装和更新。",
+  "dl.mac_file": "下载 .dmg 文件",
+  "dl.mac_file_note": "打开后，将 Hifi 拖到“应用程序”文件夹。",
+  "dl.windows_file": "下载安装程序（.exe）",
+  "dl.windows_file_note": "适用于 Windows 10 和 11。",
+  "dl.ios_note": "适用于 iPhone 和 iPad。",
+  "dl.android_note": "适用于手机和平板电脑。",
+  "dl.redirecting": "正在打开 App Store……",
+  "dl.soon": "即将推出",
+  "dl.other": "其他平台",
+  "dl.back": "返回网站"
 }

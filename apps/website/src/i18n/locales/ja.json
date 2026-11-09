@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "開発中",
 
-  "footer.top": "ページの先頭へ"
+  "footer.top": "ページの先頭へ",
+
+  "cta.mac": "Mac版をダウンロード",
+  "cta.mac_soon": "Mac版は近日公開",
+  "cta.ios": "App Storeからダウンロード",
+  "cta.ios_soon": "App Storeに近日登場",
+  "cta.android": "Android版をダウンロード",
+  "cta.android_soon": "Android版は近日公開",
+  "cta.other_platforms": "その他のプラットフォーム",
+  "cta.all_platforms": "ダウンロード",
+
+  "dl.meta_title": "Hifiをダウンロード — macOS・Windows・iPhone・Android対応",
+  "dl.meta_description": "お使いのデバイスに、無料のビットパーフェクト音楽プレーヤーを。",
+  "dl.title": "Hifiをダウンロード",
+  "dl.for_mac": "お使いのMac向け",
+  "dl.for_windows": "お使いのWindows PC向け",
+  "dl.for_ios": "お使いのiPhone・iPad向け",
+  "dl.for_android": "お使いのAndroidデバイス向け",
+  "dl.choose": "プラットフォームを選択",
+  "dl.appstore_note": "インストールとアップデートはApp Storeから。",
+  "dl.mac_file": ".dmgファイルをダウンロード",
+  "dl.mac_file_note": "ファイルを開き、Hifiを「アプリケーション」フォルダにドラッグします。",
+  "dl.windows_file": "インストーラー（.exe）をダウンロード",
+  "dl.windows_file_note": "Windows 10・11対応。",
+  "dl.ios_note": "iPhone・iPad対応。",
+  "dl.android_note": "スマートフォン・タブレット対応。",
+  "dl.redirecting": "App Storeを開いています…",
+  "dl.soon": "近日公開",
+  "dl.other": "その他のプラットフォーム",
+  "dl.back": "サイトに戻る"
 }

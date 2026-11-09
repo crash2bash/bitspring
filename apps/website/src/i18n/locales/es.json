@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "En desarrollo",
 
-  "footer.top": "Volver arriba"
+  "footer.top": "Volver arriba",
+
+  "cta.mac": "Descargar para Mac",
+  "cta.mac_soon": "Próximamente para Mac",
+  "cta.ios": "Descárgalo en el App Store",
+  "cta.ios_soon": "Próximamente en el App Store",
+  "cta.android": "Descargar para Android",
+  "cta.android_soon": "Próximamente para Android",
+  "cta.other_platforms": "Otras plataformas",
+  "cta.all_platforms": "Descargar",
+
+  "dl.meta_title": "Descarga Hifi para macOS, Windows, iPhone y Android",
+  "dl.meta_description": "El reproductor de música bit-perfect gratuito para tu dispositivo.",
+  "dl.title": "Descarga Hifi",
+  "dl.for_mac": "Para tu Mac",
+  "dl.for_windows": "Para tu PC con Windows",
+  "dl.for_ios": "Para tu iPhone o iPad",
+  "dl.for_android": "Para tu dispositivo Android",
+  "dl.choose": "Elige tu plataforma",
+  "dl.appstore_note": "Se instala y se actualiza desde el App Store.",
+  "dl.mac_file": "Descargar el archivo .dmg",
+  "dl.mac_file_note": "Ábrelo y arrastra Hifi a «Aplicaciones».",
+  "dl.windows_file": "Descargar el instalador (.exe)",
+  "dl.windows_file_note": "Para Windows 10 y 11.",
+  "dl.ios_note": "Para iPhone y iPad.",
+  "dl.android_note": "Para teléfonos y tabletas.",
+  "dl.redirecting": "Abriendo el App Store…",
+  "dl.soon": "Próximamente",
+  "dl.other": "Otras plataformas",
+  "dl.back": "Volver al sitio"
 }

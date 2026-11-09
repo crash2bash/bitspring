@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "På gång",
 
-  "footer.top": "Till toppen"
+  "footer.top": "Till toppen",
+
+  "cta.mac": "Ladda ner för Mac",
+  "cta.mac_soon": "Snart för Mac",
+  "cta.ios": "Hämta i App Store",
+  "cta.ios_soon": "Snart i App Store",
+  "cta.android": "Ladda ner för Android",
+  "cta.android_soon": "Snart för Android",
+  "cta.other_platforms": "Andra plattformar",
+  "cta.all_platforms": "Ladda ner",
+
+  "dl.meta_title": "Ladda ner Hifi för macOS, Windows, iPhone och Android",
+  "dl.meta_description": "Den gratis bit-perfect musikspelaren för din enhet.",
+  "dl.title": "Ladda ner Hifi",
+  "dl.for_mac": "För din Mac",
+  "dl.for_windows": "För din Windows-dator",
+  "dl.for_ios": "För din iPhone eller iPad",
+  "dl.for_android": "För din Android-enhet",
+  "dl.choose": "Välj din plattform",
+  "dl.appstore_note": "Installeras och uppdateras via App Store.",
+  "dl.mac_file": "Ladda ner .dmg-filen",
+  "dl.mac_file_note": "Öppna den och dra Hifi till ”Program”.",
+  "dl.windows_file": "Ladda ner installationsprogrammet (.exe)",
+  "dl.windows_file_note": "För Windows 10 och 11.",
+  "dl.ios_note": "För iPhone och iPad.",
+  "dl.android_note": "För telefoner och surfplattor.",
+  "dl.redirecting": "Öppnar App Store…",
+  "dl.soon": "Kommer snart",
+  "dl.other": "Andra plattformar",
+  "dl.back": "Tillbaka till webbplatsen"
 }

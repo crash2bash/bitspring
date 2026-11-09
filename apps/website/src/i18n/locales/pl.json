@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "W przygotowaniu",
 
-  "footer.top": "Na górę"
+  "footer.top": "Na górę",
+
+  "cta.mac": "Pobierz na Maca",
+  "cta.mac_soon": "Wkrótce na Maca",
+  "cta.ios": "Pobierz z App Store",
+  "cta.ios_soon": "Wkrótce w App Store",
+  "cta.android": "Pobierz na Androida",
+  "cta.android_soon": "Wkrótce na Androida",
+  "cta.other_platforms": "Inne platformy",
+  "cta.all_platforms": "Pobierz",
+
+  "dl.meta_title": "Pobierz Hifi na macOS, Windows, iPhone’a i Androida",
+  "dl.meta_description": "Pobierz darmowy odtwarzacz muzyki bit-perfect na swoje urządzenie.",
+  "dl.title": "Pobierz Hifi",
+  "dl.for_mac": "Na Maca",
+  "dl.for_windows": "Na komputer z Windows",
+  "dl.for_ios": "Na iPhone’a lub iPada",
+  "dl.for_android": "Na urządzenie z Androidem",
+  "dl.choose": "Wybierz platformę",
+  "dl.appstore_note": "Instalacja i aktualizacje przez App Store.",
+  "dl.mac_file": "Pobierz plik .dmg",
+  "dl.mac_file_note": "Otwórz go i przeciągnij Hifi do folderu „Aplikacje”.",
+  "dl.windows_file": "Pobierz instalator (.exe)",
+  "dl.windows_file_note": "Na Windows 10 i 11.",
+  "dl.ios_note": "Na iPhone’a i iPada.",
+  "dl.android_note": "Na telefony i tablety.",
+  "dl.redirecting": "Otwieranie App Store…",
+  "dl.soon": "Wkrótce",
+  "dl.other": "Inne platformy",
+  "dl.back": "Wróć do strony"
 }

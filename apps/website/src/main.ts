@@ -10,106 +10,57 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
 
 import { LINKS } from "./config";
-import { localeUrl, LOCALES, type FontGroup } from "./i18n/locales";
+import { downloadUrl, fontGroup, fontsReady, isRtl, numberLocale, t } from "./i18n/runtime";
+import { detectPlatform, isAvailable, type Platform } from "./platform";
 import { createField, HERO, type FieldState } from "./scene";
 
 gsap.registerPlugin(ScrollTrigger);
-
-// ---- language ------------------------------------------------------------------------------
-// The page arrives already translated (see src/i18n/render.ts); only strings that JS writes at
-// runtime come from this inline dictionary.
-
-const root = document.documentElement;
-const runtime = JSON.parse(document.getElementById("i18n")?.textContent ?? "{}") as {
-  numbers?: string;
-  strings?: Record<string, string>;
-};
-const t = (key: string) => runtime.strings?.[key] ?? key;
-const numberLocale = runtime.numbers ?? root.lang;
-const isRtl = root.dir === "rtl";
-
-// Barlow covers Latin only. Other scripts fall back to a companion face (see --script-font in
-// style.css); each page loads just its own, and CJK faces arrive in small unicode-range slices.
-const SCRIPT_FONTS: Record<FontGroup, () => Promise<unknown>> = {
-  latin: async () => {},
-  cyrillic: () =>
-    Promise.all([
-      import("@fontsource/ibm-plex-sans/cyrillic-300.css"),
-      import("@fontsource/ibm-plex-sans/cyrillic-400.css"),
-      import("@fontsource/ibm-plex-sans/cyrillic-500.css"),
-    ]),
-  greek: () =>
-    Promise.all([
-      import("@fontsource/ibm-plex-sans/greek-300.css"),
-      import("@fontsource/ibm-plex-sans/greek-400.css"),
-      import("@fontsource/ibm-plex-sans/greek-500.css"),
-    ]),
-  arabic: () =>
-    Promise.all([
-      import("@fontsource/ibm-plex-sans-arabic/arabic-300.css"),
-      import("@fontsource/ibm-plex-sans-arabic/arabic-400.css"),
-      import("@fontsource/ibm-plex-sans-arabic/arabic-500.css"),
-    ]),
-  sc: () =>
-    Promise.all([
-      import("@fontsource/noto-sans-sc/300.css"),
-      import("@fontsource/noto-sans-sc/400.css"),
-      import("@fontsource/noto-sans-sc/500.css"),
-    ]),
-  tc: () =>
-    Promise.all([
-      import("@fontsource/noto-sans-tc/300.css"),
-      import("@fontsource/noto-sans-tc/400.css"),
-      import("@fontsource/noto-sans-tc/500.css"),
-    ]),
-  jp: () =>
-    Promise.all([
-      import("@fontsource/noto-sans-jp/300.css"),
-      import("@fontsource/noto-sans-jp/400.css"),
-      import("@fontsource/noto-sans-jp/500.css"),
-    ]),
-  kr: () =>
-    Promise.all([
-      import("@fontsource/noto-sans-kr/300.css"),
-      import("@fontsource/noto-sans-kr/400.css"),
-      import("@fontsource/noto-sans-kr/500.css"),
-    ]),
-};
-const fontGroup = (root.dataset.font ?? "latin") as FontGroup;
-const fontsReady = (SCRIPT_FONTS[fontGroup] ?? SCRIPT_FONTS.latin)();
-
-const langSelect = document.querySelector<HTMLSelectElement>("[data-lang-select]");
-const langCurrent = document.querySelector<HTMLElement>("[data-lang-current]");
-if (langSelect && langCurrent) {
-  const current = LOCALES.find((l) => l.tag === root.lang) ?? LOCALES[0];
-  langCurrent.textContent = (current.path || "en").split("-")[0].toUpperCase();
-  langSelect.addEventListener("change", () => {
-    const next = LOCALES.find((l) => l.path === langSelect.value);
-    if (!next) return;
-    try {
-      localStorage.setItem("lang", next.path); // the root page stops auto-redirecting
-    } catch {}
-    location.href = localeUrl(next) + location.hash;
-  });
-}
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const $ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 const $$ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) =>
   Array.from(root.querySelectorAll(sel)) as T[];
 
-// ---- store links -------------------------------------------------------------------------
+// ---- download buttons ------------------------------------------------------------------------
+// The main button offers the build for the visitor's device: an iPhone goes straight to the
+// App Store, Windows gets the installer, a Mac goes to the download page to choose between the
+// App Store and a .dmg. "Other platforms" always leads to that page.
 
-for (const a of $$<HTMLAnchorElement>("[data-store]")) {
-  const url = LINKS[a.dataset.store as keyof typeof LINKS];
-  if (url) {
-    a.href = url;
-    a.rel = "noopener";
-  } else {
-    a.textContent = t(a.dataset.store === "appStore" ? "cta.appstore_soon" : "cta.windows_soon");
-    a.setAttribute("aria-disabled", "true");
+const platform: Platform = detectPlatform();
+
+function primaryDownload(p: Platform): { href: string; label: string; direct: boolean } {
+  const soon = (label: string) => ({ href: downloadUrl, label: t(label), direct: false });
+  switch (p) {
+    case "ios":
+      return LINKS.iosAppStore ? { href: LINKS.iosAppStore, label: t("cta.ios"), direct: true } : soon("cta.ios_soon");
+    case "windows":
+      return LINKS.windowsFile ? { href: LINKS.windowsFile, label: t("cta.windows"), direct: true } : soon("cta.windows_soon");
+    case "android":
+      return LINKS.android ? { href: LINKS.android, label: t("cta.android"), direct: true } : soon("cta.android_soon");
+    case "mac":
+      return { href: downloadUrl, label: t(isAvailable("mac") ? "cta.mac" : "cta.mac_soon"), direct: false };
+    default:
+      return { href: downloadUrl, label: t("cta.all_platforms"), direct: false };
   }
 }
+
+const primary = primaryDownload(platform);
+for (const a of $$<HTMLAnchorElement>("[data-download-primary]")) {
+  a.href = primary.href;
+  a.textContent = primary.label;
+  if (primary.direct) a.rel = "noopener";
+}
+
+// The platform list under "Free": what is out already, what is still coming.
+for (const li of $$<HTMLElement>("[data-platform]")) {
+  const p = li.dataset.platform as Platform;
+  if (isAvailable(p)) continue;
+  li.classList.add("is-soon");
+  const status = li.querySelector("[data-status]");
+  if (status) status.textContent = t("dl.soon");
+}
+const androidStatus = document.querySelector('[data-platform="android"] [data-status]');
+if (androidStatus && LINKS.android) androidStatus.textContent = /play\.google\./.test(LINKS.android) ? "Google Play" : "APK";
 
 // ---- smooth scroll -------------------------------------------------------------------------
 // Lenis interpolates wheel input, which is what makes notched Windows mice glide like a trackpad.
@@ -125,7 +76,6 @@ if (!reduceMotion) {
 
 for (const a of $$<HTMLAnchorElement>('a[href^="#"]')) {
   a.addEventListener("click", (e) => {
-    if (a.getAttribute("aria-disabled") === "true" && a.hash === "#download" && location.hash === "#download") return;
     const target = a.hash === "#top" ? document.body : document.querySelector<HTMLElement>(a.hash);
     if (!target) return;
     e.preventDefault();

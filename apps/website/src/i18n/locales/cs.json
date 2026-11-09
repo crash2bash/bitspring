@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "Připravujeme",
 
-  "footer.top": "Zpět nahoru"
+  "footer.top": "Zpět nahoru",
+
+  "cta.mac": "Stáhnout pro Mac",
+  "cta.mac_soon": "Brzy pro Mac",
+  "cta.ios": "Stáhnout v App Store",
+  "cta.ios_soon": "Brzy v App Store",
+  "cta.android": "Stáhnout pro Android",
+  "cta.android_soon": "Brzy pro Android",
+  "cta.other_platforms": "Další platformy",
+  "cta.all_platforms": "Stáhnout",
+
+  "dl.meta_title": "Stáhněte si Hifi pro macOS, Windows, iPhone a Android",
+  "dl.meta_description": "Bezplatný bit-perfect hudební přehrávač pro vaše zařízení.",
+  "dl.title": "Stáhněte si Hifi",
+  "dl.for_mac": "Pro váš Mac",
+  "dl.for_windows": "Pro váš počítač s Windows",
+  "dl.for_ios": "Pro váš iPhone nebo iPad",
+  "dl.for_android": "Pro vaše zařízení s Androidem",
+  "dl.choose": "Vyberte platformu",
+  "dl.appstore_note": "Instalace a aktualizace přes App Store.",
+  "dl.mac_file": "Stáhnout soubor .dmg",
+  "dl.mac_file_note": "Otevřete ho a přetáhněte Hifi do složky „Aplikace“.",
+  "dl.windows_file": "Stáhnout instalátor (.exe)",
+  "dl.windows_file_note": "Pro Windows 10 a 11.",
+  "dl.ios_note": "Pro iPhone a iPad.",
+  "dl.android_note": "Pro telefony a tablety.",
+  "dl.redirecting": "Otevírá se App Store…",
+  "dl.soon": "Již brzy",
+  "dl.other": "Další platformy",
+  "dl.back": "Zpět na web"
 }

@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "In lavorazione",
 
-  "footer.top": "Torna su"
+  "footer.top": "Torna su",
+
+  "cta.mac": "Scarica per Mac",
+  "cta.mac_soon": "In arrivo per Mac",
+  "cta.ios": "Scarica su App Store",
+  "cta.ios_soon": "In arrivo su App Store",
+  "cta.android": "Scarica per Android",
+  "cta.android_soon": "In arrivo per Android",
+  "cta.other_platforms": "Altre piattaforme",
+  "cta.all_platforms": "Scarica",
+
+  "dl.meta_title": "Scarica Hifi per macOS, Windows, iPhone e Android",
+  "dl.meta_description": "Il lettore musicale bit-perfect gratuito per il tuo dispositivo.",
+  "dl.title": "Scarica Hifi",
+  "dl.for_mac": "Per il tuo Mac",
+  "dl.for_windows": "Per il tuo PC Windows",
+  "dl.for_ios": "Per il tuo iPhone o iPad",
+  "dl.for_android": "Per il tuo dispositivo Android",
+  "dl.choose": "Scegli la tua piattaforma",
+  "dl.appstore_note": "Installazione e aggiornamenti tramite App Store.",
+  "dl.mac_file": "Scarica il file .dmg",
+  "dl.mac_file_note": "Aprilo e trascina Hifi in «Applicazioni».",
+  "dl.windows_file": "Scarica il programma di installazione (.exe)",
+  "dl.windows_file_note": "Per Windows 10 e 11.",
+  "dl.ios_note": "Per iPhone e iPad.",
+  "dl.android_note": "Per smartphone e tablet.",
+  "dl.redirecting": "Apertura di App Store…",
+  "dl.soon": "In arrivo",
+  "dl.other": "Altre piattaforme",
+  "dl.back": "Torna al sito"
 }

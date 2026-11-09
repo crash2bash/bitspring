@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "Työn alla",
 
-  "footer.top": "Takaisin ylös"
+  "footer.top": "Takaisin ylös",
+
+  "cta.mac": "Lataa Macille",
+  "cta.mac_soon": "Tulossa Macille",
+  "cta.ios": "Lataa App Storesta",
+  "cta.ios_soon": "Tulossa App Storeen",
+  "cta.android": "Lataa Androidille",
+  "cta.android_soon": "Tulossa Androidille",
+  "cta.other_platforms": "Muut alustat",
+  "cta.all_platforms": "Lataa",
+
+  "dl.meta_title": "Lataa Hifi macOS:lle, Windowsille, iPhonelle ja Androidille",
+  "dl.meta_description": "Ilmainen bit-perfect-musiikkisoitin laitteellesi.",
+  "dl.title": "Lataa Hifi",
+  "dl.for_mac": "Macillesi",
+  "dl.for_windows": "Windows-tietokoneellesi",
+  "dl.for_ios": "iPhonellesi tai iPadillesi",
+  "dl.for_android": "Android-laitteellesi",
+  "dl.choose": "Valitse alusta",
+  "dl.appstore_note": "Asennus ja päivitykset App Storen kautta.",
+  "dl.mac_file": "Lataa .dmg-tiedosto",
+  "dl.mac_file_note": "Avaa tiedosto ja vedä Hifi kansioon ”Ohjelmat”.",
+  "dl.windows_file": "Lataa asennusohjelma (.exe)",
+  "dl.windows_file_note": "Windows 10:lle ja 11:lle.",
+  "dl.ios_note": "iPhonelle ja iPadille.",
+  "dl.android_note": "Puhelimille ja tableteille.",
+  "dl.redirecting": "Avataan App Storea…",
+  "dl.soon": "Tulossa pian",
+  "dl.other": "Muut alustat",
+  "dl.back": "Takaisin sivustolle"
 }

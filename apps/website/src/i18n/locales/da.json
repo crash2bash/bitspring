@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "På vej",
 
-  "footer.top": "Til toppen"
+  "footer.top": "Til toppen",
+
+  "cta.mac": "Hent til Mac",
+  "cta.mac_soon": "Snart til Mac",
+  "cta.ios": "Hent i App Store",
+  "cta.ios_soon": "Snart i App Store",
+  "cta.android": "Hent til Android",
+  "cta.android_soon": "Snart til Android",
+  "cta.other_platforms": "Andre platforme",
+  "cta.all_platforms": "Hent",
+
+  "dl.meta_title": "Hent Hifi til macOS, Windows, iPhone og Android",
+  "dl.meta_description": "Den gratis bit-perfect musikafspiller til din enhed.",
+  "dl.title": "Hent Hifi",
+  "dl.for_mac": "Til din Mac",
+  "dl.for_windows": "Til din Windows-pc",
+  "dl.for_ios": "Til din iPhone eller iPad",
+  "dl.for_android": "Til din Android-enhed",
+  "dl.choose": "Vælg din platform",
+  "dl.appstore_note": "Installeres og opdateres via App Store.",
+  "dl.mac_file": "Hent .dmg-filen",
+  "dl.mac_file_note": "Åbn den, og træk Hifi over i »Programmer«.",
+  "dl.windows_file": "Hent installationsprogrammet (.exe)",
+  "dl.windows_file_note": "Til Windows 10 og 11.",
+  "dl.ios_note": "Til iPhone og iPad.",
+  "dl.android_note": "Til telefoner og tablets.",
+  "dl.redirecting": "Åbner App Store…",
+  "dl.soon": "Kommer snart",
+  "dl.other": "Andre platforme",
+  "dl.back": "Tilbage til webstedet"
 }

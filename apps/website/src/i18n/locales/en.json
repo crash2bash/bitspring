@@ -3,7 +3,6 @@
   "meta.description": "A free music player that sends your DAC exactly what is in the file. FLAC, ALAC, WAV, DSD up to DSD1024, up to 768 kHz. EQ, crossfeed and upsampling when you want them.",
   "meta.og_title": "Hifi — bit for bit",
   "meta.og_description": "A free bit-perfect music player for macOS and Windows.",
-
   "nav.home_label": "Hifi, back to top",
   "nav.sections_label": "Sections",
   "nav.how": "How it works",
@@ -11,15 +10,12 @@
   "nav.enhance": "Enhancers",
   "nav.download": "Download",
   "nav.language": "Language",
-
   "hero.title": "Bit for bit",
   "hero.lede": "A free music player for macOS and Windows. Your DAC gets exactly what is in the file: no resampling, no system mixer, no surprises.",
-
   "cta.appstore": "Download on the Mac App Store",
   "cta.windows": "Download for Windows",
   "cta.appstore_soon": "Coming to the Mac App Store",
   "cta.windows_soon": "Coming to Windows",
-
   "path.title": "Not a single bit changes between the file and the DAC",
   "path.file": "File",
   "path.file_detail": "FLAC, 24-bit, 96 kHz. Samples are read exactly as stored.",
@@ -30,12 +26,10 @@
   "path.samples": "Samples sent",
   "path.changed": "Bits changed",
   "path.foot": "On macOS: CoreAudio exclusive (hog) mode with integer output. On Windows: WASAPI Exclusive.",
-
   "formats.title": "From CD to 768 kHz",
   "formats.lede": "The player switches your DAC to each track's sample rate. If the DAC can't do that rate, the audio is carefully resampled, and the player tells you so.",
   "formats.dsd": "DSD plays natively over DoP if your DAC supports it, or as 176.4 kHz PCM if it doesn't.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD quality",
   "rates.video": "Video and studio recording",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "The ceiling of today's DACs",
   "rates.dsd": "One bit, {mhz} MHz",
-
   "enhance.title": "Want a different sound? Go ahead",
   "enhance.lede": "Enhancers are off by default. Turn any of them on and the player's indicator switches from \"Bit-perfect\" to \"Processing\" and lists exactly what is being done to the sound.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Light, medium or strong. Removes the feeling that the music is playing inside your head.",
   "enhance.lossy": "For MP3 and AAC",
   "enhance.lossy_detail": "Headroom against clipping turns on by itself, and the highs above the codec's cutoff can be gently restored.",
-
   "app.title": "Everything that happens to the sound, in plain sight",
   "app.lede": "File format, DAC sample rate and every processing step, right on the main screen.",
   "app.alt": "The player window: queue, now playing, and the Bit-perfect indicator with the signal path",
-
   "download.title": "Free",
   "download.lede": "No subscription, no ads, no account. Just a player.",
   "platforms.macos": "macOS",
@@ -70,6 +61,32 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "In progress",
-
-  "footer.top": "Back to top"
+  "footer.top": "Back to top",
+  "cta.mac": "Download for Mac",
+  "cta.mac_soon": "Coming to Mac",
+  "cta.ios": "Download on the App Store",
+  "cta.ios_soon": "Coming to the App Store",
+  "cta.android": "Download for Android",
+  "cta.android_soon": "Coming to Android",
+  "cta.other_platforms": "Other platforms",
+  "cta.all_platforms": "Download",
+  "dl.meta_title": "Download Hifi for macOS, Windows, iPhone and Android",
+  "dl.meta_description": "Get the free bit-perfect music player for your device.",
+  "dl.title": "Download Hifi",
+  "dl.for_mac": "For your Mac",
+  "dl.for_windows": "For your Windows PC",
+  "dl.for_ios": "For your iPhone or iPad",
+  "dl.for_android": "For your Android device",
+  "dl.choose": "Choose your platform",
+  "dl.appstore_note": "Installs and updates through the App Store.",
+  "dl.mac_file": "Download the .dmg file",
+  "dl.mac_file_note": "Open it and drag Hifi into Applications.",
+  "dl.windows_file": "Download the installer (.exe)",
+  "dl.windows_file_note": "For Windows 10 and 11.",
+  "dl.ios_note": "For iPhone and iPad.",
+  "dl.android_note": "For phones and tablets.",
+  "dl.redirecting": "Opening the App Store…",
+  "dl.soon": "Coming soon",
+  "dl.other": "Other platforms",
+  "dl.back": "Back to the site"
 }

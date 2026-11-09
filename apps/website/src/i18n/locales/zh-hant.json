@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "開發中",
 
-  "footer.top": "回到頂端"
+  "footer.top": "回到頂端",
+
+  "cta.mac": "下載 Mac 版",
+  "cta.mac_soon": "Mac 版即將推出",
+  "cta.ios": "在 App Store 下載",
+  "cta.ios_soon": "即將登上 App Store",
+  "cta.android": "下載 Android 版",
+  "cta.android_soon": "Android 版即將推出",
+  "cta.other_platforms": "其他平台",
+  "cta.all_platforms": "下載",
+
+  "dl.meta_title": "下載 Hifi，支援 macOS、Windows、iPhone 與 Android",
+  "dl.meta_description": "為你的裝置下載免費的 bit-perfect 音樂播放器。",
+  "dl.title": "下載 Hifi",
+  "dl.for_mac": "適用於你的 Mac",
+  "dl.for_windows": "適用於你的 Windows 電腦",
+  "dl.for_ios": "適用於你的 iPhone 或 iPad",
+  "dl.for_android": "適用於你的 Android 裝置",
+  "dl.choose": "選擇你的平台",
+  "dl.appstore_note": "透過 App Store 安裝與更新。",
+  "dl.mac_file": "下載 .dmg 檔案",
+  "dl.mac_file_note": "打開後，將 Hifi 拖到「應用程式」檔案夾。",
+  "dl.windows_file": "下載安裝程式（.exe）",
+  "dl.windows_file_note": "適用於 Windows 10 與 11。",
+  "dl.ios_note": "適用於 iPhone 與 iPad。",
+  "dl.android_note": "適用於手機與平板電腦。",
+  "dl.redirecting": "正在開啟 App Store……",
+  "dl.soon": "即將推出",
+  "dl.other": "其他平台",
+  "dl.back": "返回網站"
 }

@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "قيد التطوير",
 
-  "footer.top": "العودة إلى الأعلى"
+  "footer.top": "العودة إلى الأعلى",
+
+  "cta.mac": "نزّله لجهاز Mac",
+  "cta.mac_soon": "قريبًا لجهاز Mac",
+  "cta.ios": "تنزيل من App Store",
+  "cta.ios_soon": "قريبًا على App Store",
+  "cta.android": "نزّله لأجهزة Android",
+  "cta.android_soon": "قريبًا لأجهزة Android",
+  "cta.other_platforms": "منصات أخرى",
+  "cta.all_platforms": "تنزيل",
+
+  "dl.meta_title": "نزّل Hifi لأنظمة macOS وWindows وiPhone وAndroid",
+  "dl.meta_description": "احصل على مشغّل الموسيقى المجاني بدقة Bit-perfect لجهازك.",
+  "dl.title": "تنزيل Hifi",
+  "dl.for_mac": "لجهاز Mac",
+  "dl.for_windows": "لحاسوب Windows",
+  "dl.for_ios": "لجهاز iPhone أو iPad",
+  "dl.for_android": "لجهاز Android",
+  "dl.choose": "اختر منصتك",
+  "dl.appstore_note": "يُثبَّت ويُحدَّث عبر App Store.",
+  "dl.mac_file": "نزّل ملف ‎.dmg",
+  "dl.mac_file_note": "افتحه واسحب Hifi إلى مجلد «التطبيقات».",
+  "dl.windows_file": "نزّل برنامج التثبيت (‎.exe)",
+  "dl.windows_file_note": "لنظامي Windows 10 و11.",
+  "dl.ios_note": "لأجهزة iPhone وiPad.",
+  "dl.android_note": "للهواتف والأجهزة اللوحية.",
+  "dl.redirecting": "جارٍ فتح App Store…",
+  "dl.soon": "قريبًا",
+  "dl.other": "منصات أخرى",
+  "dl.back": "العودة إلى الموقع"
 }

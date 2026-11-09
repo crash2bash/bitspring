@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "개발 중",
 
-  "footer.top": "맨 위로"
+  "footer.top": "맨 위로",
+
+  "cta.mac": "Mac용 다운로드",
+  "cta.mac_soon": "Mac 버전 출시 예정",
+  "cta.ios": "App Store에서 다운로드",
+  "cta.ios_soon": "App Store 출시 예정",
+  "cta.android": "Android용 다운로드",
+  "cta.android_soon": "Android 버전 출시 예정",
+  "cta.other_platforms": "다른 플랫폼",
+  "cta.all_platforms": "다운로드",
+
+  "dl.meta_title": "macOS, Windows, iPhone, Android용 Hifi 다운로드",
+  "dl.meta_description": "내 기기에 맞는 무료 비트 퍼펙트 음악 플레이어를 받으세요.",
+  "dl.title": "Hifi 다운로드",
+  "dl.for_mac": "Mac용",
+  "dl.for_windows": "Windows PC용",
+  "dl.for_ios": "iPhone 및 iPad용",
+  "dl.for_android": "Android 기기용",
+  "dl.choose": "플랫폼을 선택하세요",
+  "dl.appstore_note": "App Store에서 설치하고 업데이트합니다.",
+  "dl.mac_file": ".dmg 파일 다운로드",
+  "dl.mac_file_note": "파일을 열고 Hifi를 ‘응용 프로그램’ 폴더로 드래그하세요.",
+  "dl.windows_file": "설치 프로그램(.exe) 다운로드",
+  "dl.windows_file_note": "Windows 10 및 11 지원.",
+  "dl.ios_note": "iPhone 및 iPad 지원.",
+  "dl.android_note": "휴대폰 및 태블릿 지원.",
+  "dl.redirecting": "App Store를 여는 중…",
+  "dl.soon": "출시 예정",
+  "dl.other": "다른 플랫폼",
+  "dl.back": "사이트로 돌아가기"
 }

@@ -7,29 +7,45 @@ import { SITE_URL } from "./src/config";
 import { DEFAULT_LOCALE, LOCALES } from "./src/i18n/locales";
 import { renderPage } from "./src/i18n/render";
 
-/** One static page per language: "/" for English, "/de/", "/ja/", … for the rest. */
+/** Page templates, by their path below a language root. */
+const PAGES: Record<string, string> = {
+  "": "index.html",
+  "download/": "download/index.html",
+};
+
+const LOCALE_PATH = "[a-z]{2}(?:-[a-z]+)?";
+
+/** One static page per language and template: "/", "/download/", "/de/", "/de/download/", … */
 function i18nPages(): Plugin {
   return {
     name: "i18n-pages",
     enforce: "post",
     configureServer(server) {
-      const template = () => readFileSync(resolve(server.config.root, "index.html"), "utf8");
-      server.watcher.add(resolve(server.config.root, "src/i18n/locales"));
+      const root = server.config.root;
+      server.watcher.add(resolve(root, "src/i18n/locales"));
       server.watcher.on("change", (file) => {
         if (file.endsWith(".json") && file.includes("/i18n/locales/")) server.ws.send({ type: "full-reload" });
       });
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url ?? "/").split("?")[0];
-        const bare = url.match(/^\/([a-z]{2}(?:-[a-z]+)?)$/);
-        if (bare && LOCALES.some((l) => l.path === bare[1])) {
-          res.writeHead(301, { Location: `${url}/` }).end();
-          return;
+        // "/de" or "/download" without the trailing slash: redirect like the host will.
+        if (!url.endsWith("/") && !url.includes(".") && /^\/[\w-]+(\/[\w-]+)?$/.test(url)) {
+          const [, a, b] = url.split("/");
+          const isPage = (s: string | undefined) => s !== undefined && `${s}/` in PAGES;
+          const isLocale = (s: string | undefined) => LOCALES.some((l) => l.path === s);
+          if ((b === undefined && (isPage(a) || isLocale(a))) || (isLocale(a) && isPage(b))) {
+            res.writeHead(301, { Location: `${url}/${req.url?.includes("?") ? "?" + req.url.split("?")[1] : ""}` }).end();
+            return;
+          }
         }
-        const m = url.match(/^\/(?:([a-z]{2}(?:-[a-z]+)?)\/)?(?:index\.html)?$/);
-        const locale = m && (m[1] ? LOCALES.find((l) => l.path === m[1]) : DEFAULT_LOCALE);
-        if (!locale) return next();
+        const m = url.match(new RegExp(`^/(?:(${LOCALE_PATH})/)?((?:[\\w-]+/)?)(?:index\\.html)?$`));
+        if (!m) return next();
+        const [, localePath, page] = m;
+        const locale = localePath ? LOCALES.find((l) => l.path === localePath) : DEFAULT_LOCALE;
+        if (!locale || !(page in PAGES)) return next();
         try {
-          const html = await server.transformIndexHtml(url, renderPage(template(), locale, { site: SITE_URL }));
+          const template = readFileSync(resolve(root, PAGES[page]), "utf8");
+          const html = await server.transformIndexHtml(url, renderPage(template, locale, { site: SITE_URL, page }));
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.end(html);
         } catch (e) {
@@ -37,15 +53,17 @@ function i18nPages(): Plugin {
         }
       });
     },
-    // Vite has emitted index.html with hashed asset URLs by now; fan it out per language.
+    // Vite has emitted each template with hashed asset URLs by now; fan them out per language.
     generateBundle(_, bundle) {
-      const page = bundle["index.html"];
-      if (!page || page.type !== "asset") return;
-      const template = String(page.source);
-      for (const l of LOCALES) {
-        const html = renderPage(template, l, { site: SITE_URL });
-        if (l === DEFAULT_LOCALE) page.source = html;
-        else this.emitFile({ type: "asset", fileName: `${l.path}/index.html`, source: html });
+      for (const [page, file] of Object.entries(PAGES)) {
+        const asset = bundle[file];
+        if (!asset || asset.type !== "asset") continue;
+        const template = String(asset.source);
+        for (const l of LOCALES) {
+          const html = renderPage(template, l, { site: SITE_URL, page });
+          if (l === DEFAULT_LOCALE) asset.source = html;
+          else this.emitFile({ type: "asset", fileName: `${l.path}/${file}`, source: html });
+        }
       }
     },
   };
@@ -54,6 +72,11 @@ function i18nPages(): Plugin {
 export default defineConfig({
   plugins: [i18nPages()],
   server: { host: "127.0.0.1", port: 5180, strictPort: true },
-  // three.js is most of the bundle (~185 kB gzipped) and the hero needs it immediately.
-  build: { chunkSizeWarningLimit: 800 },
+  build: {
+    rolldownOptions: {
+      input: Object.fromEntries(Object.values(PAGES).map((f) => [f.replace(/\/?index\.html$/, "") || "home", resolve(import.meta.dirname, f)])),
+    },
+    // three.js is most of the home page bundle (~185 kB gzipped) and the hero needs it immediately.
+    chunkSizeWarningLimit: 800,
+  },
 });

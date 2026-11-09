@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "På vei",
 
-  "footer.top": "Til toppen"
+  "footer.top": "Til toppen",
+
+  "cta.mac": "Last ned for Mac",
+  "cta.mac_soon": "Kommer til Mac",
+  "cta.ios": "Last ned fra App Store",
+  "cta.ios_soon": "Kommer til App Store",
+  "cta.android": "Last ned for Android",
+  "cta.android_soon": "Kommer til Android",
+  "cta.other_platforms": "Andre plattformer",
+  "cta.all_platforms": "Last ned",
+
+  "dl.meta_title": "Last ned Hifi for macOS, Windows, iPhone og Android",
+  "dl.meta_description": "Den gratis bit-perfect musikkspilleren for enheten din.",
+  "dl.title": "Last ned Hifi",
+  "dl.for_mac": "For din Mac",
+  "dl.for_windows": "For din Windows-PC",
+  "dl.for_ios": "For din iPhone eller iPad",
+  "dl.for_android": "For din Android-enhet",
+  "dl.choose": "Velg plattform",
+  "dl.appstore_note": "Installeres og oppdateres via App Store.",
+  "dl.mac_file": "Last ned .dmg-filen",
+  "dl.mac_file_note": "Åpne den og dra Hifi til «Programmer».",
+  "dl.windows_file": "Last ned installasjonsprogrammet (.exe)",
+  "dl.windows_file_note": "For Windows 10 og 11.",
+  "dl.ios_note": "For iPhone og iPad.",
+  "dl.android_note": "For telefoner og nettbrett.",
+  "dl.redirecting": "Åpner App Store…",
+  "dl.soon": "Kommer snart",
+  "dl.other": "Andre plattformer",
+  "dl.back": "Tilbake til nettstedet"
 }

@@ -46,7 +46,7 @@
         <span class="visually-hidden">{{nav.language}}</span>
         <select class="lang-select" data-lang-select><!--@lang-options--></select>
       </label>
-      <a class="btn btn-small" href="#download">{{nav.download}}</a>
+      <a class="btn btn-small" href="{{@download}}">{{nav.download}}</a>
     </header>
 
     <main>
@@ -55,8 +55,8 @@
         <div class="hero-body">
           <p class="hero-lede">{{hero.lede}}</p>
           <div class="cta-row">
-            <a class="btn btn-primary" data-store="appStore" href="#download">{{cta.appstore}}</a>
-            <a class="btn" data-store="windows" href="#download">{{cta.windows}}</a>
+            <a class="btn btn-primary" data-download-primary href="{{@download}}">{{cta.all_platforms}}</a>
+            <a class="btn" href="{{@download}}#all">{{cta.other_platforms}}</a>
           </div>
         </div>
       </section>
@@ -161,14 +161,22 @@
         <h2 class="download-title" id="download-title" data-split>{{download.title}}</h2>
         <p class="download-lede">{{download.lede}}</p>
         <div class="cta-row">
-          <a class="btn btn-primary" data-store="appStore" href="#download">{{cta.appstore}}</a>
-          <a class="btn" data-store="windows" href="#download">{{cta.windows}}</a>
+          <a class="btn btn-primary" data-download-primary href="{{@download}}">{{cta.all_platforms}}</a>
+          <a class="btn" href="{{@download}}#all">{{cta.other_platforms}}</a>
         </div>
         <ul class="platforms">
-          <li><span>{{platforms.macos}}</span><span>{{platforms.appstore}}</span></li>
-          <li><span>{{platforms.windows}}</span><span>{{platforms.installer}}</span></li>
-          <li class="is-soon"><span>{{platforms.ios}}</span><span>{{platforms.soon}}</span></li>
-          <li class="is-soon"><span>{{platforms.android}}</span><span>{{platforms.soon}}</span></li>
+          <li data-platform="mac">
+            <a href="{{@download}}#mac"><span>{{platforms.macos}}</span><span data-status>{{platforms.appstore}}</span></a>
+          </li>
+          <li data-platform="windows">
+            <a href="{{@download}}#windows"><span>{{platforms.windows}}</span><span data-status>{{platforms.installer}}</span></a>
+          </li>
+          <li data-platform="ios">
+            <a href="{{@download}}#ios"><span>{{platforms.ios}}</span><span data-status>App Store</span></a>
+          </li>
+          <li data-platform="android">
+            <a href="{{@download}}#android"><span>{{platforms.android}}</span><span data-status>Android</span></a>
+          </li>
         </ul>
       </section>
     </main>

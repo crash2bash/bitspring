@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "În lucru",
 
-  "footer.top": "Înapoi sus"
+  "footer.top": "Înapoi sus",
+
+  "cta.mac": "Descarcă pentru Mac",
+  "cta.mac_soon": "În curând pentru Mac",
+  "cta.ios": "Descarcă din App Store",
+  "cta.ios_soon": "În curând în App Store",
+  "cta.android": "Descarcă pentru Android",
+  "cta.android_soon": "În curând pentru Android",
+  "cta.other_platforms": "Alte platforme",
+  "cta.all_platforms": "Descarcă",
+
+  "dl.meta_title": "Descarcă Hifi pentru macOS, Windows, iPhone și Android",
+  "dl.meta_description": "Playerul muzical gratuit, bit-perfect, pentru dispozitivul tău.",
+  "dl.title": "Descarcă Hifi",
+  "dl.for_mac": "Pentru Mac-ul tău",
+  "dl.for_windows": "Pentru PC-ul tău cu Windows",
+  "dl.for_ios": "Pentru iPhone-ul sau iPad-ul tău",
+  "dl.for_android": "Pentru dispozitivul tău Android",
+  "dl.choose": "Alege platforma",
+  "dl.appstore_note": "Se instalează și se actualizează prin App Store.",
+  "dl.mac_file": "Descarcă fișierul .dmg",
+  "dl.mac_file_note": "Deschide-l și trage Hifi în „Aplicații”.",
+  "dl.windows_file": "Descarcă programul de instalare (.exe)",
+  "dl.windows_file_note": "Pentru Windows 10 și 11.",
+  "dl.ios_note": "Pentru iPhone și iPad.",
+  "dl.android_note": "Pentru telefoane și tablete.",
+  "dl.redirecting": "Se deschide App Store…",
+  "dl.soon": "În curând",
+  "dl.other": "Alte platforme",
+  "dl.back": "Înapoi la site"
 }

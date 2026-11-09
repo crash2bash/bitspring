@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "In ontwikkeling",
 
-  "footer.top": "Terug naar boven"
+  "footer.top": "Terug naar boven",
+
+  "cta.mac": "Downloaden voor Mac",
+  "cta.mac_soon": "Binnenkort voor Mac",
+  "cta.ios": "Download in de App Store",
+  "cta.ios_soon": "Binnenkort in de App Store",
+  "cta.android": "Downloaden voor Android",
+  "cta.android_soon": "Binnenkort voor Android",
+  "cta.other_platforms": "Andere platforms",
+  "cta.all_platforms": "Downloaden",
+
+  "dl.meta_title": "Download Hifi voor macOS, Windows, iPhone en Android",
+  "dl.meta_description": "De gratis bit-perfect muziekspeler voor je apparaat.",
+  "dl.title": "Download Hifi",
+  "dl.for_mac": "Voor je Mac",
+  "dl.for_windows": "Voor je Windows-pc",
+  "dl.for_ios": "Voor je iPhone of iPad",
+  "dl.for_android": "Voor je Android-apparaat",
+  "dl.choose": "Kies je platform",
+  "dl.appstore_note": "Installatie en updates via de App Store.",
+  "dl.mac_file": "Download het .dmg-bestand",
+  "dl.mac_file_note": "Open het en sleep Hifi naar “Apps”.",
+  "dl.windows_file": "Download het installatieprogramma (.exe)",
+  "dl.windows_file_note": "Voor Windows 10 en 11.",
+  "dl.ios_note": "Voor iPhone en iPad.",
+  "dl.android_note": "Voor telefoons en tablets.",
+  "dl.redirecting": "App Store wordt geopend…",
+  "dl.soon": "Binnenkort",
+  "dl.other": "Andere platforms",
+  "dl.back": "Terug naar de site"
 }

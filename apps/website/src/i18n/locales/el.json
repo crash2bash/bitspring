@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "Σε εξέλιξη",
 
-  "footer.top": "Επιστροφή στην αρχή"
+  "footer.top": "Επιστροφή στην αρχή",
+
+  "cta.mac": "Λήψη για Mac",
+  "cta.mac_soon": "Σύντομα για Mac",
+  "cta.ios": "Λήψη από το App Store",
+  "cta.ios_soon": "Σύντομα στο App Store",
+  "cta.android": "Λήψη για Android",
+  "cta.android_soon": "Σύντομα για Android",
+  "cta.other_platforms": "Άλλες πλατφόρμες",
+  "cta.all_platforms": "Λήψη",
+
+  "dl.meta_title": "Λήψη του Hifi για macOS, Windows, iPhone και Android",
+  "dl.meta_description": "Το δωρεάν bit-perfect player μουσικής για τη συσκευή σας.",
+  "dl.title": "Λήψη του Hifi",
+  "dl.for_mac": "Για το Mac σας",
+  "dl.for_windows": "Για τον υπολογιστή σας με Windows",
+  "dl.for_ios": "Για το iPhone ή το iPad σας",
+  "dl.for_android": "Για τη συσκευή σας Android",
+  "dl.choose": "Επιλέξτε πλατφόρμα",
+  "dl.appstore_note": "Εγκατάσταση και ενημερώσεις μέσω του App Store.",
+  "dl.mac_file": "Λήψη του αρχείου .dmg",
+  "dl.mac_file_note": "Ανοίξτε το και σύρετε το Hifi στις «Εφαρμογές».",
+  "dl.windows_file": "Λήψη του προγράμματος εγκατάστασης (.exe)",
+  "dl.windows_file_note": "Για Windows 10 και 11.",
+  "dl.ios_note": "Για iPhone και iPad.",
+  "dl.android_note": "Για κινητά και tablet.",
+  "dl.redirecting": "Άνοιγμα του App Store…",
+  "dl.soon": "Σύντομα",
+  "dl.other": "Άλλες πλατφόρμες",
+  "dl.back": "Επιστροφή στον ιστότοπο"
 }

@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "Fejlesztés alatt",
 
-  "footer.top": "Vissza a tetejére"
+  "footer.top": "Vissza a tetejére",
+
+  "cta.mac": "Letöltés Macre",
+  "cta.mac_soon": "Hamarosan Macre",
+  "cta.ios": "Letöltés az App Store-ból",
+  "cta.ios_soon": "Hamarosan az App Store-ban",
+  "cta.android": "Letöltés Androidra",
+  "cta.android_soon": "Hamarosan Androidra",
+  "cta.other_platforms": "Más platformok",
+  "cta.all_platforms": "Letöltés",
+
+  "dl.meta_title": "Hifi letöltése macOS-re, Windowsra, iPhone-ra és Androidra",
+  "dl.meta_description": "Ingyenes, bit-perfect zenelejátszó az eszközödre.",
+  "dl.title": "Hifi letöltése",
+  "dl.for_mac": "A Macedre",
+  "dl.for_windows": "A windowsos gépedre",
+  "dl.for_ios": "Az iPhone-odra vagy iPadedre",
+  "dl.for_android": "Az androidos eszközödre",
+  "dl.choose": "Válassz platformot",
+  "dl.appstore_note": "Telepítés és frissítések az App Store-on keresztül.",
+  "dl.mac_file": "A .dmg fájl letöltése",
+  "dl.mac_file_note": "Nyisd meg, és húzd a Hifit az „Alkalmazások” mappába.",
+  "dl.windows_file": "A telepítő letöltése (.exe)",
+  "dl.windows_file_note": "Windows 10-hez és 11-hez.",
+  "dl.ios_note": "iPhone-ra és iPadre.",
+  "dl.android_note": "Telefonokra és táblagépekre.",
+  "dl.redirecting": "Az App Store megnyitása…",
+  "dl.soon": "Hamarosan",
+  "dl.other": "Más platformok",
+  "dl.back": "Vissza a webhelyre"
 }

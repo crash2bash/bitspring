@@ -71,5 +71,34 @@
   "platforms.android": "Android",
   "platforms.soon": "Hazırlanıyor",
 
-  "footer.top": "Başa dön"
+  "footer.top": "Başa dön",
+
+  "cta.mac": "Mac için indir",
+  "cta.mac_soon": "Yakında Mac'te",
+  "cta.ios": "App Store'dan indirin",
+  "cta.ios_soon": "Yakında App Store'da",
+  "cta.android": "Android için indir",
+  "cta.android_soon": "Yakında Android'de",
+  "cta.other_platforms": "Diğer platformlar",
+  "cta.all_platforms": "İndir",
+
+  "dl.meta_title": "Hifi'yi macOS, Windows, iPhone ve Android için indir",
+  "dl.meta_description": "Cihazın için ücretsiz, bit-perfect müzik çalar.",
+  "dl.title": "Hifi'yi indir",
+  "dl.for_mac": "Mac'in için",
+  "dl.for_windows": "Windows bilgisayarın için",
+  "dl.for_ios": "iPhone'un veya iPad'in için",
+  "dl.for_android": "Android cihazın için",
+  "dl.choose": "Platformunu seç",
+  "dl.appstore_note": "App Store üzerinden yüklenir ve güncellenir.",
+  "dl.mac_file": ".dmg dosyasını indir",
+  "dl.mac_file_note": "Dosyayı aç ve Hifi'yi “Uygulamalar” klasörüne sürükle.",
+  "dl.windows_file": "Yükleyiciyi indir (.exe)",
+  "dl.windows_file_note": "Windows 10 ve 11 için.",
+  "dl.ios_note": "iPhone ve iPad için.",
+  "dl.android_note": "Telefonlar ve tabletler için.",
+  "dl.redirecting": "App Store açılıyor…",
+  "dl.soon": "Yakında",
+  "dl.other": "Diğer platformlar",
+  "dl.back": "Siteye dön"
 }
