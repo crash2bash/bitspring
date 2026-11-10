@@ -1,7 +1,7 @@
 // Browser-only stand-in for the Rust backend, so the layout can be built and reviewed
 // without Tauri. Never used inside the app.
 import { isIOS } from "./api";
-import type { Album, Device, DspSettings, EqInfo, LibTrack, NowPlaying, Signal, Status } from "./api";
+import type { Album, Device, DeviceEq, DspSettings, EqPreset, EqState, LibTrack, NowPlaying, Signal, Status, StoredPreset } from "./api";
 
 // ---- library ----------------------------------------------------------------------------------
 /** The engine's name for untagged music (api.ts UNKNOWN_ARTIST; not imported: api.ts imports this file). */
@@ -48,27 +48,52 @@ const devices: Device[] = [
   { uid: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null },
 ];
 
-let dsp: DspSettings = { upsampleKhz: null, crossfeed: null, eqPath: null, headroom: true, restoreHighs: false };
+let dsp: DspSettings = { upsampleKhz: null, crossfeed: null, convolution: null, headroom: true, restoreHighs: false };
 let lastDevice: Device | null = null;
 let lastExclusive = true;
 
-function mockEq(path: string): EqInfo {
-  const bands: EqInfo["bands"] = [
-    { kind: "lowShelf", freq: 105, gain: 5.5, q: 0.7 },
-    { kind: "peak", freq: 2800, gain: -3.2, q: 1.4 },
-    { kind: "peak", freq: 6200, gain: 2.4, q: 3 },
-    { kind: "highShelf", freq: 10000, gain: 3, q: 0.7 },
-  ];
-  const curve: [number, number][] = Array.from({ length: 97 }, (_, i) => {
-    const f = 20 * Math.pow(1000, i / 96);
-    const lo = 5.5 / (1 + Math.pow(f / 105, 2));
-    const pk = -3.2 * Math.exp(-Math.pow(Math.log2(f / 2800) * 1.4, 2));
-    const pk2 = 2.4 * Math.exp(-Math.pow(Math.log2(f / 6200) * 3, 2));
-    const hi = 3 / (1 + Math.pow(10000 / f, 2));
-    return [f, -6 + lo + pk + pk2 + hi];
-  });
-  return { name: path.split("/").pop()!.replace(/ ParametricEQ\.txt$|\.txt$/, ""), preamp: -6, bands, curve };
+// ---- equalizer --------------------------------------------------------------------------------
+const LCD2: EqPreset = {
+  name: "Audeze LCD-2 (2021)", preamp: -6.4, autoPreamp: true, balance: 0, phase: "minimum", curve: [],
+  bands: [
+    { enabled: true, kind: "lowShelf", freq: 105, gain: 5.5, q: 0.7, slope: 12, channels: "both" },
+    { enabled: true, kind: "peak", freq: 180, gain: -2.1, q: 0.9, slope: 12, channels: "both" },
+    { enabled: true, kind: "peak", freq: 2800, gain: -3.2, q: 1.4, slope: 12, channels: "both" },
+    { enabled: true, kind: "peak", freq: 6200, gain: 2.4, q: 3, slope: 12, channels: "both" },
+    { enabled: true, kind: "peak", freq: 7400, gain: -1.8, q: 4.5, slope: 12, channels: "right" },
+    { enabled: true, kind: "highShelf", freq: 10000, gain: 3, q: 0.7, slope: 12, channels: "both" },
+  ],
+};
+const eq: { presets: StoredPreset[]; activeId: string | null; enabled: boolean; bypass: boolean; devices: Record<string, DeviceEq> } = {
+  presets: [
+    { ...structuredClone(LCD2), id: "p1", updated: 1 },
+    {
+      id: "p2", updated: 2, name: "Room, nearfield", preamp: -3, autoPreamp: false, balance: 0.4, phase: "linear", curve: [],
+      bands: [
+        { enabled: true, kind: "highPass", freq: 28, gain: 0, q: 0.71, slope: 24, channels: "both" },
+        { enabled: true, kind: "peak", freq: 46, gain: -6.5, q: 5, slope: 12, channels: "both" },
+        { enabled: true, kind: "peak", freq: 112, gain: -3, q: 3.2, slope: 12, channels: "left" },
+      ],
+    },
+  ],
+  activeId: "p1", enabled: true, bypass: false, devices: { spk: { mode: "preset", id: "p2" } },
+};
+let eqSeq = 3;
+function eqSnapshot(): EqState {
+  const playingOn = lastDevice?.uid ?? null;
+  const b = playingOn ? eq.devices[playingOn] : undefined;
+  const effectiveId = b ? (b.mode === "preset" ? b.id : null) : eq.enabled ? eq.activeId : null;
+  return structuredClone({ ...eq, playingOn, effectiveId });
 }
+function eqOn(): string | null {
+  const s = eqSnapshot();
+  return s.presets.find((p) => p.id === s.effectiveId)?.name ?? null;
+}
+function eqChanged() {
+  return { state: eqSnapshot(), signal: duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null };
+}
+
+const convName = () => (dsp.convolution ? dsp.convolution.split("/").pop()!.replace(/\.[^.]+$/, "") : null);
 
 let lastPath = "";
 let lastDop = false;
@@ -77,7 +102,7 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
   const air = dev.transport === "Bluetooth";
   if (/\.(dsf|dff)$/i.test(path)) {
     const dsdRate = 2822400;
-    const dspOn = !!dsp.eqPath || !!dsp.crossfeed;
+    const dspOn = !!eqOn() || !!dsp.convolution || !!dsp.crossfeed;
     const dop = dopWanted && exclusive && !!dev.maxDop && !dspOn;
     const maxRate = Math.max(...dev.rates);
     const deviceRate = dop ? 176400 : Math.min(176400, maxRate);
@@ -85,7 +110,7 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
     return {
       sourceRate: 176400, sourceBits: dop ? 1 : null, deviceRate, dacBits: 32, dacFloat: air, integerMode: !air,
       exclusive, transport: dev.transport, resampled: deviceRate !== 176400,
-      eq: !dop && dsp.eqPath ? mockEq(dsp.eqPath).name : null, crossfeed: dop ? null : dsp.crossfeed,
+      eq: dop ? null : eqOn(), eqLinear: false, convolution: dop ? null : convName(), crossfeed: dop ? null : dsp.crossfeed,
       sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
       dsdRate, dop, dsdNote, bitPerfect: dop,
     };
@@ -96,10 +121,10 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
   return {
     sourceRate: src, sourceBits: 16, deviceRate: rate, dacBits: 32, dacFloat: air, integerMode: !air,
     exclusive, transport: dev.transport, resampled: rate !== src,
-    eq: dsp.eqPath ? mockEq(dsp.eqPath).name : null, crossfeed: dsp.crossfeed,
+    eq: eqOn(), eqLinear: eqSnapshot().presets.find((p) => p.name === eqOn())?.phase === "linear", convolution: convName(), crossfeed: dsp.crossfeed,
     sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
     dsdRate: null, dop: false, dsdNote: null,
-    bitPerfect: !air && exclusive && rate === src && !dsp.eqPath && !dsp.crossfeed,
+    bitPerfect: !air && exclusive && rate === src && !eqOn() && !dsp.convolution && !dsp.crossfeed,
   };
 }
 
@@ -186,7 +211,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       if (duration > 0 && !paused && now() >= duration && mockIndex !== null && mockIndex + 1 < mockQueue.length && lastDevice) {
         await mock("play_file", { path: mockQueue[mockIndex + 1], deviceUid: lastDevice.uid, exclusive: lastExclusive, dop: lastDop, index: mockIndex + 1 });
       }
-      const processing = !!(dsp.upsampleKhz || dsp.eqPath || dsp.crossfeed);
+      const processing = !!(dsp.upsampleKhz || eqOn() || dsp.convolution || dsp.crossfeed);
       const s: Status = {
         active: duration > 0, position: Math.min(now(), duration), duration, paused,
         finished: now() >= duration && duration > 0, peakDb: processing ? -3.4 : null, underruns: 0,
@@ -216,12 +241,60 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "set_dsp": {
       dsp = {
         upsampleKhz: args.upsampleKhz as number | null, crossfeed: args.crossfeed as DspSettings["crossfeed"],
-        eqPath: args.eqPath as string | null, headroom: !!args.headroom, restoreHighs: !!args.restoreHighs,
+        convolution: args.convolution as string | null, headroom: !!args.headroom, restoreHighs: !!args.restoreHighs,
       };
-      return { signal: duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null, eq: dsp.eqPath ? mockEq(dsp.eqPath) : null } as T;
+      return {
+        signal: duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null,
+        convolution: dsp.convolution ? { name: convName(), channels: 2, rate: 48000, seconds: 0.68 } : null,
+      } as T;
     }
+    case "eq_state":
+      return eqSnapshot() as T;
+    case "eq_save": {
+      const p = eq.presets.find((x) => x.id === args.id);
+      if (p) Object.assign(p, structuredClone(args.preset as EqPreset), { updated: Date.now() });
+      else {
+        const id = `p${eqSeq++}`;
+        eq.presets.push({ ...structuredClone(args.preset as EqPreset), id, updated: Date.now() });
+        eq.activeId = id;
+        eq.enabled = true;
+      }
+      return eqChanged() as T;
+    }
+    case "eq_delete":
+      eq.presets = eq.presets.filter((p) => p.id !== args.id);
+      if (eq.activeId === args.id) eq.activeId = eq.presets[0]?.id ?? null;
+      for (const [k, v] of Object.entries(eq.devices)) if (v.mode === "preset" && v.id === args.id) delete eq.devices[k];
+      return eqChanged() as T;
+    case "eq_activate":
+      eq.activeId = args.id as string;
+      eq.enabled = true;
+      return eqChanged() as T;
+    case "eq_set_enabled":
+      eq.enabled = !!args.enabled && !!eq.activeId;
+      return eqChanged() as T;
+    case "eq_set_bypass":
+      eq.bypass = !!args.bypass;
+      return eqChanged() as T;
+    case "eq_bind_device":
+      if (args.binding) eq.devices[args.deviceUid as string] = args.binding as DeviceEq;
+      else delete eq.devices[args.deviceUid as string];
+      return eqChanged() as T;
+    case "eq_import_file":
+    case "eq_import_text": {
+      const id = `p${eqSeq++}`;
+      const name = cmd === "eq_import_text" ? (args.name as string) : "Audeze LCD-2 (imported)";
+      eq.presets.push({ ...structuredClone(LCD2), name, id, updated: Date.now() });
+      eq.activeId = id;
+      eq.enabled = true;
+      return { ...eqChanged(), ids: [id] } as T;
+    }
+    case "eq_export":
+      return ((args.path as string | null) ?? `/Users/me/Downloads/${eq.presets.find((p) => p.id === (args.ids as string[])[0])?.name ?? "Hifi EQ"}.txt`) as T;
+    case "eq_export_text":
+      return "Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.7\n" as T;
     case "channel_test":
-      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, dsdRate: null, dop: false, dsdNote: null, bitPerfect: true } as T;
+      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, dsdRate: null, dop: false, dsdNote: null, bitPerfect: true } as T;
     case "playlists_list":
       return [...mockLists].sort((a, b) => b.updated - a.updated).map(mockSummary) as T;
     case "playlist_get": {

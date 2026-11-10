@@ -1,26 +1,32 @@
 <script lang="ts">
-  import type { Crossfeed, DspSettings, EqInfo } from "./api";
-  import { list, num, t, tn } from "./i18n.svelte";
+  import type { Crossfeed, DspSettings, IrInfo } from "./api";
+  import { list, num, t } from "./i18n.svelte";
 
   let {
     settings,
-    eq,
+    eqName,
+    ir,
     onchange,
-    onpickeq,
+    onopeneq,
   }: {
     settings: DspSettings;
-    eq: EqInfo | null;
+    /** The EQ preset playing on the picked output (null = off). */
+    eqName: string | null;
+    ir: IrInfo | null;
     onchange: (s: DspSettings) => void;
-    onpickeq: () => void;
+    onopeneq: () => void;
   } = $props();
 
   let open = $state(false);
   let root: HTMLElement;
 
   let active = $derived(
-    [settings.upsampleKhz && t("enh.on.upsampling"), settings.eqPath && t("enh.on.eq"), settings.crossfeed && t("enh.on.crossfeed")].filter(
-      Boolean,
-    ) as string[],
+    [
+      settings.upsampleKhz && t("enh.on.upsampling"),
+      eqName && t("enh.on.eq"),
+      settings.convolution && t("enh.on.convolution"),
+      settings.crossfeed && t("enh.on.crossfeed"),
+    ].filter(Boolean) as string[],
   );
 
   let lossyOn = $derived(settings.headroom || settings.restoreHighs);
@@ -31,13 +37,6 @@
   function set(patch: Partial<DspSettings>) {
     onchange({ ...settings, ...patch });
   }
-
-  // EQ curve → SVG path. x: log 20 Hz–20 kHz, y: ±12 dB.
-  const W = 320;
-  const H = 96;
-  const x = (f: number) => (Math.log10(f / 20) / 3) * W;
-  const y = (db: number) => H / 2 - (Math.max(-12, Math.min(12, db)) / 12) * (H / 2 - 4);
-  let curvePath = $derived(eq ? eq.curve.map(([f, db], i) => `${i ? "L" : "M"}${x(f).toFixed(1)},${y(db).toFixed(1)}`).join("") : "");
 
   // composedPath is captured at dispatch, so a click on a button that the click itself
   // removes from the DOM (e.g. "load profile" → replaced by the curve) still counts as inside.
@@ -70,27 +69,12 @@
 
       <fieldset>
         <legend>{t("enh.eq")}</legend>
-        {#if eq}
-          <div class="eq-head">
-            <span class="eq-name">{eq.name}</span>
-            <span class="eq-meta num">{t("enh.eqMeta", { bands: tn("enh.bands", eq.bands.length), db: num(eq.preamp) })}</span>
-          </div>
-          <svg class="curve" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("enh.eqCurve")}>
-            {#each [100, 1000, 10000] as f (f)}
-              <line x1={x(f)} x2={x(f)} y1="0" y2={H} class="grid" />
-              <text x={x(f) + 3} y={H - 4} class="tick">{f >= 1000 ? `${f / 1000}k` : f}</text>
-            {/each}
-            <line x1="0" x2={W} y1={y(0)} y2={y(0)} class="zero" />
-            <path d={curvePath} class="line" />
-          </svg>
-          <div class="row">
-            <button class="link" onclick={onpickeq}>{t("enh.eqOther")}</button>
-            <button class="link" onclick={() => set({ eqPath: null })}>{t("enh.eqOff")}</button>
-          </div>
-        {:else}
-          <button class="load" onclick={onpickeq}>{t("enh.eqLoad")}</button>
-          <p class="help">{t("enh.eqHelp")}</p>
-        {/if}
+        <div class="eq-head">
+          <span class="eq-name" class:off={!eqName}>{eqName ?? t("enh.offShort")}</span>
+          {#if ir}<span class="eq-meta">{t("enh.convolutionWith", { name: ir.name })}</span>{/if}
+        </div>
+        <button class="load" onclick={() => ((open = false), onopeneq())}>{t("enh.eqOpen")}</button>
+        <p class="help">{t("enh.eqHelp")}</p>
       </fieldset>
 
       <fieldset>
@@ -233,51 +217,19 @@
   .eq-name {
     font-weight: 600;
   }
+  .eq-name.off {
+    color: var(--mist);
+    font-weight: 400;
+  }
   .eq-meta {
     font-size: var(--t-xs);
     color: var(--mist);
-  }
-  .curve {
-    width: 100%;
-    height: auto;
-    margin-top: 10px;
-    background: var(--slate-800);
-    border-radius: var(--r-md);
-  }
-  .curve .grid {
-    stroke: var(--slate-600);
-    stroke-width: 1;
-  }
-  .curve .zero {
-    stroke: var(--slate-500);
-    stroke-dasharray: 3 3;
-  }
-  .curve .line {
-    fill: none;
-    stroke: var(--violet);
-    stroke-width: 2;
-  }
-  .curve .tick {
-    fill: var(--mist-dim);
-    font-size: 9px;
-    font-family: var(--font-display);
-  }
-  .row {
-    display: flex;
-    gap: 16px;
-    margin-top: 8px;
-  }
-  .link {
-    font-size: var(--t-sm);
-    color: var(--mist);
-  }
-  .link:hover {
-    color: var(--porcelain);
   }
   .load {
     clear: both;
     display: block;
     width: 100%;
+    margin-top: 10px;
     padding: 9px;
     border-radius: var(--r-md);
     border: 1px dashed var(--slate-500);

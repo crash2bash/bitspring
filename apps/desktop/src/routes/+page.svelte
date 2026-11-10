@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
+  import { api, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
   import { labels, labelOf } from "$lib/labels.svelte";
@@ -10,6 +10,7 @@
   import DevicePicker from "$lib/DevicePicker.svelte";
   import Display from "$lib/Display.svelte";
   import Enhancers from "$lib/Enhancers.svelte";
+  import Equalizer from "$lib/Equalizer.svelte";
 
   // --- persisted preferences (per machine) ---
   function load<T>(key: string, fallback: T): T {
@@ -41,15 +42,27 @@
   /** The backend's nowRev we are showing; when it moves, the queue went on by itself. */
   let knownRev = 0;
   let lastOutputError: string | null = null;
-  let dsp = $state<DspSettings>({ upsampleKhz: null, crossfeed: null, eqPath: null, headroom: true, restoreHighs: false, ...load("dsp", {}) });
-  let eq = $state<EqInfo | null>(null);
+  // `eqPath` is the single AutoEQ file of earlier versions: moved into the preset store on start.
+  const savedDsp = load<Partial<DspSettings> & { eqPath?: string | null }>("dsp", {});
+  const legacyEqPath = savedDsp.eqPath ?? null;
+  delete savedDsp.eqPath;
+  let dsp = $state<DspSettings>({ upsampleKhz: null, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, ...savedDsp });
+  let ir = $state<IrInfo | null>(null);
+  let eqState = $state<EqState | null>(null);
+  /** The EQ preset that plays on the picked output (null = EQ off there). */
+  let eqName = $derived.by(() => {
+    if (!eqState) return null;
+    const b = eqState.devices[selected];
+    const id = b ? (b.mode === "preset" ? b.id : null) : eqState.enabled ? eqState.activeId : null;
+    return eqState.presets.find((p) => p.id === id)?.name ?? null;
+  });
   let error = $state<string | null>(null);
   let loading = $state(false);
   let testing = $state(false);
   let dragOver = $state(false);
   let sweepKey = $state(0);
   let advancing = false;
-  let screen = $state<"player" | "library" | "queue" | "streaming">(load("screen", "player"));
+  let screen = $state<"player" | "library" | "queue" | "streaming" | "eq">(load("screen", "player"));
   /** Qobuz/TIDAL: null until known; `available` is false in App Store builds. */
   let streaming = $state<StreamingStatus | null>(null);
   async function refreshStreaming() {
@@ -213,7 +226,7 @@
     try {
       const res = await api.setDsp(next);
       dsp = next;
-      eq = res.eq;
+      ir = res.convolution;
       save("dsp", next);
       if (res.signal && now && !testing) {
         now = { ...now, signal: res.signal };
@@ -222,17 +235,39 @@
       error = null;
     } catch (e) {
       error = t("err.dsp", { error: errorText(e) });
-      // An unreadable EQ file shouldn't take the rest of the settings down with it.
-      if (next.eqPath && next.eqPath !== dsp.eqPath) return;
-      if (next.eqPath) await applyDsp({ ...next, eqPath: null });
+      // An unreadable impulse response shouldn't take the rest of the settings down with it.
+      if (next.convolution && next.convolution !== dsp.convolution) return;
+      if (next.convolution) await applyDsp({ ...next, convolution: null });
     }
   }
 
-  async function pickEq() {
-    if (!inTauri) return applyDsp({ ...dsp, eqPath: "/Users/me/AutoEq/Audeze LCD-2 ParametricEQ.txt" });
+  async function pickIr() {
+    if (!inTauri) return applyDsp({ ...dsp, convolution: "/Users/me/REW/Room correction 48k.wav" });
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({ multiple: false, filters: [{ name: t("dialog.autoeq"), extensions: ["txt"] }] });
-    if (typeof picked === "string") await applyDsp({ ...dsp, eqPath: picked });
+    const picked = await open({ multiple: false, ...(isIOS ? {} : { filters: [{ name: t("dialog.ir"), extensions: ["wav", "flac", "aif", "aiff", "caf"] }] }) });
+    if (typeof picked === "string") await applyDsp({ ...dsp, convolution: picked });
+  }
+
+  /** The EQ changed playback (restarted it): show the new signal path. */
+  function eqSignal(signal: import("$lib/api").Signal) {
+    if (now && !testing) {
+      now = { ...now, signal };
+      sweepKey++;
+    }
+  }
+
+  async function loadEq() {
+    try {
+      // Earlier versions kept one AutoEQ file: it becomes the first preset.
+      if (legacyEqPath && inTauri) {
+        const s = await api.eqState();
+        if (!s.presets.length) await api.eqImportFile(legacyEqPath).catch(() => null);
+        save("dsp", $state.snapshot(dsp));
+      }
+      eqState = await api.eqState();
+    } catch {
+      eqState = null;
+    }
   }
 
   // Mirror the queue to the backend, which starts the next track by itself.
@@ -266,6 +301,8 @@
 
   function onKey(e: KeyboardEvent) {
     const t = e.target as HTMLElement;
+    // Handled already (an EQ band moved by the arrow keys), or typing in a field.
+    if (e.defaultPrevented || t.tagName === "SELECT" || t.tagName === "TEXTAREA") return;
     if (t.tagName === "INPUT" && (t as HTMLInputElement).type !== "range") return;
     if (e.code === "Space") {
       e.preventDefault();
@@ -280,8 +317,9 @@
   onMount(() => {
     refreshDevices();
     refreshStreaming();
-    // Restore last session's processing (also loads and validates the EQ file).
+    // Restore last session's processing (also loads and validates the impulse response).
     applyDsp(untrack(() => dsp));
+    loadEq();
     const timer = setInterval(async () => {
       status = await api.status();
       // The backend moved on to the next track (or stopped at one it couldn't play).
@@ -342,9 +380,10 @@
       {#if streaming?.available}
         <button class:sel={screen === "streaming"} aria-current={screen === "streaming" ? "page" : undefined} onclick={() => (screen = "streaming")}>{t("nav.streaming")}</button>
       {/if}
+      <button class:sel={screen === "eq"} aria-current={screen === "eq" ? "page" : undefined} onclick={() => (screen = "eq")}>{t("nav.eq")}</button>
     </nav>
     <div class="controls">
-      <Enhancers settings={dsp} {eq} onchange={applyDsp} onpickeq={pickEq} />
+      <Enhancers settings={dsp} {eqName} {ir} onchange={applyDsp} onopeneq={() => (screen = "eq")} />
       <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={refreshDevices} onchanneltest={channelTest} />
       <Settings />
     </div>
@@ -441,6 +480,10 @@
       </button>
     </div>
   </main>
+  {:else if screen === "eq"}
+    <main class="lib">
+      <Equalizer {devices} device={selected} convolution={ir} onsignal={eqSignal} onstate={(s) => (eqState = s)} onpickir={pickIr} onclearir={() => applyDsp({ ...dsp, convolution: null })} />
+    </main>
   {:else if screen === "streaming" && streaming?.available}
     <main class="lib">
       <Streaming status={streaming} currentPath={testing ? null : (now?.path ?? null)} onstatus={refreshStreaming} onplay={playPaths} onenqueue={enqueue} />
@@ -498,6 +541,10 @@
         {t("nav.streaming")}
       </button>
     {/if}
+    <button class:sel={screen === "eq"} aria-current={screen === "eq" ? "page" : undefined} onclick={() => (screen = "eq")}>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M5 3v16M11 3v16M17 3v16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><rect x="2.5" y="12" width="5" height="3" rx="1.5" fill="var(--slate-900)" stroke="currentColor" stroke-width="1.6" /><rect x="8.5" y="6" width="5" height="3" rx="1.5" fill="var(--slate-900)" stroke="currentColor" stroke-width="1.6" /><rect x="14.5" y="10" width="5" height="3" rx="1.5" fill="var(--slate-900)" stroke="currentColor" stroke-width="1.6" /></svg>
+      {t("nav.eq")}
+    </button>
     <button class:sel={screen === "queue"} aria-current={screen === "queue" ? "page" : undefined} onclick={() => (screen = "queue")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 5h16M3 11h16M3 17h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
       {t("nav.queue")}{#if queue.length}<span class="badge num">{queue.length}</span>{/if}

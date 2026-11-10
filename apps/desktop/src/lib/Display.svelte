@@ -31,7 +31,8 @@
     const steps: string[] = [];
     if (signal.dsdRate !== null && !signal.dop) steps.push(t("step.dsdToPcm", { dsd: dsdName(signal.dsdRate), rate: khz(signal.sourceRate) }));
     if (signal.resampled) steps.push(t("step.resample", { from: khz(signal.sourceRate), to: khz(signal.deviceRate) }));
-    if (signal.eq) steps.push(t("step.eq", { name: signal.eq }));
+    if (signal.eq) steps.push(t(signal.eqLinear ? "step.eqLinear" : "step.eq", { name: signal.eq }));
+    if (signal.convolution) steps.push(t("step.convolution", { name: signal.convolution }));
     if (signal.crossfeed) steps.push(t(`step.crossfeed.${signal.crossfeed}`));
     if (signal.headroomDb !== null)
       steps.push(t(signal.headroomMeasured ? "step.headroom" : "step.headroomPending", { db: num(signal.headroomDb) }));

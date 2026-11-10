@@ -18,6 +18,8 @@ use crate::decode::{DsdSource, Track};
 use crate::dsd::{DOP_IDLE, PCM_GAIN};
 use crate::dsp::crossfeed::CrossfeedLevel;
 use crate::dsp::lossy::LossyPlan;
+use crate::dsp::eq::{EqPreset, EqStage, IirPlan, Phase};
+use crate::dsp::fir::{FirControl, FirDesigner};
 use crate::dsp::{Chain, DspSettings, Upsample};
 use crate::rate::{RateDecision, RateRange, choose_device_rate, upsample_target};
 use crate::ring::Ring;
@@ -113,8 +115,12 @@ pub struct SignalPath {
     pub transport: Transport,
     /// Sample rate converted on the way (upsampling, or a DAC that can't do the source rate).
     pub resampled: bool,
-    /// Name of the EQ profile applied, if any.
+    /// Name of the EQ preset applied, if any.
     pub eq: Option<String>,
+    /// The EQ runs in linear phase.
+    pub eq_linear: bool,
+    /// Name of the impulse response convolved with, if any.
+    pub convolution: Option<String>,
     pub crossfeed: Option<CrossfeedLevel>,
     /// The source is MP3/AAC/Vorbis/Opus.
     pub source_lossy: bool,
@@ -307,6 +313,8 @@ pub(crate) fn signal_path(
         transport,
         resampled: plan.resampled,
         eq: opts.dsp.eq.as_ref().map(|p| p.name.clone()),
+        eq_linear: opts.dsp.eq.as_ref().is_some_and(|p| p.phase == Phase::Linear),
+        convolution: opts.dsp.convolution.as_ref().map(|c| c.0.name.clone()),
         crossfeed: opts.dsp.crossfeed,
         source_lossy: track.lossy,
         lossy: plan.lossy,
@@ -381,6 +389,10 @@ struct RingState {
     /// Render thread is waiting for the decoder (a stream still downloading): silence then is
     /// buffering, not a dropout of ours.
     starved: AtomicBool,
+    /// The parametric EQ, run by the callback on what it pops from the ring.
+    eq: Option<EqStage>,
+    /// The render thread's FIR stage (linear-phase EQ, curves, convolution).
+    fir: Option<Arc<FirControl>>,
 }
 
 // SAFETY: `scratch` is touched only by the callback thread; everything else is atomic or `Ring`
@@ -409,6 +421,14 @@ impl Playback {
             {
                 bail!(crate::UserError::Resample { from: track.sample_rate, to: out_rate });
             }
+            let fs = out_rate as f64;
+            let eq = opts.dsp.eq.as_ref();
+            let ir = opts.dsp.convolution.as_ref().map(|c| &*c.0);
+            let fir = FirDesigner::new(eq, ir, fs, channels)?.map(|d| {
+                let control = FirControl::new(d);
+                let first = control.designer.design(eq, opts.dsp.eq_bypass);
+                (control, first)
+            });
             let rs = Arc::new(RingState {
                 // ~0.5 s of audio: enough to ride out scheduling hiccups, short enough that
                 // a seek or a settings change is heard promptly.
@@ -428,8 +448,10 @@ impl Playback {
                 peak: AtomicU32::new(0),
                 underruns: AtomicU64::new(0),
                 starved: AtomicBool::new(false),
+                eq: eq.map(|e| EqStage::new(e, fs, channels, opts.dsp.eq_bypass)),
+                fir: fir.as_ref().map(|(c, _)| c.clone()),
             });
-            let chain = Chain::new(&opts.dsp, plan.lossy.as_ref(), track.sample_rate, device_rate.round() as u32, channels);
+            let chain = Chain::new(&opts.dsp, plan.lossy.as_ref(), fir, track.sample_rate, out_rate, channels);
             let handle = {
                 let (track, rs) = (track.clone(), rs.clone());
                 let start = plan.start_frame;
@@ -544,6 +566,29 @@ impl Playback {
     pub fn source_error(&self) -> Option<String> {
         self.shared.track.error()
     }
+
+    /// Apply new equaliser settings to what plays, without a restart: the callback crossfades
+    /// to them within a buffer (minimum phase), the FIR stage after the render buffer. False
+    /// when this playback can't take them live — it started without the EQ, or the change
+    /// needs a different FIR layout (phase mode, a curve added or removed): start a new one.
+    pub fn update_eq(&self, eq: &EqPreset, bypass: bool) -> bool {
+        let Some(rs) = &self.shared.ring else { return false };
+        let Some(stage) = &rs.eq else { return false };
+        let fits = match &rs.fir {
+            Some(c) => c.designer.fits(Some(eq)),
+            None => !eq.needs_fir(),
+        };
+        if !fits {
+            return false;
+        }
+        let fs = rs.device_rate.round();
+        stage.mailbox.post(IirPlan::new(eq, fs, rs.channels, eq.phase == Phase::Minimum));
+        stage.mailbox.set_bypass(bypass);
+        if let Some(c) = rs.fir.as_ref().filter(|c| c.designer.has_eq()) {
+            c.post(c.designer.design(Some(eq), bypass));
+        }
+        true
+    }
 }
 
 impl Drop for Playback {
@@ -565,6 +610,9 @@ fn render_loop(track: Arc<Track>, rs: Arc<RingState>, mut chain: Chain, start_fr
     let nap = || std::thread::sleep(Duration::from_millis(2));
 
     while !rs.quit.load(Ordering::Acquire) {
+        if let Some(eq) = &rs.eq {
+            eq.mailbox.collect();
+        }
         let seek = rs.seek_req.swap(NO_SEEK, Ordering::AcqRel);
         if seek != NO_SEEK {
             src = seek.min(track.frames());
@@ -609,9 +657,9 @@ fn render_loop(track: Arc<Track>, rs: Arc<RingState>, mut chain: Chain, start_fr
         let last = complete && src >= track.ready_frames();
         let processed = chain.process(input, last);
         out.clear();
-        out.extend(processed.iter().map(|&v| v.clamp(-1.0, 1.0) as f32));
+        // Not clamped yet: the callback's EQ may still lower the level (its preamp).
+        out.extend(processed.iter().map(|&v| v as f32));
         sent = 0;
-        rs.peak.store((chain.peak as f32).to_bits(), Ordering::Relaxed);
     }
 }
 
@@ -658,6 +706,10 @@ impl Shared {
                 let scratch = unsafe { &mut *rs.scratch.get() };
                 let generation = rs.flush_gen.load(Ordering::Acquire);
                 if generation != rs.flush_ack.load(Ordering::Relaxed) {
+                    if let Some(eq) = &rs.eq {
+                        // SAFETY: this is the callback thread.
+                        unsafe { eq.live() }.reset();
+                    }
                     rs.ring.discard();
                     rs.played.store(0, Ordering::Relaxed);
                     rs.flush_ack.store(generation, Ordering::Release);
@@ -666,6 +718,17 @@ impl Shared {
                 let ch = rs.channels;
                 let want = (frames * ch).min(scratch.len());
                 let got = if paused { 0 } else { rs.ring.pop(&mut scratch[..want]) / ch };
+                let block = &mut scratch[..got * ch];
+                let peak = match &rs.eq {
+                    // SAFETY: this is the callback thread.
+                    Some(eq) => unsafe { eq.live() }.process(&eq.mailbox, block),
+                    None => block.iter_mut().fold(0f32, |m, s| {
+                        let p = m.max(s.abs());
+                        *s = s.clamp(-1.0, 1.0);
+                        p
+                    }),
+                };
+                rs.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
                 let peaks = fill(buffers, got, |f, dc| source_sample(scratch, ch, f, dc));
                 st.meter(peaks);
                 rs.played.fetch_add(got as u64, Ordering::Relaxed);
@@ -797,6 +860,87 @@ fn source_sample(samples: &[f32], channels: usize, frame: usize, device_channel:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The processed path end to end, as a device would pull it: the EQ runs in the callback,
+    /// takes edits live, and the compare bypass and the linear-phase FIR work there too.
+    mod eq_path {
+        use super::*;
+        use crate::decode::TrackMeta;
+        use crate::dsp::eq::Band;
+        use crate::dsp::eq::FilterKind;
+
+        const FS: u32 = 48_000;
+
+        fn sine_track(secs: f64) -> Arc<Track> {
+            let samples: Vec<f32> = (0..(FS as f64 * secs) as usize)
+                .flat_map(|i| {
+                    let v = ((2.0 * std::f64::consts::PI * 1000.0 * i as f64 / FS as f64).sin() * 0.1) as f32;
+                    [v, v]
+                })
+                .collect();
+            Arc::new(Track::from_samples(FS, 2, Some(24), &samples, TrackMeta::default()))
+        }
+
+        fn peak_eq(gain: f64, phase: Phase) -> EqPreset {
+            EqPreset { phase, bands: vec![Band { kind: FilterKind::Peak, freq: 1000.0, gain, q: 1.0, ..Default::default() }], ..Default::default() }
+        }
+
+        fn start(eq: EqPreset) -> Playback {
+            let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
+            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false };
+            Playback::new(sine_track(8.0), &opts, &plan, FS as f64).unwrap()
+        }
+
+        /// Pull `frames` from the callback, 512 at a time, waiting for the render thread like
+        /// a real device's clock would. Returns the left channel.
+        fn pull(p: &Playback, frames: usize) -> Vec<f32> {
+            let rs = p.shared().ring.as_ref().unwrap();
+            let mut out = Vec::new();
+            let mut data = vec![0u8; 512 * 2 * 4];
+            while out.len() < frames {
+                while rs.ring.available() < 512 * 2 && !rs.render_done.load(Ordering::Acquire) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: OutFormat::F32 }]);
+                out.extend(data.chunks_exact(8).map(|f| f32::from_le_bytes(f[..4].try_into().unwrap())));
+            }
+            out
+        }
+
+        fn level_db(x: &[f32]) -> f64 {
+            20.0 * (x.iter().fold(0f32, |m, v| m.max(v.abs())) as f64 / 0.1).log10()
+        }
+
+        #[test]
+        fn minimum_phase_edits_are_heard_within_a_buffer() {
+            let p = start(peak_eq(6.0, Phase::Minimum));
+            let a = pull(&p, 24_000);
+            assert!((level_db(&a[12_000..]) - 6.0).abs() < 0.1, "{}", level_db(&a[12_000..]));
+            assert!(p.update_eq(&peak_eq(-6.0, Phase::Minimum), false));
+            let b = pull(&p, 6_000);
+            // A 20 ms crossfade, then the new setting — no waiting for the render buffer.
+            assert!((level_db(&b[2_048..]) + 6.0).abs() < 0.1, "{}", level_db(&b[2_048..]));
+            let step = a.iter().chain(&b).collect::<Vec<_>>().windows(2).map(|w| (w[1] - w[0]).abs()).fold(0f32, f32::max);
+            assert!(step < 0.03, "click: {step}");
+            // Compare: the level-matched bypass.
+            let eq = peak_eq(-6.0, Phase::Minimum);
+            assert!(p.update_eq(&eq, true));
+            let c = pull(&p, 6_000);
+            assert!((level_db(&c[2_048..]) - eq.loudness_db(FS as f64)).abs() < 0.1);
+        }
+
+        #[test]
+        fn linear_phase_runs_on_the_fir_and_updates_after_the_buffer() {
+            let p = start(peak_eq(6.0, Phase::Linear));
+            let a = pull(&p, 48_000);
+            assert!((level_db(&a[24_000..]) - 6.0).abs() < 0.1, "{}", level_db(&a[24_000..]));
+            assert!(p.update_eq(&peak_eq(-6.0, Phase::Linear), false));
+            let b = pull(&p, 96_000);
+            assert!((level_db(&b[60_000..]) + 6.0).abs() < 0.1, "{}", level_db(&b[60_000..]));
+            // A different layout can't go live: phase change → the caller restarts.
+            assert!(!p.update_eq(&peak_eq(-6.0, Phase::Minimum), false));
+        }
+    }
 
     /// The bit-perfect claim, checked exhaustively: every 24-bit integer survives
     /// decode (i24 / 2^23 → f32) and output (f32 → packed i24) unchanged.

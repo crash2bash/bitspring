@@ -7,6 +7,7 @@
 mod android_media;
 #[cfg(target_os = "ios")]
 mod ios_media;
+mod eq;
 mod library;
 mod playlists;
 /// Qobuz and TIDAL: the real thing outside the App Store, a stand-in inside it.
@@ -27,9 +28,9 @@ use std::time::Duration;
 use base64::Engine as _;
 use hifi_engine::output::{self, DeviceInfo, PlayOptions, Player, SignalPath};
 use hifi_engine::dsp::crossfeed::CrossfeedLevel;
-use hifi_engine::dsp::eq::{EqProfile, FilterKind};
+use hifi_engine::dsp::fir::ImpulseResponse;
 use hifi_engine::dsp::lossy::LossySettings;
-use hifi_engine::dsp::{DspSettings, Upsample};
+use hifi_engine::dsp::{Convolution, DspSettings, Upsample};
 use hifi_engine::dsd::{self, DsdMode};
 use hifi_engine::{Track, UserError, open_file, testsignal};
 use serde::Serialize;
@@ -56,7 +57,7 @@ enum DsdNote {
     Exclusive,
     /// Something system-wide blocks DoP (iOS: the volume is below maximum).
     Volume,
-    /// The equalizer and crossfeed work on PCM.
+    /// The equalizer, convolution and crossfeed work on PCM.
     Dsp,
     /// The device doesn't run at the PCM rate DoP needs (`khz`) for this DSD rate (`dsd`).
     Rate { device: String, khz: f64, dsd: String },
@@ -81,7 +82,11 @@ struct Queue {
 struct AppState {
     player: Mutex<Option<Player>>,
     current: Mutex<Option<Current>>,
+    /// Processing for every output; the EQ in it comes from `eq`, per output.
     dsp: Mutex<DspSettings>,
+    eq: Mutex<eq::EqStore>,
+    /// The last impulse response loaded (path, response), so settings changes don't reload it.
+    ir: Mutex<Option<(String, Arc<ImpulseResponse>)>>,
     queue: Mutex<Queue>,
     /// What plays now, as last sent to the UI (the queue thread changes it on its own).
     now: Mutex<Option<NowPlayingDto>>,
@@ -166,6 +171,8 @@ struct SignalDto {
     transport: String,
     resampled: bool,
     eq: Option<String>,
+    eq_linear: bool,
+    convolution: Option<String>,
     crossfeed: Option<String>,
     /// Source is MP3/AAC/Vorbis/Opus.
     source_lossy: bool,
@@ -197,6 +204,8 @@ impl From<&SignalPath> for SignalDto {
             transport: format!("{:?}", p.transport),
             resampled: p.resampled,
             eq: p.eq.clone(),
+            eq_linear: p.eq_linear,
+            convolution: p.convolution.clone(),
             crossfeed: p.crossfeed.map(crossfeed_key),
             source_lossy: p.source_lossy,
             headroom_db: p.lossy.filter(|l| l.gain < 1.0).map(|l| l.gain_db()),
@@ -258,50 +267,11 @@ struct StatusDto {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct BandDto {
-    kind: &'static str,
-    freq: f64,
-    gain: f64,
-    q: f64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct EqDto {
+struct IrDto {
     name: String,
-    preamp: f64,
-    bands: Vec<BandDto>,
-    /// [frequency Hz, gain dB] from 20 Hz to 20 kHz, log-spaced, for drawing.
-    curve: Vec<[f64; 2]>,
-}
-
-impl From<&EqProfile> for EqDto {
-    fn from(p: &EqProfile) -> Self {
-        Self {
-            name: p.name.clone(),
-            preamp: p.preamp_db,
-            bands: p
-                .bands
-                .iter()
-                .map(|b| BandDto {
-                    kind: match b.kind {
-                        FilterKind::Peak => "peak",
-                        FilterKind::LowShelf => "lowShelf",
-                        FilterKind::HighShelf => "highShelf",
-                    },
-                    freq: b.freq,
-                    gain: b.gain_db,
-                    q: b.q,
-                })
-                .collect(),
-            curve: (0..=96)
-                .map(|i| {
-                    let f = 20.0 * 1000f64.powf(i as f64 / 96.0);
-                    [f, p.response_db(f, 96_000.0)]
-                })
-                .collect(),
-        }
-    }
+    channels: usize,
+    rate: u32,
+    seconds: f64,
 }
 
 #[derive(Serialize)]
@@ -309,7 +279,7 @@ impl From<&EqProfile> for EqDto {
 struct DspResult {
     /// New signal path if something was playing and got restarted with the new settings.
     signal: Option<SignalDto>,
-    eq: Option<EqDto>,
+    convolution: Option<IrDto>,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -350,7 +320,7 @@ fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: b
         Some(DsdNote::Exclusive)
     } else if output::dop_blocker().is_some() {
         Some(DsdNote::Volume)
-    } else if dsp.eq.is_some() || dsp.crossfeed.is_some() {
+    } else if dsp.eq.is_some() || dsp.convolution.is_some() || dsp.crossfeed.is_some() {
         Some(DsdNote::Dsp)
     } else if !device.device.supports_dop(rate) {
         Some(DsdNote::Rate {
@@ -423,6 +393,15 @@ fn list_devices() -> CmdResult<Vec<DeviceDto>> {
     Ok(output::output_devices().map_err(err)?.iter().map(DeviceDto::from).collect())
 }
 
+/// The processing for a playback on `device_uid`: the shared settings plus that output's EQ.
+fn dsp_for(state: &AppState, device_uid: &str) -> DspSettings {
+    let mut dsp = state.dsp.lock().unwrap().clone();
+    let eq = state.eq.lock().unwrap();
+    dsp.eq = eq.effective(device_uid);
+    dsp.eq_bypass = eq.bypass;
+    dsp
+}
+
 /// Start `file` (already opened as `track`) and record it as what plays now.
 fn begin(
     state: &AppState,
@@ -435,7 +414,7 @@ fn begin(
     dop: bool,
     dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
-    let dsp = state.dsp.lock().unwrap().clone();
+    let dsp = dsp_for(state, &device.uid);
     let meta = track.meta.clone();
     let (channels, duration) = (track.channels, track.duration_secs());
     let opts = PlayOptions { exclusive, dsp, start_at, start_paused };
@@ -494,7 +473,7 @@ async fn play_file(
     let device = find_device(&device_uid)?;
     let file = PathBuf::from(&path);
     let dop = dop.unwrap_or(false);
-    let dsp = state.dsp.lock().unwrap().clone();
+    let dsp = dsp_for(&state, &device.uid);
     let (mode, dsd_note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
     // Only the headers are parsed here; the decoder keeps filling RAM in the background
     // while playback starts. Still off the UI/IPC threads: opening may touch a slow disk.
@@ -540,7 +519,7 @@ fn play_queue_at(state: &AppState, i: usize) {
     let Some(path) = state.queue.lock().unwrap().paths.get(i).cloned() else { return };
     let file = PathBuf::from(&path);
     let result = find_device(&device_uid).and_then(|device| {
-        let dsp = state.dsp.lock().unwrap().clone();
+        let dsp = dsp_for(state, &device.uid);
         let (mode, note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
         let track = open_for(&file, mode)?;
         begin(state, &device, file.clone(), track, exclusive, 0.0, false, dop, note)
@@ -676,63 +655,115 @@ fn stop(state: State<'_, AppState>) {
 /// Replace the processing settings. Everything off = bit-perfect. If a track is loaded it
 /// continues from the same position (and pause state) with the new chain.
 #[tauri::command]
-fn set_dsp(
-    state: State<'_, AppState>,
+async fn set_dsp(
+    app: tauri::AppHandle,
     upsample_khz: Option<f64>,
     crossfeed: Option<String>,
-    eq_path: Option<String>,
+    convolution: Option<String>,
     headroom: Option<bool>,
     restore_highs: Option<bool>,
 ) -> CmdResult<DspResult> {
-    let eq = match &eq_path {
+    use tauri::Manager;
+    let state = app.state::<AppState>();
+    // Reading and decoding an impulse response can take a moment: off the IPC thread.
+    let ir = match convolution {
         Some(path) => {
-            let p = PathBuf::from(path);
-            let text = std::fs::read_to_string(&p).map_err(|e| UserError::ProfileUnreadable { detail: e.to_string() })?;
-            let name = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-            let name = name.trim_end_matches(" ParametricEQ").to_string();
-            Some(EqProfile::parse_autoeq(&name, &text).map_err(err)?)
+            let cached = state.ir.lock().unwrap().as_ref().filter(|(p, _)| *p == path).map(|(_, r)| r.clone());
+            match cached {
+                Some(r) => Some(r),
+                None => {
+                    let p = PathBuf::from(&path);
+                    let r = tauri::async_runtime::spawn_blocking(move || ImpulseResponse::load(&p)).await.map_err(err)?.map_err(err)?;
+                    *state.ir.lock().unwrap() = Some((path, r.clone()));
+                    Some(r)
+                }
+            }
         }
         None => None,
     };
-    let settings = DspSettings {
+    let ir_dto = ir.as_ref().map(|r| IrDto {
+        name: r.name.clone(),
+        channels: r.channels.len(),
+        rate: r.rate,
+        seconds: r.len() as f64 / r.rate as f64,
+    });
+    *state.dsp.lock().unwrap() = DspSettings {
         upsample: upsample_khz.map_or(Upsample::Off, |k| Upsample::UpTo(k * 1000.0)),
-        eq,
+        eq: None,
+        eq_bypass: false,
+        convolution: ir.map(Convolution),
         crossfeed: crossfeed
             .and_then(|k| CROSSFEED_LEVELS.iter().find(|(key, _)| *key == k).map(|(_, l)| *l)),
         lossy: LossySettings { headroom: headroom.unwrap_or(false), restore_highs: restore_highs.unwrap_or(false) },
     };
-    let eq_dto = settings.eq.as_ref().map(EqDto::from);
-    *state.dsp.lock().unwrap() = settings.clone();
+    let signal = restart(&state)?;
+    Ok(DspResult { signal, convolution: ir_dto })
+}
 
-    // Restart in place, if something is loaded.
+/// Restart what plays in place (same position and pause state) with the current settings.
+/// Returns the new signal path, or None when nothing is loaded.
+fn restart(state: &AppState) -> CmdResult<Option<SignalDto>> {
     let _one = state.play_lock.lock().unwrap();
     let resume = {
         let player = state.player.lock().unwrap();
         player.as_ref().map(|p| (p.position_secs(), p.is_paused(), p.is_finished()))
     };
     let mut current = state.current.lock().unwrap();
-    let signal = match (resume, current.as_mut()) {
-        (Some((pos, paused, false)), Some(cur)) => {
-            let device = find_device(&cur.device_uid)?;
-            // A DSD file may have to switch between DoP and PCM (EQ/crossfeed need PCM).
-            if dsd::is_dsd_path(&cur.path) {
-                let (mode, note) = dsd_mode(&cur.path, &device, cur.exclusive, cur.dop, &settings);
-                if (mode == DsdMode::Dop) != cur.track.is_dop() {
-                    cur.track = open_for(&cur.path, mode)?;
-                }
-                cur.dsd_note = note;
-            }
-            let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused };
-            let mut signal = start(&state, &device, cur.track.clone(), opts)?;
-            signal.dsd_note = cur.dsd_note.clone();
-            if let Some(now) = state.now.lock().unwrap().as_mut() {
-                now.signal = signal.clone();
-            }
-            Some(signal)
+    let (Some((pos, paused, false)), Some(cur)) = (resume, current.as_mut()) else { return Ok(None) };
+    let device = find_device(&cur.device_uid)?;
+    let settings = dsp_for(state, &cur.device_uid);
+    // A DSD file may have to switch between DoP and PCM (the EQ and friends need PCM).
+    if dsd::is_dsd_path(&cur.path) {
+        let (mode, note) = dsd_mode(&cur.path, &device, cur.exclusive, cur.dop, &settings);
+        if (mode == DsdMode::Dop) != cur.track.is_dop() {
+            cur.track = open_for(&cur.path, mode)?;
         }
-        _ => None,
+        cur.dsd_note = note;
+    }
+    let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused };
+    let mut signal = start(state, &device, cur.track.clone(), opts)?;
+    signal.dsd_note = cur.dsd_note.clone();
+    if let Some(now) = state.now.lock().unwrap().as_mut() {
+        now.signal = signal.clone();
+    }
+    Ok(Some(signal))
+}
+
+/// The EQ settings changed: apply them to what plays — live when the engine can take them
+/// (the usual case: an edit, another preset of the same kind, compare), else by a restart.
+/// Returns the new signal path when it changed.
+fn apply_eq(state: &AppState) -> CmdResult<Option<SignalDto>> {
+    let Some(device_uid) = state.current.lock().unwrap().as_ref().map(|c| c.device_uid.clone()) else {
+        return Ok(None);
     };
-    Ok(DspResult { signal, eq: eq_dto })
+    let (want, bypass) = {
+        let s = state.eq.lock().unwrap();
+        (s.effective(&device_uid), s.bypass)
+    };
+    {
+        let mut player = state.player.lock().unwrap();
+        let Some(p) = player.as_mut() else { return Ok(None) };
+        match &want {
+            None if p.path.eq.is_none() => return Ok(None),
+            Some(eq) if p.path.eq.is_some() && p.update_eq(eq, bypass) => {
+                // Same chain, new settings: only the name shown can change.
+                if p.path.eq.as_deref() == Some(eq.name.as_str()) {
+                    return Ok(None);
+                }
+                p.path.eq = Some(eq.name.clone());
+                let mut signal = SignalDto::from(&p.path);
+                drop(player);
+                let mut now = state.now.lock().unwrap();
+                if let Some(now) = now.as_mut() {
+                    signal.dsd_note = now.signal.dsd_note.clone();
+                    now.signal = signal.clone();
+                }
+                return Ok(Some(signal));
+            }
+            _ => {}
+        }
+    }
+    restart(state)
 }
 
 /// iPhone: let the page run under the status bar and home indicator (it pads itself with
@@ -768,6 +799,7 @@ pub fn run() {
             let lib = library::Library::load(app.handle());
             app.manage(lib);
             app.manage(playlists::Playlists::default());
+            *app.state::<AppState>().eq.lock().unwrap() = eq::EqStore::load(app.handle());
             stream::init(app.handle());
             // Android: the main window is made here rather than from the config (see
             // tauri.android.conf.json), so a streaming sign-in can run in it.
@@ -826,6 +858,17 @@ pub fn run() {
             seek,
             stop,
             set_dsp,
+            eq::eq_state,
+            eq::eq_save,
+            eq::eq_delete,
+            eq::eq_activate,
+            eq::eq_set_enabled,
+            eq::eq_set_bypass,
+            eq::eq_bind_device,
+            eq::eq_import_file,
+            eq::eq_import_text,
+            eq::eq_export,
+            eq::eq_export_text,
             library::library_status,
             library::library_albums,
             library::library_tracks,

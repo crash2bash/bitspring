@@ -48,10 +48,24 @@ pub enum UserError {
     OtherFormat { device: String, khz: f64 },
     /// Android: AAudio failed mid-stream.
     OutputFailed { detail: String },
-    /// The AutoEQ file couldn't be read (`detail`: the OS's reason).
+    /// An equaliser file couldn't be read (`detail`: the OS's reason).
     ProfileUnreadable { detail: String },
     /// The AutoEQ file has no filter lines.
     ProfileEmpty,
+    /// An equaliser file or pasted text is in no format we know.
+    EqFormat,
+    /// The equaliser file holds no filters, curve or preamp.
+    EqEmpty,
+    /// The equaliser preset isn't there (deleted elsewhere).
+    EqNotFound,
+    /// The impulse response file couldn't be read or decoded.
+    IrUnreadable { detail: String },
+    /// Impulse responses must be mono or stereo; this one has `channels`.
+    IrChannels { channels: usize },
+    /// The impulse response is longer than `seconds`.
+    IrTooLong { seconds: f64 },
+    /// The impulse response is silent.
+    IrEmpty,
     /// iOS: copying an imported file `name` into the library failed.
     CopyFailed { name: String, detail: String },
     /// iOS: the app has no folder to keep music in.
@@ -134,6 +148,13 @@ impl fmt::Display for UserError {
             OtherFormat { device, khz } => write!(f, "{device} opened in another format ({khz} kHz) — try again"),
             OutputFailed { detail } => write!(f, "output error: {detail}"),
             ProfileUnreadable { detail } => write!(f, "couldn't read the profile: {detail}"),
+            EqFormat => write!(f, "not an equaliser preset in any format we read (Equalizer APO, AutoEQ, GraphicEQ, EasyEffects, CSV)"),
+            EqEmpty => write!(f, "the preset has no filters"),
+            EqNotFound => write!(f, "the preset isn't there any more"),
+            IrUnreadable { detail } => write!(f, "couldn't read the impulse response: {detail}"),
+            IrChannels { channels } => write!(f, "impulse responses must be mono or stereo (this one has {channels} channels)"),
+            IrTooLong { seconds } => write!(f, "the impulse response is longer than {seconds} s"),
+            IrEmpty => write!(f, "the impulse response is silent"),
             ProfileEmpty => write!(
                 f,
                 "no filters found — expected AutoEQ ParametricEQ.txt lines like `Filter 1: ON PK Fc 100 Hz Gain 3 dB Q 1.0`"

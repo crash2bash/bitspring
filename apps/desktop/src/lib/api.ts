@@ -28,6 +28,9 @@ export interface Signal {
   transport: string;
   resampled: boolean;
   eq: string | null;
+  eqLinear: boolean;
+  /** Name of the impulse response convolved with. */
+  convolution: string | null;
   crossfeed: Crossfeed | null;
   sourceLossy: boolean;
   headroomDb: number | null;
@@ -66,9 +69,12 @@ export type EngineError =
       code:
         | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice"
         | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder"
-        | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled";
+        | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled"
+        | "eqFormat" | "eqEmpty" | "eqNotFound" | "irEmpty";
     }
-  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed"; detail: string }
+  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed" | "irUnreadable"; detail: string }
+  | { code: "irChannels"; channels: number }
+  | { code: "irTooLong"; seconds: number }
   | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
   | { code: "serviceUnreachable"; service: string; detail: string }
   | { code: "noRates"; device: string }
@@ -82,17 +88,71 @@ export type EngineError =
   /** No code: the failing part's own words (a corrupt file, an OS error). */
   | { code: "other"; message: string };
 
-export interface EqInfo {
+export type FilterKind = "peak" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "notch" | "allPass";
+export type BandChannels = "both" | "left" | "right";
+
+export interface EqBand {
+  enabled: boolean;
+  kind: FilterKind;
+  freq: number;
+  /** dB (peak and shelves). */
+  gain: number;
+  q: number;
+  /** dB per octave for low/high-pass: 6 … 48. */
+  slope: number;
+  channels: BandChannels;
+}
+
+export interface EqPreset {
   name: string;
   preamp: number;
-  bands: { kind: "peak" | "lowShelf" | "highShelf"; freq: number; gain: number; q: number }[];
+  autoPreamp: boolean;
+  /** dB; positive turns the left channel down. */
+  balance: number;
+  bands: EqBand[];
+  /** [Hz, dB] points (GraphicEQ). */
   curve: [number, number][];
+  phase: "minimum" | "linear";
+}
+
+export interface StoredPreset extends EqPreset {
+  id: string;
+  updated: number;
+}
+
+/** What an output does with the EQ (absent: follows the active preset). */
+export type DeviceEq = { mode: "off" } | { mode: "preset"; id: string };
+
+export interface EqState {
+  presets: StoredPreset[];
+  activeId: string | null;
+  enabled: boolean;
+  bypass: boolean;
+  devices: Record<string, DeviceEq>;
+  playingOn: string | null;
+  effectiveId: string | null;
+}
+
+export interface EqChanged {
+  state: EqState;
+  /** New signal path when playback had to restart. */
+  signal: Signal | null;
+}
+
+export type EqFormat = "apo" | "graphicEq" | "easyEffects" | "csv" | "hifi";
+
+export interface IrInfo {
+  name: string;
+  channels: number;
+  rate: number;
+  seconds: number;
 }
 
 export interface DspSettings {
   upsampleKhz: number | null;
   crossfeed: Crossfeed | null;
-  eqPath: string | null;
+  /** Impulse response file to convolve with. */
+  convolution: string | null;
   /** Lossy files only: lower the level by exactly the decoded overshoot. */
   headroom: boolean;
   /** Lossy files only: synthesise the octave above the encoder's low-pass. */
@@ -101,7 +161,7 @@ export interface DspSettings {
 
 export interface DspResult {
   signal: Signal | null;
-  eq: EqInfo | null;
+  convolution: IrInfo | null;
 }
 
 export interface NowPlaying {
@@ -365,6 +425,17 @@ export const api = {
   nowPlaying: () => call<NowPlaying | null>("now_playing"),
   importFiles: (paths: string[]) => call<string[]>("import_files", { paths }),
   setDsp: (s: DspSettings) => call<DspResult>("set_dsp", { ...s }),
+  eqState: () => call<EqState>("eq_state"),
+  eqSave: (id: string | null, preset: EqPreset, persist: boolean) => call<EqChanged>("eq_save", { id, preset, persist }),
+  eqDelete: (id: string) => call<EqChanged>("eq_delete", { id }),
+  eqActivate: (id: string) => call<EqChanged>("eq_activate", { id }),
+  eqSetEnabled: (enabled: boolean) => call<EqChanged>("eq_set_enabled", { enabled }),
+  eqSetBypass: (bypass: boolean) => call<EqChanged>("eq_set_bypass", { bypass }),
+  eqBindDevice: (deviceUid: string, binding: DeviceEq | null) => call<EqChanged>("eq_bind_device", { deviceUid, binding }),
+  eqImportFile: (path: string) => call<EqChanged & { ids: string[] }>("eq_import_file", { path }),
+  eqImportText: (text: string, name: string) => call<EqChanged & { ids: string[] }>("eq_import_text", { text, name }),
+  eqExport: (ids: string[], format: EqFormat, path: string | null) => call<string>("eq_export", { ids, format, path }),
+  eqExportText: (ids: string[], format: EqFormat) => call<string>("eq_export_text", { ids, format }),
   channelTest: (deviceUid: string) => call<Signal>("channel_test", { deviceUid }),
   status: () => call<Status>("status"),
   libraryStatus: () => call<LibraryStatus>("library_status"),
@@ -499,7 +570,7 @@ export function dsdNoteText(n: DsdNote): string {
  * error.* keys; plain text (from Tauri itself or a plugin) is shown as it is.
  */
 export function errorText(e: unknown): string {
-  if (e && typeof e === "object" && "code" in e) {
+  if (e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string") {
     const err = e as EngineError;
     switch (err.code) {
       case "other":
@@ -525,7 +596,12 @@ export function errorText(e: unknown): string {
       case "profileUnreadable":
       case "playlistUnreadable":
       case "writeFailed":
+      case "irUnreadable":
         return t(`error.${err.code}`, { detail: err.detail });
+      case "irChannels":
+        return t("error.irChannels", { channels: num(err.channels) });
+      case "irTooLong":
+        return t("error.irTooLong", { seconds: num(err.seconds) });
       case "signInNeeded":
       case "signInExpired":
       case "streamPreview":
