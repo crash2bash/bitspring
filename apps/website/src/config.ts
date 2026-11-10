@@ -19,7 +19,7 @@ export const LINKS: {
   macAppStore: null,
   macFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-mac.dmg",
   iosAppStore: null,
-  windowsFile: null,
+  windowsFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-windows-setup.exe",
   android: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-android.apk",
 };
 
