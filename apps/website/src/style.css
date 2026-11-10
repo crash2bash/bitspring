@@ -857,6 +857,8 @@ main,
 
 /* One row per platform in the list: name on one side, its downloads on the other. */
 .dl-platform {
+  /* A link to #windows etc. lands below the site header, not under it. */
+  scroll-margin-top: 96px;
   display: grid;
   grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
   align-items: start;
@@ -936,6 +938,8 @@ a.dl-option[href]:active {
 
 /* The visitor's own platform: big, first, with the choice laid out side by side. */
 .dl-platform.is-featured {
+  /* Already on the first screen: a #windows link shouldn't scroll the title away. */
+  scroll-margin-top: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 20px;
@@ -977,6 +981,10 @@ a.dl-option[href]:active {
 
 .is-featured a.dl-option[href]:first-child .dl-option-note {
   color: rgba(18, 29, 35, 0.72);
+}
+
+.is-featured a.dl-option[href]:first-child .dl-option-hint {
+  color: rgba(18, 29, 35, 0.62);
 }
 
 .is-featured a.dl-option[href]:first-child:hover {
