@@ -3,6 +3,7 @@ name = "hifi-desktop"
 version = "0.5.1"
 description = "Bit-perfect music player"
 edition = "2024"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
