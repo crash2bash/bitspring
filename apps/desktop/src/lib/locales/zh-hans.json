@@ -469,5 +469,24 @@
   "menu.window": "窗口",
   "menu.minimize": "最小化",
   "menu.zoom": "缩放",
-  "menu.close": "关闭窗口"
+  "menu.close": "关闭窗口",
+
+  "upd.title": "更新",
+  "upd.version": "版本 {version}",
+  "upd.available": "新版本 {version} 已推出",
+  "upd.current": "当前版本为 {version}。",
+  "upd.whatsNew": "新内容",
+  "upd.install": "安装并重启",
+  "upd.installAndroid": "下载并安装",
+  "upd.later": "稍后",
+  "upd.show": "查看更新",
+  "upd.downloading": "正在下载更新…",
+  "upd.downloadingPct": "正在下载更新：{percent}%",
+  "upd.restartNote": "应用需要重启以完成更新，播放会随之停止。",
+  "upd.androidNote": "Android 会请你确认安装。",
+  "upd.check": "检查更新",
+  "upd.checking": "正在检查…",
+  "upd.upToDate": "已是最新版本。",
+  "error.updateFailed": "更新失败：{detail}",
+  "error.installNotAllowed": "请在刚打开的设置页面中允许 Hifi 安装应用，然后再次点按“下载并安装”"
 }

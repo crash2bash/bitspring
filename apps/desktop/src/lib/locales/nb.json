@@ -469,5 +469,24 @@
   "menu.window": "Vindu",
   "menu.minimize": "Minimer",
   "menu.zoom": "Zoom",
-  "menu.close": "Lukk vindu"
+  "menu.close": "Lukk vindu",
+
+  "upd.title": "Oppdateringer",
+  "upd.version": "Versjon {version}",
+  "upd.available": "Versjon {version} er tilgjengelig",
+  "upd.current": "Du har {version}.",
+  "upd.whatsNew": "Nyheter",
+  "upd.install": "Installer og start på nytt",
+  "upd.installAndroid": "Last ned og installer",
+  "upd.later": "Senere",
+  "upd.show": "Vis oppdateringen",
+  "upd.downloading": "Laster ned oppdateringen…",
+  "upd.downloadingPct": "Laster ned oppdateringen: {percent} %",
+  "upd.restartNote": "Appen starter på nytt for å fullføre, og avspillingen stopper.",
+  "upd.androidNote": "Android ber deg bekrefte installasjonen.",
+  "upd.check": "Se etter oppdateringer",
+  "upd.checking": "Sjekker…",
+  "upd.upToDate": "Du har nyeste versjon.",
+  "error.updateFailed": "oppdateringen mislyktes: {detail}",
+  "error.installNotAllowed": "la Hifi installere apper på innstillingsskjermen som nettopp åpnet seg, og trykk deretter på «Last ned og installer» igjen"
 }

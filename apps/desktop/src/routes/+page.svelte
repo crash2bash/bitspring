@@ -11,6 +11,8 @@
   import Display from "$lib/Display.svelte";
   import Enhancers from "$lib/Enhancers.svelte";
   import Equalizer from "$lib/Equalizer.svelte";
+  import UpdateNotice from "$lib/UpdateNotice.svelte";
+  import { startUpdateChecks } from "$lib/updates.svelte";
 
   // --- persisted preferences (per machine) ---
   function load<T>(key: string, fallback: T): T {
@@ -329,6 +331,7 @@
     // Restore last session's processing (also loads and validates the impulse response).
     applyDsp(untrack(() => dsp));
     loadEq();
+    const stopUpdateChecks = startUpdateChecks();
     const timer = setInterval(async () => {
       status = await api.status();
       // The backend moved on to the next track (or stopped at one it couldn't play).
@@ -373,6 +376,7 @@
     }
     return () => {
       clearInterval(timer);
+      stopUpdateChecks();
       unlisten?.();
     };
   });
@@ -559,6 +563,8 @@
       {t("nav.queue")}{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
     </button>
   </nav>
+
+  <UpdateNotice playing={status.active && !status.paused} />
 
   {#if dragOver}
     <div class="drop-hint" aria-hidden="true"><p>{t("queue.drop")}</p></div>

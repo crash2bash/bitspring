@@ -63,6 +63,37 @@ pub fn locales() -> Vec<String> {
     .unwrap_or_default()
 }
 
+/// The app's cache folder (downloaded updates go there).
+#[cfg(feature = "updater")]
+pub fn cache_dir() -> Option<std::path::PathBuf> {
+    with_env(|env, ctx| {
+        let dir = env.call_method(ctx, "getCacheDir", "()Ljava/io/File;", &[])?.l()?;
+        let p = env.call_method(&dir, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?;
+        let p: String = env.get_string(&p.into())?.into();
+        Ok(std::path::PathBuf::from(p))
+    })
+}
+
+/// Open Android's installer for the APK at `path`. False: the app may not install apps yet,
+/// and Android's settings page for that was opened instead.
+#[cfg(feature = "updater")]
+pub fn install_apk(path: &str) -> bool {
+    with_env(|env, ctx| {
+        let loader = env.call_method(ctx, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
+        let name = env.new_string("dev.local.hifi.Updater")?;
+        let class = env.call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?.l()?;
+        let path = env.new_string(path)?;
+        env.call_static_method(
+            JClass::from(class),
+            "install",
+            "(Landroid/content/Context;Ljava/lang/String;)Z",
+            &[JValue::Object(ctx), JValue::Object(&path)],
+        )?
+        .z()
+    })
+    .unwrap_or(false)
+}
+
 /// The folders the library scans: the shared Music folder (needs the audio permission) and the
 /// app's own one under Android/data (always readable, reachable over USB).
 pub fn music_dirs() -> Vec<String> {

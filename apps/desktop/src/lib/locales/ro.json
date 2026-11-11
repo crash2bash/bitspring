@@ -469,5 +469,24 @@
   "menu.window": "Fereastră",
   "menu.minimize": "Minimizează",
   "menu.zoom": "Zoom",
-  "menu.close": "Închide fereastra"
+  "menu.close": "Închide fereastra",
+
+  "upd.title": "Actualizări",
+  "upd.version": "Versiunea {version}",
+  "upd.available": "Versiunea {version} este disponibilă",
+  "upd.current": "Ai versiunea {version}.",
+  "upd.whatsNew": "Noutăți",
+  "upd.install": "Instalează și repornește",
+  "upd.installAndroid": "Descarcă și instalează",
+  "upd.later": "Mai târziu",
+  "upd.show": "Arată actualizarea",
+  "upd.downloading": "Se descarcă actualizarea…",
+  "upd.downloadingPct": "Se descarcă actualizarea: {percent}%",
+  "upd.restartNote": "Pentru a termina, aplicația repornește, iar redarea se oprește.",
+  "upd.androidNote": "Android îți va cere să confirmi instalarea.",
+  "upd.check": "Caută actualizări",
+  "upd.checking": "Se caută…",
+  "upd.upToDate": "Ai cea mai nouă versiune.",
+  "error.updateFailed": "actualizarea a eșuat: {detail}",
+  "error.installNotAllowed": "permite-i lui Hifi să instaleze aplicații pe ecranul de setări care tocmai s-a deschis, apoi apasă din nou „Descarcă și instalează”"
 }

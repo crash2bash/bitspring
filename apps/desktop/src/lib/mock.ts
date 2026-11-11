@@ -250,6 +250,18 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     }
     case "set_menu_labels":
       return undefined as T;
+    case "update_check":
+      return {
+        enabled: true, current: "0.2.0",
+        update: new URLSearchParams(location.search).has("update")
+          ? { version: "0.3.0", date: null, notes: "**What's new**\n- **Equalizer** presets per output.\n- Faster library scan." }
+          : null,
+      } as T;
+    case "update_install":
+      await new Promise((r) => setTimeout(r, 2500));
+      return undefined as T;
+    case "update_progress":
+      return [Math.min(30e6, ((performance.now() / 80) % 400) * 75e3), 30e6] as T;
     case "eq_state":
       return eqSnapshot() as T;
     case "eq_save": {

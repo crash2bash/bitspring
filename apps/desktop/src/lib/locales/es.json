@@ -469,5 +469,24 @@
   "menu.window": "Ventana",
   "menu.minimize": "Minimizar",
   "menu.zoom": "Zoom",
-  "menu.close": "Cerrar ventana"
+  "menu.close": "Cerrar ventana",
+
+  "upd.title": "Actualizaciones",
+  "upd.version": "Versión {version}",
+  "upd.available": "La versión {version} está disponible",
+  "upd.current": "Tienes la versión {version}.",
+  "upd.whatsNew": "Novedades",
+  "upd.install": "Instalar y reiniciar",
+  "upd.installAndroid": "Descargar e instalar",
+  "upd.later": "Más tarde",
+  "upd.show": "Ver la actualización",
+  "upd.downloading": "Descargando la actualización…",
+  "upd.downloadingPct": "Descargando la actualización: {percent} %",
+  "upd.restartNote": "La app se reinicia para terminar, lo que detiene la reproducción.",
+  "upd.androidNote": "Android te pedirá que confirmes la instalación.",
+  "upd.check": "Buscar actualizaciones",
+  "upd.checking": "Buscando…",
+  "upd.upToDate": "Tienes la última versión.",
+  "error.updateFailed": "la actualización ha fallado: {detail}",
+  "error.installNotAllowed": "permite que Hifi instale apps en la pantalla de ajustes que se acaba de abrir y vuelve a pulsar «Descargar e instalar»"
 }

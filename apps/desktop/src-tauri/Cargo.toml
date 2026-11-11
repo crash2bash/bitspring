@@ -36,15 +36,22 @@ objc2-media-player = { version = "0.3", default-features = false, features = ["s
 jni = "0.21"
 log = "0.4"
 ndk-context = "0.1"
+# Android updates: fetch latest.json and the APK.
+ureq = { version = "3", optional = true }
 
 
 
-# Qobuz and TIDAL. On by default (DMG, Windows, Android); the Mac App Store build goes
-# without it: `npm run build:appstore` (= tauri build -- --no-default-features).
-# iOS never gets it (every iPhone build goes through the App Store).
+# Qobuz and TIDAL, and updating itself from GitHub Releases. On by default (DMG, Windows,
+# Android); the Mac App Store build goes without both: `npm run build:appstore` (= tauri build
+# with tauri.appstore.conf.json -- --no-default-features). iOS never gets either (every iPhone
+# build goes through the App Store).
 [features]
-default = ["streaming"]
+default = ["streaming", "updater"]
 streaming = ["dep:hifi-streaming"]
+updater = ["dep:tauri-plugin-updater", "dep:ureq"]
+
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-updater = { version = "2", optional = true }
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 hifi-streaming = { path = "../../../crates/streaming", optional = true }

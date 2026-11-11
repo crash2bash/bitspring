@@ -469,5 +469,24 @@
   "menu.window": "Ablak",
   "menu.minimize": "Kis méret",
   "menu.zoom": "Nagyítás",
-  "menu.close": "Ablak bezárása"
+  "menu.close": "Ablak bezárása",
+
+  "upd.title": "Frissítések",
+  "upd.version": "Verzió: {version}",
+  "upd.available": "Új verzió érhető el: {version}",
+  "upd.current": "Jelenlegi verzió: {version}.",
+  "upd.whatsNew": "Újdonságok",
+  "upd.install": "Telepítés és újraindítás",
+  "upd.installAndroid": "Letöltés és telepítés",
+  "upd.later": "Később",
+  "upd.show": "Frissítés megtekintése",
+  "upd.downloading": "A frissítés letöltése…",
+  "upd.downloadingPct": "A frissítés letöltése: {percent}%",
+  "upd.restartNote": "A befejezéshez az app újraindul, ez leállítja a lejátszást.",
+  "upd.androidNote": "Az Android megkér, hogy erősítsd meg a telepítést.",
+  "upd.check": "Frissítések keresése",
+  "upd.checking": "Keresés…",
+  "upd.upToDate": "A legújabb verziót használod.",
+  "error.updateFailed": "a frissítés nem sikerült: {detail}",
+  "error.installNotAllowed": "a most megnyílt beállításképernyőn engedélyezd, hogy a Hifi appokat telepítsen, majd nyomd meg újra a „Letöltés és telepítés” gombot"
 }

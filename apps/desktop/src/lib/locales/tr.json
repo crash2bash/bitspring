@@ -469,5 +469,24 @@
   "menu.window": "Pencere",
   "menu.minimize": "Küçült",
   "menu.zoom": "Büyüt/Küçült",
-  "menu.close": "Pencereyi Kapat"
+  "menu.close": "Pencereyi Kapat",
+
+  "upd.title": "Güncellemeler",
+  "upd.version": "Sürüm {version}",
+  "upd.available": "{version} sürümü kullanılabilir",
+  "upd.current": "Yüklü sürüm: {version}.",
+  "upd.whatsNew": "Yenilikler",
+  "upd.install": "Yükle ve yeniden başlat",
+  "upd.installAndroid": "İndir ve yükle",
+  "upd.later": "Daha sonra",
+  "upd.show": "Güncellemeyi göster",
+  "upd.downloading": "Güncelleme indiriliyor…",
+  "upd.downloadingPct": "Güncelleme indiriliyor: %{percent}",
+  "upd.restartNote": "Tamamlamak için uygulama yeniden başlar, bu da çalmayı durdurur.",
+  "upd.androidNote": "Android, yüklemeyi onaylamanı isteyecek.",
+  "upd.check": "Güncellemeleri denetle",
+  "upd.checking": "Denetleniyor…",
+  "upd.upToDate": "En son sürümü kullanıyorsun.",
+  "error.updateFailed": "güncelleme başarısız oldu: {detail}",
+  "error.installNotAllowed": "az önce açılan ayarlar ekranında Hifi'nin uygulama yüklemesine izin ver, sonra “İndir ve yükle” düğmesine yeniden bas"
 }

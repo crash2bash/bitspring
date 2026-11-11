@@ -70,9 +70,9 @@ export type EngineError =
         | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice"
         | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder"
         | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled"
-        | "eqFormat" | "eqEmpty" | "eqNotFound" | "irEmpty";
+        | "eqFormat" | "eqEmpty" | "eqNotFound" | "irEmpty" | "installNotAllowed";
     }
-  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed" | "irUnreadable"; detail: string }
+  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed" | "irUnreadable" | "updateFailed"; detail: string }
   | { code: "irChannels"; channels: number }
   | { code: "irTooLong"; seconds: number }
   | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
@@ -419,6 +419,9 @@ export const api = {
   listDevices: () => call<Device[]>("list_devices"),
   systemLocales: () => call<string[]>("system_locales"),
   setMenuLabels: (labels: Record<string, string>) => call<void>("set_menu_labels", { labels }),
+  updateCheck: () => call<{ enabled: boolean; current: string; update: { version: string; notes: string | null; date: string | null } | null }>("update_check"),
+  updateInstall: () => call<void>("update_install"),
+  updateProgress: () => call<[number, number]>("update_progress"),
   expandPaths: (paths: string[]) => call<string[]>("expand_paths", { paths }),
   playFile: (path: string, deviceUid: string, exclusive: boolean, startAt = 0, dop = false, index: number | null = null, paused = false) =>
     call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop, index, paused }),
@@ -598,6 +601,7 @@ export function errorText(e: unknown): string {
       case "playlistUnreadable":
       case "writeFailed":
       case "irUnreadable":
+      case "updateFailed":
         return t(`error.${err.code}`, { detail: err.detail });
       case "irChannels":
         return t("error.irChannels", { channels: num(err.channels) });

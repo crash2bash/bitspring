@@ -98,6 +98,10 @@ pub enum UserError {
     StreamChanged { service: String },
     /// `service` couldn't be reached (`detail`: the network's reason).
     ServiceUnreachable { service: String, detail: String },
+    /// Checking for, downloading or installing an update failed (`detail`: why).
+    UpdateFailed { detail: String },
+    /// Android: the app may not install apps yet (Settings → Install unknown apps).
+    InstallNotAllowed,
     /// Anything else, in the words of whatever failed.
     Other { message: String },
 }
@@ -148,6 +152,8 @@ impl fmt::Display for UserError {
             OtherFormat { device, khz } => write!(f, "{device} opened in another format ({khz} kHz) — try again"),
             OutputFailed { detail } => write!(f, "output error: {detail}"),
             ProfileUnreadable { detail } => write!(f, "couldn't read the profile: {detail}"),
+            UpdateFailed { detail } => write!(f, "the update failed: {detail}"),
+            InstallNotAllowed => write!(f, "allow Hifi to install apps, then try again"),
             EqFormat => write!(f, "not an equaliser preset in any format we read (Equalizer APO, AutoEQ, GraphicEQ, EasyEffects, CSV)"),
             EqEmpty => write!(f, "the preset has no filters"),
             EqNotFound => write!(f, "the preset isn't there any more"),

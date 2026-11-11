@@ -497,5 +497,24 @@
   "menu.window": "نافذة",
   "menu.minimize": "تصغير",
   "menu.zoom": "تكبير/تصغير",
-  "menu.close": "إغلاق النافذة"
+  "menu.close": "إغلاق النافذة",
+
+  "upd.title": "التحديثات",
+  "upd.version": "الإصدار {version}",
+  "upd.available": "الإصدار {version} متاح",
+  "upd.current": "لديك الإصدار {version}.",
+  "upd.whatsNew": "ما الجديد",
+  "upd.install": "تثبيت وإعادة التشغيل",
+  "upd.installAndroid": "تنزيل وتثبيت",
+  "upd.later": "لاحقًا",
+  "upd.show": "عرض التحديث",
+  "upd.downloading": "جارٍ تنزيل التحديث…",
+  "upd.downloadingPct": "جارٍ تنزيل التحديث: {percent}%",
+  "upd.restartNote": "يُعاد تشغيل التطبيق لإتمام التحديث، فيتوقف تشغيل الموسيقى.",
+  "upd.androidNote": "سيطلب منك Android تأكيد التثبيت.",
+  "upd.check": "التحقق من وجود تحديثات",
+  "upd.checking": "جارٍ التحقق…",
+  "upd.upToDate": "لديك أحدث إصدار.",
+  "error.updateFailed": "فشل التحديث: {detail}",
+  "error.installNotAllowed": "اسمح لـHifi بتثبيت التطبيقات في شاشة الإعدادات التي فُتحت للتو، ثم اضغط «تنزيل وتثبيت» مجددًا"
 }

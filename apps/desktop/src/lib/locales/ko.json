@@ -469,5 +469,24 @@
   "menu.window": "윈도우",
   "menu.minimize": "최소화",
   "menu.zoom": "확대/축소",
-  "menu.close": "윈도우 닫기"
+  "menu.close": "윈도우 닫기",
+
+  "upd.title": "업데이트",
+  "upd.version": "버전 {version}",
+  "upd.available": "{version} 버전을 사용할 수 있습니다",
+  "upd.current": "현재 버전은 {version}입니다.",
+  "upd.whatsNew": "새로운 기능",
+  "upd.install": "설치 후 재시작",
+  "upd.installAndroid": "다운로드 후 설치",
+  "upd.later": "나중에",
+  "upd.show": "업데이트 보기",
+  "upd.downloading": "업데이트 다운로드 중…",
+  "upd.downloadingPct": "업데이트 다운로드 중: {percent}%",
+  "upd.restartNote": "완료하려면 앱이 다시 시작되며, 이때 재생이 멈춥니다.",
+  "upd.androidNote": "Android에서 설치를 확인하라는 메시지가 표시됩니다.",
+  "upd.check": "업데이트 확인",
+  "upd.checking": "확인 중…",
+  "upd.upToDate": "최신 버전입니다.",
+  "error.updateFailed": "업데이트하지 못했습니다: {detail}",
+  "error.installNotAllowed": "방금 열린 설정 화면에서 Hifi의 앱 설치를 허용한 다음 “다운로드 후 설치”를 다시 누르세요"
 }

@@ -469,5 +469,24 @@
   "menu.window": "Fönster",
   "menu.minimize": "Minimera",
   "menu.zoom": "Zooma",
-  "menu.close": "Stäng fönster"
+  "menu.close": "Stäng fönster",
+
+  "upd.title": "Uppdateringar",
+  "upd.version": "Version {version}",
+  "upd.available": "Version {version} är tillgänglig",
+  "upd.current": "Du har {version}.",
+  "upd.whatsNew": "Nyheter",
+  "upd.install": "Installera och starta om",
+  "upd.installAndroid": "Hämta och installera",
+  "upd.later": "Senare",
+  "upd.show": "Visa uppdateringen",
+  "upd.downloading": "Hämtar uppdateringen…",
+  "upd.downloadingPct": "Hämtar uppdateringen: {percent} %",
+  "upd.restartNote": "Appen startas om för att slutföra, vilket stoppar uppspelningen.",
+  "upd.androidNote": "Android ber dig bekräfta installationen.",
+  "upd.check": "Sök efter uppdateringar",
+  "upd.checking": "Söker…",
+  "upd.upToDate": "Du har den senaste versionen.",
+  "error.updateFailed": "uppdateringen misslyckades: {detail}",
+  "error.installNotAllowed": "tillåt Hifi att installera appar på inställningsskärmen som just öppnades och tryck sedan på ”Hämta och installera” igen"
 }

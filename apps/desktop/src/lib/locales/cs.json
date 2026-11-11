@@ -474,5 +474,24 @@
   "menu.window": "Okno",
   "menu.minimize": "Minimalizovat",
   "menu.zoom": "Zvětšit",
-  "menu.close": "Zavřít okno"
+  "menu.close": "Zavřít okno",
+
+  "upd.title": "Aktualizace",
+  "upd.version": "Verze {version}",
+  "upd.available": "Je k dispozici verze {version}",
+  "upd.current": "Máte verzi {version}.",
+  "upd.whatsNew": "Co je nového",
+  "upd.install": "Nainstalovat a restartovat",
+  "upd.installAndroid": "Stáhnout a nainstalovat",
+  "upd.later": "Později",
+  "upd.show": "Zobrazit aktualizaci",
+  "upd.downloading": "Stahuje se aktualizace…",
+  "upd.downloadingPct": "Stahuje se aktualizace: {percent} %",
+  "upd.restartNote": "Na závěr se aplikace restartuje a přehrávání se zastaví.",
+  "upd.androidNote": "Android vás požádá o potvrzení instalace.",
+  "upd.check": "Zkontrolovat aktualizace",
+  "upd.checking": "Probíhá kontrola…",
+  "upd.upToDate": "Máte nejnovější verzi.",
+  "error.updateFailed": "aktualizace se nezdařila: {detail}",
+  "error.installNotAllowed": "povolte Hifi instalovat aplikace na právě otevřené obrazovce nastavení a pak znovu stiskněte „Stáhnout a nainstalovat“"
 }

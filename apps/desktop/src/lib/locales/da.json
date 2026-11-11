@@ -469,5 +469,24 @@
   "menu.window": "Vindue",
   "menu.minimize": "Minimer",
   "menu.zoom": "Zoom",
-  "menu.close": "Luk vindue"
+  "menu.close": "Luk vindue",
+
+  "upd.title": "Opdateringer",
+  "upd.version": "Version {version}",
+  "upd.available": "Version {version} er tilgængelig",
+  "upd.current": "Du har {version}.",
+  "upd.whatsNew": "Nyheder",
+  "upd.install": "Installér og genstart",
+  "upd.installAndroid": "Hent og installér",
+  "upd.later": "Senere",
+  "upd.show": "Vis opdateringen",
+  "upd.downloading": "Henter opdateringen…",
+  "upd.downloadingPct": "Henter opdateringen: {percent} %",
+  "upd.restartNote": "Appen genstarter for at gøre opdateringen færdig, og det stopper afspilningen.",
+  "upd.androidNote": "Android beder dig bekræfte installationen.",
+  "upd.check": "Søg efter opdateringer",
+  "upd.checking": "Søger…",
+  "upd.upToDate": "Du har den nyeste version.",
+  "error.updateFailed": "opdateringen mislykkedes: {detail}",
+  "error.installNotAllowed": "tillad Hifi at installere apps på den indstillingsskærm, der lige er åbnet, og tryk så på »Hent og installér« igen"
 }

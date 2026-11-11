@@ -469,5 +469,24 @@
   "menu.window": "Venster",
   "menu.minimize": "Minimaliseer",
   "menu.zoom": "Zoom",
-  "menu.close": "Sluit venster"
+  "menu.close": "Sluit venster",
+
+  "upd.title": "Updates",
+  "upd.version": "Versie {version}",
+  "upd.available": "Versie {version} is beschikbaar",
+  "upd.current": "Je hebt {version}.",
+  "upd.whatsNew": "Wat is er nieuw",
+  "upd.install": "Installeren en herstarten",
+  "upd.installAndroid": "Downloaden en installeren",
+  "upd.later": "Later",
+  "upd.show": "Update tonen",
+  "upd.downloading": "Update downloaden…",
+  "upd.downloadingPct": "Update downloaden: {percent}%",
+  "upd.restartNote": "De app start opnieuw op om af te ronden, waardoor het afspelen stopt.",
+  "upd.androidNote": "Android vraagt je de installatie te bevestigen.",
+  "upd.check": "Controleren op updates",
+  "upd.checking": "Controleren…",
+  "upd.upToDate": "Je hebt de nieuwste versie.",
+  "error.updateFailed": "de update is mislukt: {detail}",
+  "error.installNotAllowed": "sta Hifi toe apps te installeren in het instellingenscherm dat net is geopend en tik daarna opnieuw op “Downloaden en installeren”"
 }

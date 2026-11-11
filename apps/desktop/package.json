@@ -12,7 +12,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
     "check:locales": "node scripts/check-locales.mjs",
-    "build:appstore": "tauri build -- --no-default-features"
+    "build:appstore": "tauri build --config src-tauri/tauri.appstore.conf.json -- --no-default-features"
   },
   "license": "MIT",
   "dependencies": {

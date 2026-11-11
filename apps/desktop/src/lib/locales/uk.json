@@ -474,5 +474,24 @@
   "menu.window": "Вікно",
   "menu.minimize": "Згорнути",
   "menu.zoom": "Змінити масштаб",
-  "menu.close": "Закрити вікно"
+  "menu.close": "Закрити вікно",
+
+  "upd.title": "Оновлення",
+  "upd.version": "Версія {version}",
+  "upd.available": "Доступна версія {version}",
+  "upd.current": "У вас {version}.",
+  "upd.whatsNew": "Що нового",
+  "upd.install": "Встановити й перезапустити",
+  "upd.installAndroid": "Завантажити й встановити",
+  "upd.later": "Пізніше",
+  "upd.show": "Показати оновлення",
+  "upd.downloading": "Завантажується оновлення…",
+  "upd.downloadingPct": "Завантажується оновлення: {percent} %",
+  "upd.restartNote": "Щоб завершити, програма перезапуститься, і відтворення зупиниться.",
+  "upd.androidNote": "Android попросить підтвердити встановлення.",
+  "upd.check": "Перевірити оновлення",
+  "upd.checking": "Перевірка…",
+  "upd.upToDate": "У вас остання версія.",
+  "error.updateFailed": "оновлення не вдалося: {detail}",
+  "error.installNotAllowed": "дозвольте Hifi встановлювати програми на щойно відкритому екрані налаштувань і знову натисніть «Завантажити й встановити»"
 }

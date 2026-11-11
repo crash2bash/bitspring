@@ -469,5 +469,24 @@
   "menu.window": "Fenêtre",
   "menu.minimize": "Placer dans le Dock",
   "menu.zoom": "Réduire/agrandir",
-  "menu.close": "Fermer la fenêtre"
+  "menu.close": "Fermer la fenêtre",
+
+  "upd.title": "Mises à jour",
+  "upd.version": "Version {version}",
+  "upd.available": "La version {version} est disponible",
+  "upd.current": "Vous avez la version {version}.",
+  "upd.whatsNew": "Nouveautés",
+  "upd.install": "Installer et redémarrer",
+  "upd.installAndroid": "Télécharger et installer",
+  "upd.later": "Plus tard",
+  "upd.show": "Afficher la mise à jour",
+  "upd.downloading": "Téléchargement de la mise à jour…",
+  "upd.downloadingPct": "Téléchargement de la mise à jour : {percent} %",
+  "upd.restartNote": "L’app redémarre pour terminer, ce qui arrête la lecture.",
+  "upd.androidNote": "Android vous demandera de confirmer l’installation.",
+  "upd.check": "Rechercher des mises à jour",
+  "upd.checking": "Recherche…",
+  "upd.upToDate": "Vous avez la dernière version.",
+  "error.updateFailed": "la mise à jour a échoué : {detail}",
+  "error.installNotAllowed": "autorisez Hifi à installer des apps sur l’écran de réglages qui vient de s’ouvrir, puis appuyez de nouveau sur « Télécharger et installer »"
 }

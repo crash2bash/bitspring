@@ -469,5 +469,24 @@
   "menu.window": "Παράθυρο",
   "menu.minimize": "Ελαχιστοποίηση",
   "menu.zoom": "Ζουμ",
-  "menu.close": "Κλείσιμο παραθύρου"
+  "menu.close": "Κλείσιμο παραθύρου",
+
+  "upd.title": "Ενημερώσεις",
+  "upd.version": "Έκδοση {version}",
+  "upd.available": "Η έκδοση {version} είναι διαθέσιμη",
+  "upd.current": "Έχετε την έκδοση {version}.",
+  "upd.whatsNew": "Τι νέο υπάρχει",
+  "upd.install": "Εγκατάσταση και επανεκκίνηση",
+  "upd.installAndroid": "Λήψη και εγκατάσταση",
+  "upd.later": "Αργότερα",
+  "upd.show": "Εμφάνιση ενημέρωσης",
+  "upd.downloading": "Λήψη ενημέρωσης…",
+  "upd.downloadingPct": "Λήψη ενημέρωσης: {percent}%",
+  "upd.restartNote": "Για να ολοκληρωθεί, η εφαρμογή κάνει επανεκκίνηση και η αναπαραγωγή σταματά.",
+  "upd.androidNote": "Το Android θα σας ζητήσει να επιβεβαιώσετε την εγκατάσταση.",
+  "upd.check": "Έλεγχος για ενημερώσεις",
+  "upd.checking": "Έλεγχος…",
+  "upd.upToDate": "Έχετε την πιο πρόσφατη έκδοση.",
+  "error.updateFailed": "η ενημέρωση απέτυχε: {detail}",
+  "error.installNotAllowed": "επιτρέψτε στο Hifi να εγκαθιστά εφαρμογές στην οθόνη ρυθμίσεων που μόλις άνοιξε και πατήστε ξανά «Λήψη και εγκατάσταση»"
 }

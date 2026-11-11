@@ -469,5 +469,24 @@
   "menu.window": "Ikkuna",
   "menu.minimize": "Pienennä",
   "menu.zoom": "Zoomaa",
-  "menu.close": "Sulje ikkuna"
+  "menu.close": "Sulje ikkuna",
+
+  "upd.title": "Päivitykset",
+  "upd.version": "Versio {version}",
+  "upd.available": "Versio {version} on saatavilla",
+  "upd.current": "Sinulla on {version}.",
+  "upd.whatsNew": "Uutta",
+  "upd.install": "Asenna ja käynnistä uudelleen",
+  "upd.installAndroid": "Lataa ja asenna",
+  "upd.later": "Myöhemmin",
+  "upd.show": "Näytä päivitys",
+  "upd.downloading": "Ladataan päivitystä…",
+  "upd.downloadingPct": "Ladataan päivitystä: {percent} %",
+  "upd.restartNote": "Appi käynnistyy lopuksi uudelleen, jolloin toisto pysähtyy.",
+  "upd.androidNote": "Android pyytää sinua vahvistamaan asennuksen.",
+  "upd.check": "Tarkista päivitykset",
+  "upd.checking": "Tarkistetaan…",
+  "upd.upToDate": "Sinulla on uusin versio.",
+  "error.updateFailed": "päivitys epäonnistui: {detail}",
+  "error.installNotAllowed": "salli juuri avautuneessa asetusnäkymässä, että Hifi asentaa appeja, ja paina sitten uudelleen ”Lataa ja asenna”"
 }

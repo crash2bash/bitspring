@@ -469,5 +469,24 @@
   "menu.window": "Window",
   "menu.minimize": "Minimize",
   "menu.zoom": "Zoom",
-  "menu.close": "Close Window"
+  "menu.close": "Close Window",
+
+  "upd.title": "Updates",
+  "upd.version": "Version {version}",
+  "upd.available": "Version {version} is available",
+  "upd.current": "You have {version}.",
+  "upd.whatsNew": "What's new",
+  "upd.install": "Install and restart",
+  "upd.installAndroid": "Download and install",
+  "upd.later": "Later",
+  "upd.show": "Show the update",
+  "upd.downloading": "Downloading the update…",
+  "upd.downloadingPct": "Downloading the update: {percent}%",
+  "upd.restartNote": "The app restarts to finish, which stops playback.",
+  "upd.androidNote": "Android will ask you to confirm the installation.",
+  "upd.check": "Check for updates",
+  "upd.checking": "Checking…",
+  "upd.upToDate": "You have the latest version.",
+  "error.updateFailed": "the update failed: {detail}",
+  "error.installNotAllowed": "allow Hifi to install apps on the settings screen that just opened, then press Download and install again"
 }

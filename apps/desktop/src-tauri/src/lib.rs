@@ -14,6 +14,10 @@ mod playlists;
 #[cfg_attr(all(feature = "streaming", not(target_os = "ios")), path = "stream_on.rs")]
 #[cfg_attr(not(all(feature = "streaming", not(target_os = "ios"))), path = "stream_off.rs")]
 mod stream;
+/// Updating from GitHub Releases: the real thing in website builds, nothing in App Store ones.
+#[cfg_attr(all(feature = "updater", not(target_os = "ios")), path = "update_on.rs")]
+#[cfg_attr(not(all(feature = "updater", not(target_os = "ios"))), path = "update_off.rs")]
+mod update;
 /// Lock screen / notification player and remote controls, per phone OS.
 #[cfg(target_os = "android")]
 use android_media as media;
@@ -868,8 +872,10 @@ fn ios_edge_to_edge(webview: *mut std::ffi::c_void) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    #[cfg(all(feature = "updater", desktop))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    builder
         .manage(AppState::default())
         .setup(|app| {
             use tauri::Manager;
@@ -925,6 +931,9 @@ pub fn run() {
             list_devices,
             system_locales,
             set_menu_labels,
+            update::update_check,
+            update::update_install,
+            update::update_progress,
             expand_paths,
             play_file,
             set_queue,

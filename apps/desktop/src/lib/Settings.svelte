@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n, LOCALES, t } from "./i18n.svelte";
+  import { checkUpdates, updates } from "./updates.svelte";
 
   let open = $state(false);
   let root: HTMLElement;
@@ -36,6 +37,24 @@
           {/each}
         </select>
       </label>
+      {#if updates.enabled}
+        <div class="field upd">
+          <span>{t("upd.title")}</span>
+          <p class="ver">{t("upd.version", { version: updates.current })}</p>
+          {#if updates.update}
+            <p class="note new">{t("upd.available", { version: updates.update.version })}</p>
+            {#if updates.dismissed === updates.update.version}
+              <button class="check" onclick={() => (updates.dismissed = null)}>{t("upd.show")}</button>
+            {/if}
+          {:else}
+            <button class="check" onclick={() => checkUpdates(true)} disabled={updates.checking}>
+              {t(updates.checking ? "upd.checking" : "upd.check")}
+            </button>
+            {#if updates.upToDate}<p class="note">{t("upd.upToDate")}</p>{/if}
+          {/if}
+          {#if updates.error && !updates.update}<p class="note err">{updates.error}</p>{/if}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -75,6 +94,38 @@
     flex-direction: column;
     gap: 8px;
     font-weight: 600;
+  }
+  .upd {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--slate-600);
+  }
+  .ver,
+  .note {
+    margin: 0;
+    font-weight: 400;
+    font-size: var(--t-sm);
+    color: var(--mist);
+  }
+  .note.new {
+    color: var(--brass);
+  }
+  .note.err {
+    color: var(--alarm);
+  }
+  .check {
+    align-self: flex-start;
+    padding: 6px 12px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--slate-500);
+    font-weight: 500;
+    font-size: var(--t-sm);
+  }
+  .check:hover:not(:disabled) {
+    border-color: var(--mist);
+  }
+  .check:disabled {
+    color: var(--mist);
   }
   select {
     font: inherit;
