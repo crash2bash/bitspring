@@ -454,5 +454,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Krzywa korektora",
   "eq.editorHelp": "Przeciągnij punkt, aby zmienić częstotliwość i wzmocnienie; przewiń nad nim, aby zmienić Q. Kliknij dwukrotnie wykres, aby dodać pasmo. Gdy punkt ma fokus, strzałki go przesuwają (z Shift większymi krokami), [ i ] zmieniają Q, Delete go usuwa.",
-  "eq.preampTick": "przedwzmocnienie {db} dB"
+  "eq.preampTick": "przedwzmocnienie {db} dB",
+
+  "menu.about": "{app} – informacje",
+  "menu.services": "Usługi",
+  "menu.hide": "Ukryj {app}",
+  "menu.hideOthers": "Ukryj pozostałe",
+  "menu.showAll": "Pokaż wszystkie",
+  "menu.quit": "Zakończ {app}",
+  "menu.edit": "Edycja",
+  "menu.undo": "Cofnij",
+  "menu.redo": "Przywróć",
+  "menu.cut": "Wytnij",
+  "menu.copy": "Kopiuj",
+  "menu.paste": "Wklej",
+  "menu.selectAll": "Zaznacz wszystko",
+  "menu.view": "Widok",
+  "menu.fullscreen": "Włącz tryb pełnoekranowy",
+  "menu.window": "Okno",
+  "menu.minimize": "Minimalizuj",
+  "menu.zoom": "Zmień rozmiar",
+  "menu.close": "Zamknij okno"
 }

@@ -449,5 +449,25 @@
   "eq.seconds": "{s}秒",
   "eq.editorLabel": "イコライザーカーブ",
   "eq.editorHelp": "点をドラッグすると周波数とゲインが変わり、点の上でスクロールするとQが変わります。グラフをダブルクリックするとバンドを追加できます。点にフォーカスがあるときは、矢印キーで移動（Shiftで大きく）、[ と ] でQを変更、Deleteで削除します。",
-  "eq.preampTick": "プリアンプ {db} dB"
+  "eq.preampTick": "プリアンプ {db} dB",
+
+  "menu.about": "{app}について",
+  "menu.services": "サービス",
+  "menu.hide": "{app}を隠す",
+  "menu.hideOthers": "ほかを隠す",
+  "menu.showAll": "すべてを表示",
+  "menu.quit": "{app}を終了",
+  "menu.edit": "編集",
+  "menu.undo": "取り消す",
+  "menu.redo": "やり直す",
+  "menu.cut": "カット",
+  "menu.copy": "コピー",
+  "menu.paste": "ペースト",
+  "menu.selectAll": "すべてを選択",
+  "menu.view": "表示",
+  "menu.fullscreen": "フルスクリーンにする",
+  "menu.window": "ウインドウ",
+  "menu.minimize": "しまう",
+  "menu.zoom": "拡大/縮小",
+  "menu.close": "ウインドウを閉じる"
 }

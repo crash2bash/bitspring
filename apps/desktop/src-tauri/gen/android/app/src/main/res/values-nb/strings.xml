@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/nb.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"Spilles nå"</string>
+    <string name="action_prev">"Forrige spor"</string>
+    <string name="action_play">"Spill av"</string>
+    <string name="action_pause">"Pause"</string>
+    <string name="action_next">"Neste spor"</string>
+</resources>

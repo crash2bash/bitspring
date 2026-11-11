@@ -270,6 +270,15 @@
     }
   }
 
+  // The macOS menu bar follows the UI language.
+  const MENU_KEYS = ["about", "services", "hide", "hideOthers", "showAll", "quit", "edit", "undo", "redo", "cut", "copy", "paste", "selectAll", "view", "fullscreen", "window", "minimize", "zoom", "close"];
+  $effect(() => {
+    void i18n.locale;
+    if (!isMac || !inTauri) return;
+    const labels = Object.fromEntries(MENU_KEYS.map((k) => [`menu.${k}`, t(`menu.${k}`, { app: "Hifi" })]));
+    api.setMenuLabels(labels).catch(() => {});
+  });
+
   // Mirror the queue to the backend, which starts the next track by itself.
   $effect(() => {
     api.setQueue($state.snapshot(queue), index < 0 ? null : index, knownRev);

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/pl.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"Teraz odtwarzane"</string>
+    <string name="action_prev">"Poprzedni utwór"</string>
+    <string name="action_play">"Odtwórz"</string>
+    <string name="action_pause">"Pauza"</string>
+    <string name="action_next">"Następny utwór"</string>
+</resources>

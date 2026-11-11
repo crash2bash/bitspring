@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Curba egalizatorului",
   "eq.editorHelp": "Trage un punct ca să-i schimbi frecvența și câștigul; derulează deasupra lui ca să schimbi Q. Dublu clic pe grafic adaugă o bandă. Cu un punct selectat, săgețile îl mută (Shift pentru pași mai mari), [ și ] schimbă Q, Delete îl elimină.",
-  "eq.preampTick": "preamplificare {db} dB"
+  "eq.preampTick": "preamplificare {db} dB",
+
+  "menu.about": "Despre {app}",
+  "menu.services": "Servicii",
+  "menu.hide": "Ascunde {app}",
+  "menu.hideOthers": "Ascunde altele",
+  "menu.showAll": "Afișează-le pe toate",
+  "menu.quit": "Ieși din {app}",
+  "menu.edit": "Editează",
+  "menu.undo": "Anulează",
+  "menu.redo": "Refă",
+  "menu.cut": "Taie",
+  "menu.copy": "Copiază",
+  "menu.paste": "Lipește",
+  "menu.selectAll": "Selectează tot",
+  "menu.view": "Vizualizare",
+  "menu.fullscreen": "Intră în modul ecran complet",
+  "menu.window": "Fereastră",
+  "menu.minimize": "Minimizează",
+  "menu.zoom": "Zoom",
+  "menu.close": "Închide fereastra"
 }

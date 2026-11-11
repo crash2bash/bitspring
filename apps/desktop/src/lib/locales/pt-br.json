@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Curva do equalizador",
   "eq.editorHelp": "Arraste um ponto para mudar a frequência e o ganho; role sobre ele para mudar o Q. Clique duas vezes no gráfico para adicionar uma banda. Com um ponto em foco, as setas o movem (Shift para passos maiores), [ e ] mudam o Q, Delete o remove.",
-  "eq.preampTick": "pré-amplificação {db} dB"
+  "eq.preampTick": "pré-amplificação {db} dB",
+
+  "menu.about": "Sobre o {app}",
+  "menu.services": "Serviços",
+  "menu.hide": "Ocultar {app}",
+  "menu.hideOthers": "Ocultar Outros",
+  "menu.showAll": "Mostrar Tudo",
+  "menu.quit": "Encerrar {app}",
+  "menu.edit": "Editar",
+  "menu.undo": "Desfazer",
+  "menu.redo": "Refazer",
+  "menu.cut": "Recortar",
+  "menu.copy": "Copiar",
+  "menu.paste": "Colar",
+  "menu.selectAll": "Selecionar Tudo",
+  "menu.view": "Visualizar",
+  "menu.fullscreen": "Entrar em Tela Cheia",
+  "menu.window": "Janela",
+  "menu.minimize": "Minimizar",
+  "menu.zoom": "Zoom",
+  "menu.close": "Fechar Janela"
 }

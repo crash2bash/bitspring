@@ -449,5 +449,25 @@
   "eq.seconds": "{s} 秒",
   "eq.editorLabel": "均衡器曲线",
   "eq.editorHelp": "拖动点可改变频率和增益；在点上滚动可改变 Q。在图上双击可添加频段。选中一个点后，方向键可移动它（按住 Shift 步长更大），[ 和 ] 改变 Q，Delete 删除它。",
-  "eq.preampTick": "预放大 {db} dB"
+  "eq.preampTick": "预放大 {db} dB",
+
+  "menu.about": "关于{app}",
+  "menu.services": "服务",
+  "menu.hide": "隐藏{app}",
+  "menu.hideOthers": "隐藏其他",
+  "menu.showAll": "全部显示",
+  "menu.quit": "退出{app}",
+  "menu.edit": "编辑",
+  "menu.undo": "撤销",
+  "menu.redo": "重做",
+  "menu.cut": "剪切",
+  "menu.copy": "拷贝",
+  "menu.paste": "粘贴",
+  "menu.selectAll": "全选",
+  "menu.view": "显示",
+  "menu.fullscreen": "进入全屏幕",
+  "menu.window": "窗口",
+  "menu.minimize": "最小化",
+  "menu.zoom": "缩放",
+  "menu.close": "关闭窗口"
 }

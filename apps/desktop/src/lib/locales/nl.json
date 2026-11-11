@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Equalizercurve",
   "eq.editorHelp": "Sleep een punt om de frequentie en versterking te wijzigen; scrol erboven om Q te wijzigen. Dubbelklik in de grafiek om een band toe te voegen. Met een punt in focus verplaatsen de pijltjestoetsen het (Shift voor grotere stappen), [ en ] wijzigen Q, Delete verwijdert het.",
-  "eq.preampTick": "voorversterking {db} dB"
+  "eq.preampTick": "voorversterking {db} dB",
+
+  "menu.about": "Over {app}",
+  "menu.services": "Voorzieningen",
+  "menu.hide": "Verberg {app}",
+  "menu.hideOthers": "Verberg andere",
+  "menu.showAll": "Toon alle",
+  "menu.quit": "Stop {app}",
+  "menu.edit": "Wijzig",
+  "menu.undo": "Herstel",
+  "menu.redo": "Opnieuw",
+  "menu.cut": "Knip",
+  "menu.copy": "Kopieer",
+  "menu.paste": "Plak",
+  "menu.selectAll": "Selecteer alles",
+  "menu.view": "Weergave",
+  "menu.fullscreen": "Activeer schermvullende weergave",
+  "menu.window": "Venster",
+  "menu.minimize": "Minimaliseer",
+  "menu.zoom": "Zoom",
+  "menu.close": "Sluit venster"
 }

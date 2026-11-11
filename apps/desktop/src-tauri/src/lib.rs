@@ -347,7 +347,84 @@ fn open_for(path: &std::path::Path, mode: DsdMode) -> CmdResult<Arc<Track>> {
 /// app bundle declares rather than the user's own.
 #[tauri::command]
 fn system_locales() -> Vec<String> {
+    // Android: the app's own configuration, which includes a language picked for this app in
+    // Settings → Apps → Hifi → Language (sys-locale reads only the system-wide one).
+    #[cfg(target_os = "android")]
+    {
+        let own = android_media::locales();
+        if !own.is_empty() {
+            return own;
+        }
+    }
     sys_locale::get_locales().collect()
+}
+
+/// macOS menu bar in the UI's language: the UI sends its translations of the `menu.*` keys
+/// (with the app name filled in) whenever the language changes. Elsewhere there is no menu bar.
+#[tauri::command]
+fn set_menu_labels(app: tauri::AppHandle, labels: std::collections::HashMap<String, String>) -> CmdResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let menu = mac_menu(&app, &labels).map_err(err)?;
+        app.set_menu(menu).map_err(err)?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, labels);
+    Ok(())
+}
+
+/// The standard app, Edit, View and Window menus (as Tauri's default one), with our labels.
+#[cfg(target_os = "macos")]
+fn mac_menu(app: &tauri::AppHandle, labels: &std::collections::HashMap<String, String>) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{AboutMetadata, Menu, PredefinedMenuItem as P, Submenu};
+    let l = |k: &str| labels.get(k).map(String::as_str);
+    let name = app.package_info().name.clone();
+    let about = AboutMetadata { name: Some(name.clone()), version: Some(app.package_info().version.to_string()), ..Default::default() };
+    let app_menu = Submenu::with_items(
+        app,
+        &name,
+        true,
+        &[
+            &P::about(app, l("menu.about"), Some(about))?,
+            &P::separator(app)?,
+            &P::services(app, l("menu.services"))?,
+            &P::separator(app)?,
+            &P::hide(app, l("menu.hide"))?,
+            &P::hide_others(app, l("menu.hideOthers"))?,
+            &P::show_all(app, l("menu.showAll"))?,
+            &P::separator(app)?,
+            &P::quit(app, l("menu.quit"))?,
+        ],
+    )?;
+    let edit = Submenu::with_items(
+        app,
+        l("menu.edit").unwrap_or("Edit"),
+        true,
+        &[
+            &P::undo(app, l("menu.undo"))?,
+            &P::redo(app, l("menu.redo"))?,
+            &P::separator(app)?,
+            &P::cut(app, l("menu.cut"))?,
+            &P::copy(app, l("menu.copy"))?,
+            &P::paste(app, l("menu.paste"))?,
+            &P::select_all(app, l("menu.selectAll"))?,
+        ],
+    )?;
+    let view = Submenu::with_items(app, l("menu.view").unwrap_or("View"), true, &[&P::fullscreen(app, l("menu.fullscreen"))?])?;
+    let window = Submenu::with_items(
+        app,
+        l("menu.window").unwrap_or("Window"),
+        true,
+        &[
+            &P::minimize(app, l("menu.minimize"))?,
+            &P::maximize(app, l("menu.zoom"))?,
+            &P::separator(app)?,
+            &P::close_window(app, l("menu.close"))?,
+        ],
+    )?;
+    // macOS lists the open windows in it and adds its own window commands.
+    window.set_as_windows_menu_for_nsapp()?;
+    Menu::with_items(app, &[&app_menu, &edit, &view, &window])
 }
 
 const AUDIO_EXTENSIONS: [&str; 12] = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff"];
@@ -847,6 +924,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_devices,
             system_locales,
+            set_menu_labels,
             expand_paths,
             play_file,
             set_queue,

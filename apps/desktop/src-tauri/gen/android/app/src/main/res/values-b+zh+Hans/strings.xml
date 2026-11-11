@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/zh-hans.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"正在播放"</string>
+    <string name="action_prev">"上一首"</string>
+    <string name="action_play">"播放"</string>
+    <string name="action_pause">"暂停"</string>
+    <string name="action_next">"下一首"</string>
+</resources>

@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Equalizer-Kurve",
   "eq.editorHelp": "Zieh einen Punkt, um Frequenz und Verstärkung zu ändern; scrolle darüber, um Q zu ändern. Doppelklicke in die Grafik, um ein Band hinzuzufügen. Ist ein Punkt fokussiert, bewegen ihn die Pfeiltasten (mit Shift in größeren Schritten), [ und ] ändern Q, Entf entfernt ihn.",
-  "eq.preampTick": "Vorverstärkung {db} dB"
+  "eq.preampTick": "Vorverstärkung {db} dB",
+
+  "menu.about": "Über {app}",
+  "menu.services": "Dienste",
+  "menu.hide": "{app} ausblenden",
+  "menu.hideOthers": "Andere ausblenden",
+  "menu.showAll": "Alle einblenden",
+  "menu.quit": "{app} beenden",
+  "menu.edit": "Bearbeiten",
+  "menu.undo": "Widerrufen",
+  "menu.redo": "Wiederholen",
+  "menu.cut": "Ausschneiden",
+  "menu.copy": "Kopieren",
+  "menu.paste": "Einsetzen",
+  "menu.selectAll": "Alles auswählen",
+  "menu.view": "Darstellung",
+  "menu.fullscreen": "Vollbildmodus aktivieren",
+  "menu.window": "Fenster",
+  "menu.minimize": "Im Dock ablegen",
+  "menu.zoom": "Zoomen",
+  "menu.close": "Fenster schließen"
 }

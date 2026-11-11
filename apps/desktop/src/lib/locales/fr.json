@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Courbe de l’égaliseur",
   "eq.editorHelp": "Faites glisser un point pour changer sa fréquence et son gain ; faites défiler dessus pour changer le Q. Double-cliquez sur le graphique pour ajouter une bande. Quand un point a le focus, les flèches le déplacent (Maj pour de plus grands pas), [ et ] changent le Q, Suppr le supprime.",
-  "eq.preampTick": "préampli {db} dB"
+  "eq.preampTick": "préampli {db} dB",
+
+  "menu.about": "À propos de {app}",
+  "menu.services": "Services",
+  "menu.hide": "Masquer {app}",
+  "menu.hideOthers": "Masquer les autres",
+  "menu.showAll": "Tout afficher",
+  "menu.quit": "Quitter {app}",
+  "menu.edit": "Édition",
+  "menu.undo": "Annuler",
+  "menu.redo": "Rétablir",
+  "menu.cut": "Couper",
+  "menu.copy": "Copier",
+  "menu.paste": "Coller",
+  "menu.selectAll": "Tout sélectionner",
+  "menu.view": "Présentation",
+  "menu.fullscreen": "Passer en mode plein écran",
+  "menu.window": "Fenêtre",
+  "menu.minimize": "Placer dans le Dock",
+  "menu.zoom": "Réduire/agrandir",
+  "menu.close": "Fermer la fenêtre"
 }

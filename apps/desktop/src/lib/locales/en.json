@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Equalizer curve",
   "eq.editorHelp": "Drag a point to change its frequency and gain; scroll over it to change Q. Double-click the graph to add a band. With a point focused, the arrow keys move it (Shift for bigger steps), [ and ] change Q, Delete removes it.",
-  "eq.preampTick": "preamp {db} dB"
+  "eq.preampTick": "preamp {db} dB",
+
+  "menu.about": "About {app}",
+  "menu.services": "Services",
+  "menu.hide": "Hide {app}",
+  "menu.hideOthers": "Hide Others",
+  "menu.showAll": "Show All",
+  "menu.quit": "Quit {app}",
+  "menu.edit": "Edit",
+  "menu.undo": "Undo",
+  "menu.redo": "Redo",
+  "menu.cut": "Cut",
+  "menu.copy": "Copy",
+  "menu.paste": "Paste",
+  "menu.selectAll": "Select All",
+  "menu.view": "View",
+  "menu.fullscreen": "Enter Full Screen",
+  "menu.window": "Window",
+  "menu.minimize": "Minimize",
+  "menu.zoom": "Zoom",
+  "menu.close": "Close Window"
 }

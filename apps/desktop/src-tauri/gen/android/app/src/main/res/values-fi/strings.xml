@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/fi.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"Nyt soi"</string>
+    <string name="action_prev">"Edellinen kappale"</string>
+    <string name="action_play">"Toista"</string>
+    <string name="action_pause">"Tauko"</string>
+    <string name="action_next">"Seuraava kappale"</string>
+</resources>

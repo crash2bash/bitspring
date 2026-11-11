@@ -449,5 +449,25 @@
   "eq.seconds": "{s} sn",
   "eq.editorLabel": "Ekolayzır eğrisi",
   "eq.editorHelp": "Frekansını ve kazancını değiştirmek için bir noktayı sürükle; Q'yu değiştirmek için üzerinde kaydır. Bant eklemek için grafiğe çift tıkla. Bir nokta odaktayken ok tuşları onu taşır (daha büyük adımlar için Shift), [ ve ] Q'yu değiştirir, Delete onu siler.",
-  "eq.preampTick": "ön kazanç {db} dB"
+  "eq.preampTick": "ön kazanç {db} dB",
+
+  "menu.about": "{app} Hakkında",
+  "menu.services": "Servisler",
+  "menu.hide": "{app} Uygulamasını Gizle",
+  "menu.hideOthers": "Diğerlerini Gizle",
+  "menu.showAll": "Tümünü Göster",
+  "menu.quit": "{app} Uygulamasından Çık",
+  "menu.edit": "Düzen",
+  "menu.undo": "Geri Al",
+  "menu.redo": "Yinele",
+  "menu.cut": "Kes",
+  "menu.copy": "Kopyala",
+  "menu.paste": "Yapıştır",
+  "menu.selectAll": "Tümünü Seç",
+  "menu.view": "Görüntü",
+  "menu.fullscreen": "Tam Ekrana Gir",
+  "menu.window": "Pencere",
+  "menu.minimize": "Küçült",
+  "menu.zoom": "Büyüt/Küçült",
+  "menu.close": "Pencereyi Kapat"
 }

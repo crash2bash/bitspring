@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/da.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"Afspilles nu"</string>
+    <string name="action_prev">"Forrige nummer"</string>
+    <string name="action_play">"Afspil"</string>
+    <string name="action_pause">"Pause"</string>
+    <string name="action_next">"Næste nummer"</string>
+</resources>

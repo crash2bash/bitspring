@@ -43,11 +43,42 @@
       },
       "nsis": {
         "languages": [
+          "English",
+          "German",
+          "French",
+          "Spanish",
+          "Italian",
+          "PortugueseBR",
+          "Dutch",
+          "Swedish",
+          "Danish",
+          "Norwegian",
+          "Finnish",
+          "Polish",
+          "Czech",
+          "Hungarian",
+          "Romanian",
+          "Greek",
+          "Turkish",
+          "Ukrainian",
           "Russian",
-          "English"
+          "Arabic",
+          "SimpChinese",
+          "TradChinese",
+          "Japanese",
+          "Korean"
         ],
         "displayLanguageSelector": false,
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "customLanguageFiles": {
+          "Danish": "nsis/Danish.nsh",
+          "Finnish": "nsis/Finnish.nsh",
+          "Polish": "nsis/Polish.nsh",
+          "Czech": "nsis/Czech.nsh",
+          "Hungarian": "nsis/Hungarian.nsh",
+          "Romanian": "nsis/Romanian.nsh",
+          "Greek": "nsis/Greek.nsh"
+        }
       }
     },
     "android": {

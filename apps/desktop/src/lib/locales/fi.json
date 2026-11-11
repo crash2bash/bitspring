@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Taajuuskorjaimen käyrä",
   "eq.editorHelp": "Vedä pistettä muuttaaksesi sen taajuutta ja vahvistusta; vieritä sen päällä muuttaaksesi Q:ta. Lisää kaista kaksoisnapsauttamalla kuvaajaa. Kun piste on valittuna, nuolinäppäimet siirtävät sitä (Vaihto suuremmin askelin), [ ja ] muuttavat Q:ta, Delete poistaa sen.",
-  "eq.preampTick": "esivahvistus {db} dB"
+  "eq.preampTick": "esivahvistus {db} dB",
+
+  "menu.about": "Tietoja: {app}",
+  "menu.services": "Palvelut",
+  "menu.hide": "Kätke {app}",
+  "menu.hideOthers": "Kätke muut",
+  "menu.showAll": "Näytä kaikki",
+  "menu.quit": "Lopeta {app}",
+  "menu.edit": "Muokkaa",
+  "menu.undo": "Kumoa",
+  "menu.redo": "Tee uudelleen",
+  "menu.cut": "Leikkaa",
+  "menu.copy": "Kopioi",
+  "menu.paste": "Sijoita",
+  "menu.selectAll": "Valitse kaikki",
+  "menu.view": "Näytä",
+  "menu.fullscreen": "Siirry koko näytön tilaan",
+  "menu.window": "Ikkuna",
+  "menu.minimize": "Pienennä",
+  "menu.zoom": "Zoomaa",
+  "menu.close": "Sulje ikkuna"
 }

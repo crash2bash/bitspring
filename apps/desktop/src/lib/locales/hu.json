@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Hangszínszabályzó-görbe",
   "eq.editorHelp": "Húzz egy pontot a frekvencia és az erősítés módosításához; görgess fölötte a Q módosításához. Dupla kattintás a grafikonon új sávot ad hozzá. Ha egy pont fókuszban van, a nyílbillentyűk mozgatják (Shifttel nagyobb lépésekben), a [ és ] a Q-t változtatja, a Delete törli.",
-  "eq.preampTick": "előerősítés {db} dB"
+  "eq.preampTick": "előerősítés {db} dB",
+
+  "menu.about": "A(z) {app} névjegye",
+  "menu.services": "Szolgáltatások",
+  "menu.hide": "{app} elrejtése",
+  "menu.hideOthers": "Egyebek elrejtése",
+  "menu.showAll": "Az összes megjelenítése",
+  "menu.quit": "Kilépés: {app}",
+  "menu.edit": "Szerkesztés",
+  "menu.undo": "Visszavonás",
+  "menu.redo": "Ismét",
+  "menu.cut": "Kivágás",
+  "menu.copy": "Másolás",
+  "menu.paste": "Beillesztés",
+  "menu.selectAll": "Az összes kijelölése",
+  "menu.view": "Nézet",
+  "menu.fullscreen": "Belépés a teljes képernyős módba",
+  "menu.window": "Ablak",
+  "menu.minimize": "Kis méret",
+  "menu.zoom": "Nagyítás",
+  "menu.close": "Ablak bezárása"
 }

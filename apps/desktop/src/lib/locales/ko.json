@@ -449,5 +449,25 @@
   "eq.seconds": "{s}초",
   "eq.editorLabel": "이퀄라이저 곡선",
   "eq.editorHelp": "점을 드래그하면 주파수와 게인이, 점 위에서 스크롤하면 Q가 바뀝니다. 그래프를 더블클릭하면 밴드가 추가됩니다. 점에 포커스가 있을 때 화살표 키로 이동(Shift는 더 크게), [ 와 ]로 Q 변경, Delete로 삭제합니다.",
-  "eq.preampTick": "프리앰프 {db} dB"
+  "eq.preampTick": "프리앰프 {db} dB",
+
+  "menu.about": "{app}에 관하여",
+  "menu.services": "서비스",
+  "menu.hide": "{app} 가리기",
+  "menu.hideOthers": "기타 가리기",
+  "menu.showAll": "모두 보기",
+  "menu.quit": "{app} 종료",
+  "menu.edit": "편집",
+  "menu.undo": "실행 취소",
+  "menu.redo": "실행 복귀",
+  "menu.cut": "오려두기",
+  "menu.copy": "복사하기",
+  "menu.paste": "붙여넣기",
+  "menu.selectAll": "전체 선택",
+  "menu.view": "보기",
+  "menu.fullscreen": "전체 화면 시작",
+  "menu.window": "윈도우",
+  "menu.minimize": "최소화",
+  "menu.zoom": "확대/축소",
+  "menu.close": "윈도우 닫기"
 }

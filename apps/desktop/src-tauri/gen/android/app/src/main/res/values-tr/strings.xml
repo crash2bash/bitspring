@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/tr.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"Şimdi Çalıyor"</string>
+    <string name="action_prev">"Önceki parça"</string>
+    <string name="action_play">"Çal"</string>
+    <string name="action_pause">"Duraklat"</string>
+    <string name="action_next">"Sonraki parça"</string>
+</resources>

@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Curva del ecualizador",
   "eq.editorHelp": "Arrastra un punto para cambiar su frecuencia y ganancia; desplaza la rueda sobre él para cambiar Q. Haz doble clic en el gráfico para añadir una banda. Con un punto enfocado, las flechas lo mueven (Mayús para pasos más grandes), [ y ] cambian Q, Supr lo elimina.",
-  "eq.preampTick": "preamplificación {db} dB"
+  "eq.preampTick": "preamplificación {db} dB",
+
+  "menu.about": "Acerca de {app}",
+  "menu.services": "Servicios",
+  "menu.hide": "Ocultar {app}",
+  "menu.hideOthers": "Ocultar otros",
+  "menu.showAll": "Mostrar todo",
+  "menu.quit": "Salir de {app}",
+  "menu.edit": "Edición",
+  "menu.undo": "Deshacer",
+  "menu.redo": "Rehacer",
+  "menu.cut": "Cortar",
+  "menu.copy": "Copiar",
+  "menu.paste": "Pegar",
+  "menu.selectAll": "Seleccionar todo",
+  "menu.view": "Visualización",
+  "menu.fullscreen": "Entrar en pantalla completa",
+  "menu.window": "Ventana",
+  "menu.minimize": "Minimizar",
+  "menu.zoom": "Zoom",
+  "menu.close": "Cerrar ventana"
 }

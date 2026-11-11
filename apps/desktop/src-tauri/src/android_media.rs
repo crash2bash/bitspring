@@ -49,6 +49,20 @@ fn service_class<'a>(env: &mut JNIEnv<'a>, context: &JObject) -> jni::errors::Re
     Ok(JClass::from(class))
 }
 
+/// The app's languages, best first, as BCP 47 tags ("ru-RU", "zh-Hant-TW"): a language
+/// picked for this app in Android's settings comes first, else the system's list.
+pub fn locales() -> Vec<String> {
+    with_env(|env, ctx| {
+        let res = env.call_method(ctx, "getResources", "()Landroid/content/res/Resources;", &[])?.l()?;
+        let conf = env.call_method(&res, "getConfiguration", "()Landroid/content/res/Configuration;", &[])?.l()?;
+        let list = env.call_method(&conf, "getLocales", "()Landroid/os/LocaleList;", &[])?.l()?;
+        let tags = env.call_method(&list, "toLanguageTags", "()Ljava/lang/String;", &[])?.l()?;
+        let tags: String = env.get_string(&tags.into())?.into();
+        Ok(tags.split(',').map(str::trim).filter(|t| !t.is_empty()).map(String::from).collect())
+    })
+    .unwrap_or_default()
+}
+
 /// The folders the library scans: the shared Music folder (needs the audio permission) and the
 /// app's own one under Android/data (always readable, reachable over USB).
 pub fn music_dirs() -> Vec<String> {

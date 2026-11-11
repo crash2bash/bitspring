@@ -121,8 +121,10 @@ class PlaybackService : Service() {
 
     private fun build(ctx: Context): Notification {
       val nm = ctx.getSystemService(NotificationManager::class.java)
-      if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Воспроизведение", NotificationManager.IMPORTANCE_LOW))
+      // Created every time: for an existing channel this only renames it, so its name in
+      // Settings follows the app's language.
+      if (Build.VERSION.SDK_INT >= 26) {
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, ctx.getString(R.string.playback_channel), NotificationManager.IMPORTANCE_LOW))
       }
       val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
         PendingIntent.getActivity(ctx, 0, it, PendingIntent.FLAG_IMMUTABLE)
@@ -136,10 +138,10 @@ class PlaybackService : Service() {
         .setContentIntent(open)
         .setOngoing(playing)
         .setVisibility(Notification.VISIBILITY_PUBLIC)
-        .addAction(action(ctx, android.R.drawable.ic_media_previous, "Назад", ACTION_PREV))
-        .addAction(if (playing) action(ctx, android.R.drawable.ic_media_pause, "Пауза", ACTION_TOGGLE)
-                   else action(ctx, android.R.drawable.ic_media_play, "Играть", ACTION_TOGGLE))
-        .addAction(action(ctx, android.R.drawable.ic_media_next, "Вперёд", ACTION_NEXT))
+        .addAction(action(ctx, android.R.drawable.ic_media_previous, ctx.getString(R.string.action_prev), ACTION_PREV))
+        .addAction(if (playing) action(ctx, android.R.drawable.ic_media_pause, ctx.getString(R.string.action_pause), ACTION_TOGGLE)
+                   else action(ctx, android.R.drawable.ic_media_play, ctx.getString(R.string.action_play), ACTION_TOGGLE))
+        .addAction(action(ctx, android.R.drawable.ic_media_next, ctx.getString(R.string.action_next), ACTION_NEXT))
         .setStyle(Notification.MediaStyle().setMediaSession(session(ctx).sessionToken).setShowActionsInCompactView(0, 1, 2))
         .build()
     }

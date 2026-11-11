@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/ar.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"قيد التشغيل"</string>
+    <string name="action_prev">"المقطع السابق"</string>
+    <string name="action_play">"تشغيل"</string>
+    <string name="action_pause">"إيقاف مؤقت"</string>
+    <string name="action_next">"المقطع التالي"</string>
+</resources>

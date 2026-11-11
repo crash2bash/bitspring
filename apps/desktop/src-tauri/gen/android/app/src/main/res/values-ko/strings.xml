@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/ko.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"지금 재생 중"</string>
+    <string name="action_prev">"이전 곡"</string>
+    <string name="action_play">"재생"</string>
+    <string name="action_pause">"일시정지"</string>
+    <string name="action_next">"다음 곡"</string>
+</resources>

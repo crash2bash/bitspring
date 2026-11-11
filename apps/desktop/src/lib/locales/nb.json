@@ -449,5 +449,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Equalizerkurve",
   "eq.editorHelp": "Dra et punkt for å endre frekvens og forsterkning; rull over det for å endre Q. Dobbeltklikk i grafen for å legge til et bånd. Når et punkt har fokus, flytter piltastene det (Shift for større steg), [ og ] endrer Q, Delete fjerner det.",
-  "eq.preampTick": "forforsterkning {db} dB"
+  "eq.preampTick": "forforsterkning {db} dB",
+
+  "menu.about": "Om {app}",
+  "menu.services": "Tjenester",
+  "menu.hide": "Skjul {app}",
+  "menu.hideOthers": "Skjul andre",
+  "menu.showAll": "Vis alle",
+  "menu.quit": "Avslutt {app}",
+  "menu.edit": "Rediger",
+  "menu.undo": "Angre",
+  "menu.redo": "Utfør på nytt",
+  "menu.cut": "Klipp ut",
+  "menu.copy": "Kopier",
+  "menu.paste": "Lim inn",
+  "menu.selectAll": "Marker alt",
+  "menu.view": "Vis",
+  "menu.fullscreen": "Bruk fullskjerm",
+  "menu.window": "Vindu",
+  "menu.minimize": "Minimer",
+  "menu.zoom": "Zoom",
+  "menu.close": "Lukk vindu"
 }

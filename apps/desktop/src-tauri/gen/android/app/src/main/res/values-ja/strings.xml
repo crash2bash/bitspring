@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/ja.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"再生中"</string>
+    <string name="action_prev">"前の曲"</string>
+    <string name="action_play">"再生"</string>
+    <string name="action_pause">"一時停止"</string>
+    <string name="action_next">"次の曲"</string>
+</resources>

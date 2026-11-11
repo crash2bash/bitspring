@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From src/lib/locales/el.json (nav.player, common.*). -->
+<resources>
+    <string name="playback_channel">"Παίζει τώρα"</string>
+    <string name="action_prev">"Προηγούμενο κομμάτι"</string>
+    <string name="action_play">"Αναπαραγωγή"</string>
+    <string name="action_pause">"Παύση"</string>
+    <string name="action_next">"Επόμενο κομμάτι"</string>
+</resources>

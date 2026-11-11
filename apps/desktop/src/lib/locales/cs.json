@@ -454,5 +454,25 @@
   "eq.seconds": "{s} s",
   "eq.editorLabel": "Křivka ekvalizéru",
   "eq.editorHelp": "Tažením bodu změníte jeho frekvenci a zisk; kolečkem nad ním změníte Q. Dvojklikem do grafu přidáte pásmo. Když má bod fokus, šipky ho posouvají (se Shiftem po větších krocích), [ a ] mění Q, Delete ho odstraní.",
-  "eq.preampTick": "předzesílení {db} dB"
+  "eq.preampTick": "předzesílení {db} dB",
+
+  "menu.about": "O aplikaci {app}",
+  "menu.services": "Služby",
+  "menu.hide": "Skrýt aplikaci {app}",
+  "menu.hideOthers": "Skrýt ostatní",
+  "menu.showAll": "Zobrazit vše",
+  "menu.quit": "Ukončit aplikaci {app}",
+  "menu.edit": "Úpravy",
+  "menu.undo": "Odvolat",
+  "menu.redo": "Znovu",
+  "menu.cut": "Vyjmout",
+  "menu.copy": "Kopírovat",
+  "menu.paste": "Vložit",
+  "menu.selectAll": "Vybrat vše",
+  "menu.view": "Zobrazení",
+  "menu.fullscreen": "Přejít na celou obrazovku",
+  "menu.window": "Okno",
+  "menu.minimize": "Minimalizovat",
+  "menu.zoom": "Zvětšit",
+  "menu.close": "Zavřít okno"
 }

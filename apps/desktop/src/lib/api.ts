@@ -418,6 +418,7 @@ function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
 export const api = {
   listDevices: () => call<Device[]>("list_devices"),
   systemLocales: () => call<string[]>("system_locales"),
+  setMenuLabels: (labels: Record<string, string>) => call<void>("set_menu_labels", { labels }),
   expandPaths: (paths: string[]) => call<string[]>("expand_paths", { paths }),
   playFile: (path: string, deviceUid: string, exclusive: boolean, startAt = 0, dop = false, index: number | null = null, paused = false) =>
     call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop, index, paused }),

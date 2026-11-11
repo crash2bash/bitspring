@@ -477,5 +477,25 @@
   "eq.seconds": "{s} ث",
   "eq.editorLabel": "منحنى معادل الصوت",
   "eq.editorHelp": "اسحب نقطة لتغيير ترددها وكسبها، ومرّر عجلة الفأرة فوقها لتغيير Q. انقر نقرًا مزدوجًا على الرسم لإضافة نطاق. عندما تكون النقطة محددة، تحرّكها مفاتيح الأسهم (مع Shift بخطوات أكبر)، ويغيّر [ و] قيمة Q، ويحذفها Delete.",
-  "eq.preampTick": "تضخيم مسبق {db} ديسيبل"
+  "eq.preampTick": "تضخيم مسبق {db} ديسيبل",
+
+  "menu.about": "حول {app}",
+  "menu.services": "الخدمات",
+  "menu.hide": "إخفاء {app}",
+  "menu.hideOthers": "إخفاء الآخرين",
+  "menu.showAll": "إظهار الكل",
+  "menu.quit": "إنهاء {app}",
+  "menu.edit": "تحرير",
+  "menu.undo": "تراجع",
+  "menu.redo": "إعادة",
+  "menu.cut": "قص",
+  "menu.copy": "نسخ",
+  "menu.paste": "لصق",
+  "menu.selectAll": "تحديد الكل",
+  "menu.view": "عرض",
+  "menu.fullscreen": "الدخول إلى ملء الشاشة",
+  "menu.window": "نافذة",
+  "menu.minimize": "تصغير",
+  "menu.zoom": "تكبير/تصغير",
+  "menu.close": "إغلاق النافذة"
 }

@@ -449,5 +449,25 @@
   "eq.seconds": "{s} 秒",
   "eq.editorLabel": "等化器曲線",
   "eq.editorHelp": "拖曳點可改變頻率與增益；在點上捲動可改變 Q。在圖上按兩下可新增頻段。選取一個點後，方向鍵可移動它（按住 Shift 步幅更大），[ 和 ] 改變 Q，Delete 刪除它。",
-  "eq.preampTick": "前級增益 {db} dB"
+  "eq.preampTick": "前級增益 {db} dB",
+
+  "menu.about": "關於{app}",
+  "menu.services": "服務",
+  "menu.hide": "隱藏{app}",
+  "menu.hideOthers": "隱藏其他",
+  "menu.showAll": "顯示全部",
+  "menu.quit": "結束{app}",
+  "menu.edit": "編輯",
+  "menu.undo": "還原",
+  "menu.redo": "重做",
+  "menu.cut": "剪下",
+  "menu.copy": "拷貝",
+  "menu.paste": "貼上",
+  "menu.selectAll": "全選",
+  "menu.view": "顯示方式",
+  "menu.fullscreen": "進入全螢幕",
+  "menu.window": "視窗",
+  "menu.minimize": "縮到最小",
+  "menu.zoom": "縮放",
+  "menu.close": "關閉視窗"
 }

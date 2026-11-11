@@ -248,6 +248,8 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         convolution: dsp.convolution ? { name: convName(), channels: 2, rate: 48000, seconds: 0.68 } : null,
       } as T;
     }
+    case "set_menu_labels":
+      return undefined as T;
     case "eq_state":
       return eqSnapshot() as T;
     case "eq_save": {
