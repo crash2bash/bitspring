@@ -44,8 +44,11 @@ fn set_aside(path: &Path) {
 }
 
 /// Writes `value` as JSON to a temporary file next to `path`, then renames it over `path`, so a
-/// crash mid-write never leaves half a file.
+/// crash mid-write never leaves half a file. On Unix the file is readable by its owner only:
+/// it is the app's own data, and nothing else on the machine needs to read it. (Streaming
+/// sign-ins are written by the streaming crate itself, also owner-only.)
 pub fn save_json<T: Serialize + ?Sized>(path: &Path, value: &T) -> std::io::Result<()> {
+    use std::io::Write;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -53,7 +56,14 @@ pub fn save_json<T: Serialize + ?Sized>(path: &Path, value: &T) -> std::io::Resu
     let mut tmp = path.file_name().unwrap_or_default().to_os_string();
     tmp.push(".tmp");
     let tmp = path.with_file_name(tmp);
-    std::fs::write(&tmp, bytes)?;
+    let mut open = std::fs::OpenOptions::new();
+    open.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
+    let mut file = open.open(&tmp)?;
+    file.write_all(&bytes)?;
+    file.sync_all()?;
+    drop(file);
     std::fs::rename(&tmp, path)
 }
 

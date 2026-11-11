@@ -190,9 +190,7 @@ pub fn install(app: &AppHandle) {
         c.previousTrackCommand().addTargetWithHandler(&handler(app, move |a, _| jump(a, -1)));
         c.changePlaybackPositionCommand().addTargetWithHandler(&handler(app, |a, e| {
             let e: &MPChangePlaybackPositionCommandEvent = &*(e as *const _ as *const MPChangePlaybackPositionCommandEvent);
-            if let Some(p) = a.state::<AppState>().player.lock().unwrap().as_ref() {
-                p.seek(e.positionTime());
-            }
+            crate::seek_to(&a.state::<AppState>(), e.positionTime());
         }));
     }
 }

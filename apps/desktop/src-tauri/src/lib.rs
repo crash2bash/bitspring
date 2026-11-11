@@ -102,6 +102,21 @@ struct AppState {
     advance_error: Mutex<Option<AdvanceError>>,
     /// The last status sent to the UI, answered again while a track is starting.
     last_status: Mutex<Option<StatusDto>>,
+    /// Tracks opened ahead to follow the current one without a break (see `follow_queue`).
+    lined_up: Mutex<Vec<LinedUp>>,
+    /// The queue entry (index, path) that failed to open ahead: not tried again every tick.
+    line_up_failed: Mutex<Option<(usize, String)>>,
+}
+
+/// A queue entry opened ahead of time, to join on after the current track (gapless).
+struct LinedUp {
+    index: usize,
+    path: String,
+    track: Arc<Track>,
+    dsd_note: Option<DsdNote>,
+    /// The player can't join it on (another rate or kind): it starts anew when the current
+    /// track ends — already decoded, at least.
+    refused: bool,
 }
 
 /// The player, unless a track is starting right now. Starting holds this lock for as long as
@@ -508,9 +523,19 @@ fn begin(
     dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
     let dsp = dsp_for(state, &device.uid);
+    let opts = PlayOptions { exclusive, dsp, start_at, start_paused };
+    let mut signal = start(state, device, track.clone(), opts)?;
+    signal.dsd_note = dsd_note.clone();
+    let current = Current { track, path: file, device_uid: device.uid.clone(), exclusive, dop, dsd_note };
+    Ok(record_now(state, current, device.name.trim().to_string(), signal))
+}
+
+/// Make `current` what plays now: for the UI (a new `now_rev`) and the lock screen.
+/// Call with `play_lock` held.
+fn record_now(state: &AppState, current: Current, device_name: String, signal: SignalDto) -> NowPlayingDto {
+    let (track, file) = (current.track.clone(), current.path.clone());
     let meta = track.meta.clone();
     let (channels, duration) = (track.channels, track.duration_secs());
-    let opts = PlayOptions { exclusive, dsp, start_at, start_paused };
     #[cfg(mobile)]
     let lock_screen = media::TrackInfo {
         title: meta.title.clone().unwrap_or_else(|| file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
@@ -519,12 +544,9 @@ fn begin(
         duration,
         cover: meta.cover.as_ref().map(|(_, b)| b.clone()),
     };
-    let mut signal = start(state, device, track.clone(), opts)?;
-    signal.dsd_note = dsd_note.clone();
     let path = file.to_string_lossy().into_owned();
     let file_stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    *state.current.lock().unwrap() =
-        Some(Current { track, path: file, device_uid: device.uid.clone(), exclusive, dop, dsd_note });
+    *state.current.lock().unwrap() = Some(current);
     let rev = state.now_rev.load(Ordering::Acquire) + 1;
     let now = NowPlayingDto {
         rev,
@@ -537,7 +559,7 @@ fn begin(
         }),
         channels,
         duration,
-        device_name: device.name.trim().to_string(),
+        device_name,
         signal,
         path,
     };
@@ -549,7 +571,7 @@ fn begin(
     if let Some(app) = APP.get() {
         media::set_track(app, rev, lock_screen);
     }
-    Ok(now)
+    now
 }
 
 #[tauri::command]
@@ -611,10 +633,15 @@ fn play_queue_at(state: &AppState, i: usize) {
     };
     let Some(path) = state.queue.lock().unwrap().paths.get(i).cloned() else { return };
     let file = PathBuf::from(&path);
+    let ahead = take_lined_up(state, i, &path);
     let result = find_device(&device_uid).and_then(|device| {
         let dsp = dsp_for(state, &device.uid);
         let (mode, note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
-        let track = open_for(&file, mode)?;
+        // Opened ahead (and decoding already) — unless the settings changed how DSD goes out.
+        let track = match ahead.filter(|t| t.is_dop() == (mode == DsdMode::Dop)) {
+            Some(t) => t,
+            None => open_for(&file, mode)?,
+        };
         begin(state, &device, file.clone(), track, exclusive, 0.0, false, dop, note)
     });
     state.queue.lock().unwrap().index = Some(i);
@@ -658,17 +685,171 @@ fn release_if_still_finished(state: &AppState) {
     }
 }
 
+/// How long before the end of a track the next one in the queue is opened and lined up.
+const LINE_UP_BEFORE: f64 = 20.0;
+
+/// The gapless half of the queue: notice when the player has moved on to a lined-up track by
+/// itself (and show it), and line up the next one as the current track nears its end.
+fn follow_queue(state: &AppState) {
+    {
+        let _one = state.play_lock.lock().unwrap();
+        took_over(state);
+    }
+    let Some(want) = wanted_next(state) else { return };
+    let known = state.lined_up.lock().unwrap().iter().find(|l| l.index == want.index && l.path == want.path).map(|l| (l.track.clone(), l.refused));
+    let track = match known {
+        Some((_, true)) => return,
+        Some((track, false)) => track,
+        None => {
+            let key = (want.index, want.path.clone());
+            if state.line_up_failed.lock().unwrap().as_ref() == Some(&key) {
+                return;
+            }
+            // Opening may take a moment (a stream): no locks held meanwhile.
+            let file = PathBuf::from(&want.path);
+            let Ok(device) = find_device(&want.device_uid) else { return };
+            let dsp = dsp_for(state, &device.uid);
+            let (mode, dsd_note) = dsd_mode(&file, &device, want.exclusive, want.dop, &dsp);
+            let track = match open_for(&file, mode) {
+                Ok(t) => t,
+                Err(_) => {
+                    // It fails again, with its reason shown, when its turn comes.
+                    *state.line_up_failed.lock().unwrap() = Some(key);
+                    return;
+                }
+            };
+            let mut l = state.lined_up.lock().unwrap();
+            l.retain(|e| e.index == want.index);
+            l.push(LinedUp { index: want.index, path: want.path.clone(), track: track.clone(), dsd_note, refused: false });
+            track
+        }
+    };
+    let _one = state.play_lock.lock().unwrap();
+    let player = state.player.lock().unwrap();
+    let Some(p) = player.as_ref() else { return };
+    // Still the same situation as when we looked?
+    let same = state.current.lock().unwrap().as_ref().is_some_and(|c| Arc::ptr_eq(&c.track, &p.heard()))
+        && {
+            let q = state.queue.lock().unwrap();
+            q.index.map(|i| i + 1) == Some(want.index) && q.paths.get(want.index) == Some(&want.path)
+        };
+    if same && !p.queue_next(track.clone()) {
+        let mut l = state.lined_up.lock().unwrap();
+        if let Some(e) = l.iter_mut().find(|e| Arc::ptr_eq(&e.track, &track)) {
+            e.refused = true;
+        }
+    }
+}
+
+/// The queue entry to line up now, when one should be and isn't yet.
+struct WantNext {
+    index: usize,
+    path: String,
+    device_uid: String,
+    exclusive: bool,
+    dop: bool,
+}
+
+fn wanted_next(state: &AppState) -> Option<WantNext> {
+    // A track starting right now: look again next time.
+    let _one = state.play_lock.try_lock().ok()?;
+    let player = state.player.lock().unwrap();
+    let p = player.as_ref()?;
+    let (device_uid, exclusive, dop) = {
+        let c = state.current.lock().unwrap();
+        let c = c.as_ref()?;
+        if !Arc::ptr_eq(&c.track, &p.heard()) {
+            return None; // took_over hasn't caught up yet
+        }
+        (c.device_uid.clone(), c.exclusive, c.dop)
+    };
+    if p.is_finished() {
+        return None;
+    }
+    let (index, path) = {
+        let q = state.queue.lock().unwrap();
+        let i = q.index? + 1;
+        (i, q.paths.get(i)?.clone())
+    };
+    // Forget what was lined up for a queue that has changed since.
+    state.lined_up.lock().unwrap().retain(|e| e.index == index && e.path == path);
+    if let Some(up) = p.upcoming() {
+        let ours = state.lined_up.lock().unwrap().iter().any(|e| Arc::ptr_eq(&e.track, &up));
+        if ours {
+            return None;
+        }
+        p.clear_next();
+    }
+    if p.duration_secs() - p.position_secs() > LINE_UP_BEFORE {
+        return None;
+    }
+    Some(WantNext { index, path, device_uid, exclusive, dop })
+}
+
+/// The player moved on to a lined-up track by itself: make it what plays now (title, signal
+/// path, queue position, lock screen). Call with `play_lock` held.
+fn took_over(state: &AppState) {
+    let mut player = state.player.lock().unwrap();
+    let Some(p) = player.as_mut() else { return };
+    let heard = p.heard();
+    let mut current = state.current.lock().unwrap();
+    let Some(cur) = current.as_mut() else { return };
+    if Arc::ptr_eq(&heard, &cur.track) {
+        return;
+    }
+    let entry = {
+        let mut l = state.lined_up.lock().unwrap();
+        l.iter().position(|e| Arc::ptr_eq(&e.track, &heard)).map(|i| l.remove(i))
+    };
+    let Some(e) = entry else {
+        // Not one of ours (can't happen): at least stop looking at it.
+        cur.track = heard;
+        return;
+    };
+    p.path = p.path.for_next(&heard);
+    let mut signal = SignalDto::from(&p.path);
+    signal.dsd_note = e.dsd_note.clone();
+    drop(player);
+    let next = Current {
+        track: heard,
+        path: PathBuf::from(&e.path),
+        device_uid: cur.device_uid.clone(),
+        exclusive: cur.exclusive,
+        dop: cur.dop,
+        dsd_note: e.dsd_note,
+    };
+    drop(current);
+    let device_name = state.now.lock().unwrap().as_ref().map(|n| n.device_name.clone()).unwrap_or_default();
+    state.queue.lock().unwrap().index = Some(e.index);
+    record_now(state, next, device_name, signal);
+}
+
+/// The lined-up track for queue entry `i`, if it was opened ahead.
+fn take_lined_up(state: &AppState, i: usize, path: &str) -> Option<Arc<Track>> {
+    let mut l = state.lined_up.lock().unwrap();
+    let at = l.iter().position(|e| e.index == i && e.path == path)?;
+    Some(l.remove(at).track)
+}
+
 /// Next (+1) or previous (−1) track, for controls outside the UI (lock screen, headphones).
 /// "Previous" more than 3 s into a track restarts it, like the UI's button.
 #[cfg_attr(desktop, allow(dead_code))]
 pub(crate) fn jump(state: &AppState, delta: i64) {
     let _one = state.play_lock.lock().unwrap();
-    if delta < 0
-        && let Some(p) = state.player.lock().unwrap().as_ref()
-        && p.position_secs() > 3.0
-    {
-        p.seek(0.0);
-        return;
+    let restart_here = {
+        let player = state.player.lock().unwrap();
+        match player.as_ref() {
+            Some(p) if delta < 0 && p.position_secs() > 3.0 => Some(p.seek(0.0)),
+            _ => None,
+        }
+    };
+    match restart_here {
+        Some(true) => return,
+        Some(false) => {
+            let _ = restart_locked(state, Some(0.0));
+            return;
+        }
+        None => {}
     }
     let (index, len) = {
         let q = state.queue.lock().unwrap();
@@ -766,8 +947,16 @@ fn set_paused(state: State<'_, AppState>, paused: bool) {
 
 #[tauri::command(async)]
 fn seek(state: State<'_, AppState>, seconds: f64) {
-    if let Some(p) = state.player.lock().unwrap().as_ref() {
-        p.seek(seconds);
+    seek_to(&state, seconds);
+}
+
+/// Jump within the current track. In its last half second, when processing, the next track
+/// is already on its way to the device: then the track starts anew at that point.
+pub(crate) fn seek_to(state: &AppState, seconds: f64) {
+    let _one = state.play_lock.lock().unwrap();
+    let done = state.player.lock().unwrap().as_ref().map(|p| p.seek(seconds));
+    if done == Some(false) {
+        let _ = restart_locked(state, Some(seconds));
     }
 }
 
@@ -775,6 +964,7 @@ fn seek(state: State<'_, AppState>, seconds: f64) {
 fn stop(state: State<'_, AppState>) {
     let _one = state.play_lock.lock().unwrap();
     drop(state.player.lock().unwrap().take());
+    state.lined_up.lock().unwrap().clear();
     *state.current.lock().unwrap() = None;
     *state.now.lock().unwrap() = None;
     #[cfg(mobile)]
@@ -835,9 +1025,14 @@ async fn set_dsp(
 /// Returns the new signal path, or None when nothing is loaded.
 fn restart(state: &AppState) -> CmdResult<Option<SignalDto>> {
     let _one = state.play_lock.lock().unwrap();
+    restart_locked(state, None)
+}
+
+/// [`restart`], at `at` seconds instead of where it plays. Call with `play_lock` held.
+fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalDto>> {
     let resume = {
         let player = state.player.lock().unwrap();
-        player.as_ref().map(|p| (p.position_secs(), p.is_paused(), p.is_finished()))
+        player.as_ref().map(|p| (at.unwrap_or_else(|| p.position_secs()), p.is_paused(), p.is_finished()))
     };
     let mut current = state.current.lock().unwrap();
     let (Some((pos, paused, false)), Some(cur)) = (resume, current.as_mut()) else { return Ok(None) };
@@ -959,6 +1154,7 @@ pub fn run() {
                 loop {
                     std::thread::sleep(Duration::from_millis(40));
                     let state = handle.state::<AppState>();
+                    follow_queue(&state);
                     if advance(&state) {
                         let since = *ended.get_or_insert_with(std::time::Instant::now);
                         if since.elapsed() >= RELEASE_AFTER {

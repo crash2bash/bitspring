@@ -7,8 +7,8 @@
 //! [`Shared::render`] from its realtime callback with the device's buffers.
 
 use std::cell::UnsafeCell;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -129,6 +129,28 @@ pub struct SignalPath {
     /// The source is DSD: its rate, and whether it goes out as DoP or was converted to PCM.
     pub dsd: Option<DsdSource>,
     pub bit_perfect: bool,
+    /// Significant bits of the samples we write (for a following track's bit-perfect check).
+    out_bits: u32,
+    /// Bit-perfect apart from the source's bit depth (rate, access, transport, no processing).
+    pcm_clean: bool,
+}
+
+impl SignalPath {
+    /// The path for `track` joining on after the current one (same device setup, same
+    /// processing — see `Playback::queue_next`): only what depends on the source changes.
+    pub fn for_next(&self, track: &Track) -> SignalPath {
+        let bits_ok = match (self.physical, track.bits_per_sample) {
+            (Some(p), Some(b)) => (p.float || p.bits >= b) && self.out_bits >= b && b <= 24,
+            _ => false,
+        };
+        SignalPath {
+            source_bits: track.bits_per_sample,
+            source_lossy: track.lossy,
+            dsd: track.dsd,
+            bit_perfect: if track.is_dop() { self.bit_perfect } else { self.pcm_clean && bits_ok },
+            ..self.clone()
+        }
+    }
 }
 
 pub fn format_rates(rates: &[RateRange]) -> String {
@@ -299,8 +321,14 @@ pub(crate) fn signal_path(
     transport: Transport,
 ) -> SignalPath {
     let src_hz = track.sample_rate as f64;
+    let pcm_clean = !plan.processing
+        && (device_rate - src_hz).abs() < 0.5
+        && exclusive
+        && transport.can_be_bit_perfect()
+        && track.channels <= 2;
+    // (Up to 24 bits: f32 holds those exactly.)
     let bits_ok = match (physical, track.bits_per_sample) {
-        (Some(p), Some(b)) => (p.float || p.bits >= b) && out.bits() >= b,
+        (Some(p), Some(b)) => (p.float || p.bits >= b) && out.bits() >= b && b <= 24,
         _ => false,
     };
     SignalPath {
@@ -321,14 +349,9 @@ pub(crate) fn signal_path(
         dsd: track.dsd,
         // DoP gets this far only with the exact rate, a ≥24-bit integer format and exclusive
         // access (the backend checked).
-        bit_perfect: (plan.dop && transport.can_be_bit_perfect())
-            || !plan.processing
-                && (device_rate - src_hz).abs() < 0.5
-                && exclusive
-                && bits_ok
-                && transport.can_be_bit_perfect()
-                && track.channels <= 2
-                && track.bits_per_sample.is_some_and(|b| b <= 24),
+        bit_perfect: (plan.dop && transport.can_be_bit_perfect()) || pcm_clean && bits_ok,
+        out_bits: out.bits(),
+        pcm_clean,
     }
 }
 
@@ -337,15 +360,39 @@ pub(crate) fn signal_path(
 // ---------------------------------------------------------------------------------------------
 
 const NO_SEEK: usize = usize::MAX;
+const NO_BOUNDARY: u64 = u64::MAX;
 /// Callback scratch, in frames (CoreAudio's and WASAPI's buffers are far below). A bigger
 /// request is served in pieces of this size.
 pub(crate) const MAX_CALLBACK_FRAMES: usize = 16_384;
 
+/// Which tracks play, for gapless playback: the one the source side reads, the one queued to
+/// follow it, and the one being heard. The pointers are borrowed from `Playback::tracks`,
+/// which keeps every track any of them names alive; only the control side frees tracks.
+///
+/// A track moves `next` → `cur` (by the side that reads the source: the callback on the
+/// direct path, the render thread when processing), and `cur` → `heard` (by the callback,
+/// when the track's first sample reaches the device). Each move stores the new slot before
+/// clearing the old one, so a track the audio side may touch is always in one of them.
+struct Slots {
+    cur: AtomicPtr<Track>,
+    next: AtomicPtr<Track>,
+    heard: AtomicPtr<Track>,
+    /// Bumped each time `heard` moves on to a following track.
+    switches: AtomicU64,
+    /// A seek: the frame, and the track it is for (ignored if that track no longer plays).
+    seek_req: AtomicUsize,
+    seek_track: AtomicPtr<Track>,
+}
+
+fn ptr(t: &Arc<Track>) -> *mut Track {
+    Arc::as_ptr(t) as *mut Track
+}
+
 /// State shared with the realtime thread. Only atomics and immutable data: the callback
 /// never locks, allocates, or blocks.
 pub(crate) struct Shared {
-    track: Arc<Track>,
-    /// Direct mode: next source frame to play.
+    slots: Arc<Slots>,
+    /// Direct mode: next frame of `slots.cur` to play.
     pos: AtomicUsize,
     paused: AtomicBool,
     finished: AtomicBool,
@@ -357,8 +404,12 @@ pub(crate) struct Shared {
     /// The track is raw DSD: the callback packs it as DoP.
     dop: bool,
     /// Callback-only: marker of the next DoP frame (false = 0x05, true = 0xFA). Runs on across
-    /// callbacks, pauses and seeks — a break in the alternation makes the DAC drop out of DSD.
+    /// callbacks, pauses, seeks and tracks — a break in the alternation makes the DAC drop out
+    /// of DSD.
     dop_phase: AtomicBool,
+    /// The lossy enhancers are on: they measure each track, so no track may follow another
+    /// in the same chain when either is lossy.
+    lossy_enhancers: bool,
 }
 
 /// Hand-off between the render thread (producer) and the callback (consumer).
@@ -372,15 +423,21 @@ struct RingState {
     /// Callback-only: set by a seek flush until the ring is flowing again, so the expected
     /// gap right after a seek isn't counted as a dropout.
     refilling: AtomicBool,
-    /// Device frames played since `base_frame` (reset on seek).
+    /// Device frames played since the heard track's `base_frame` (reset on seek and when the
+    /// next track starts being heard).
     played: AtomicU64,
-    /// Source frame where the current stretch of output started.
+    /// Source frame of the heard track where the current stretch of output started.
     base_frame: AtomicUsize,
+    /// The render thread moved on to the next track: at this many `played` frames it is
+    /// heard (NO_BOUNDARY: no switch pending).
+    boundary: AtomicU64,
     /// Seek handshake: render bumps `flush_gen`, the callback discards the ring and echoes it.
     flush_gen: AtomicU64,
     flush_ack: AtomicU64,
-    seek_req: AtomicUsize,
     render_done: AtomicBool,
+    /// The render thread has let the chain's tail out at the end of the last track: nothing
+    /// can join on any more (until a seek).
+    tail_out: AtomicBool,
     quit: AtomicBool,
     /// Peak |sample| after processing, as f32 bits (for a clipping indicator).
     peak: AtomicU32,
@@ -406,12 +463,22 @@ pub struct Playback {
     /// Boxed: its address is handed to the OS callback and must not move.
     shared: Box<Shared>,
     render: Option<JoinHandle<()>>,
+    /// Owns every track the slots point at (and, briefly, ones they no longer do).
+    tracks: Mutex<Vec<Arc<Track>>>,
 }
 
 impl Playback {
     /// Set up state (and the render thread when `plan.processing`) for a device running at
     /// `device_rate`. Returns once the ring has a head start, so IO can begin right away.
     pub(crate) fn new(track: Arc<Track>, opts: &PlayOptions, plan: &Plan, device_rate: f64) -> Result<Self> {
+        let slots = Arc::new(Slots {
+            cur: AtomicPtr::new(ptr(&track)),
+            next: AtomicPtr::new(std::ptr::null_mut()),
+            heard: AtomicPtr::new(ptr(&track)),
+            switches: AtomicU64::new(0),
+            seek_req: AtomicUsize::new(NO_SEEK),
+            seek_track: AtomicPtr::new(std::ptr::null_mut()),
+        });
         let (ring, render) = if plan.processing {
             let channels = track.channels;
             // Check against the rate the device actually settled on — it can differ from the
@@ -441,10 +508,11 @@ impl Playback {
                 refilling: AtomicBool::new(true),
                 played: AtomicU64::new(0),
                 base_frame: AtomicUsize::new(plan.start_frame),
+                boundary: AtomicU64::new(NO_BOUNDARY),
                 flush_gen: AtomicU64::new(0),
                 flush_ack: AtomicU64::new(0),
-                seek_req: AtomicUsize::new(NO_SEEK),
                 render_done: AtomicBool::new(false),
+                tail_out: AtomicBool::new(false),
                 quit: AtomicBool::new(false),
                 peak: AtomicU32::new(0),
                 underruns: AtomicU64::new(0),
@@ -454,11 +522,11 @@ impl Playback {
             });
             let chain = Chain::new(&opts.dsp, plan.lossy.as_ref(), fir, track.sample_rate, out_rate, channels);
             let handle = {
-                let (track, rs) = (track.clone(), rs.clone());
+                let (slots, rs) = (slots.clone(), rs.clone());
                 let start = plan.start_frame;
                 std::thread::Builder::new()
                     .name("hifi-render".into())
-                    .spawn(move || render_loop(track, rs, chain, start))?
+                    .spawn(move || render_loop(slots, rs, chain, start))?
             };
             // Let the ring fill a little before IO starts, so playback doesn't open on silence.
             let deadline = Instant::now() + Duration::from_millis(500);
@@ -473,7 +541,7 @@ impl Playback {
             (None, None)
         };
         let shared = Box::new(Shared {
-            track,
+            slots,
             pos: AtomicUsize::new(plan.start_frame),
             paused: AtomicBool::new(opts.start_paused),
             finished: AtomicBool::new(false),
@@ -481,8 +549,9 @@ impl Playback {
             meter: [AtomicU32::new(0), AtomicU32::new(0)],
             dop: plan.dop,
             dop_phase: AtomicBool::new(false),
+            lossy_enhancers: opts.dsp.lossy.any(),
         });
-        Ok(Self { shared, render })
+        Ok(Self { shared, render, tracks: Mutex::new(vec![track]) })
     }
 
     /// Stable pointer for an OS callback's user data. Valid until this `Playback` drops;
@@ -491,20 +560,110 @@ impl Playback {
         &self.shared
     }
 
+    /// Frees tracks no slot names any more, and returns the owned tracks behind the slots
+    /// (heard, cur, next), read in an order that never misses a track the audio side holds.
+    fn tidy(&self) -> (std::sync::MutexGuard<'_, Vec<Arc<Track>>>, [*mut Track; 3]) {
+        let mut tracks = self.tracks.lock().unwrap_or_else(|p| p.into_inner());
+        let s = &self.shared.slots;
+        // next → cur → heard: the order tracks move in, so one moving while we read is seen
+        // in its old slot or its new one.
+        let next = s.next.load(Ordering::Acquire);
+        let cur = s.cur.load(Ordering::Acquire);
+        let heard = s.heard.load(Ordering::Acquire);
+        tracks.retain(|t| [next, cur, heard].contains(&ptr(t)));
+        (tracks, [heard, cur, next])
+    }
+
+    fn owned(tracks: &[Arc<Track>], p: *mut Track) -> Option<Arc<Track>> {
+        tracks.iter().find(|t| ptr(t) == p).cloned()
+    }
+
+    /// The track being heard now.
+    pub fn heard(&self) -> Arc<Track> {
+        let (tracks, [heard, ..]) = self.tidy();
+        Self::owned(&tracks, heard).expect("the heard track is owned")
+    }
+
+    /// The track that will follow the heard one without a break, if one is lined up.
+    pub fn upcoming(&self) -> Option<Arc<Track>> {
+        let (tracks, [heard, cur, next]) = self.tidy();
+        Self::owned(&tracks, if cur != heard { cur } else { next })
+    }
+
+    /// How many times playback has moved on to a following track by itself.
+    pub fn switches(&self) -> u64 {
+        self.shared.slots.switches.load(Ordering::Acquire)
+    }
+
+    /// Whether `next` can follow `prev` in this playback without a break: the device keeps its
+    /// rate and format, and the processing treats it the same way.
+    fn can_follow(&self, prev: &Track, next: &Track) -> bool {
+        prev.sample_rate == next.sample_rate
+            && prev.channels == next.channels
+            && prev.is_dop() == next.is_dop()
+            && !(self.shared.lossy_enhancers && (prev.lossy || next.lossy))
+    }
+
+    /// Line up `track` to follow the current one without a break (replacing one lined up
+    /// before). False when it can't: a different rate, channel count or kind (then let the
+    /// current track end and start the next one anew), or it is too late (the current track
+    /// has already been handed to the device in full and the one after it is on its way).
+    pub fn queue_next(&self, track: Arc<Track>) -> bool {
+        let (mut tracks, [heard, cur, _]) = self.tidy();
+        let tail_out = self.shared.ring.as_ref().is_some_and(|rs| rs.tail_out.load(Ordering::Acquire));
+        if cur != heard || tail_out || self.is_finished() {
+            return false;
+        }
+        // SAFETY: `cur` is owned by `tracks`, which we hold locked.
+        if !self.can_follow(unsafe { &*cur }, &track) {
+            return false;
+        }
+        let p = ptr(&track);
+        tracks.push(track);
+        // The one it replaces, if still waiting, is freed by the next tidy.
+        let next = &self.shared.slots.next;
+        next.store(p, Ordering::SeqCst);
+        // The render thread may have reached the end meanwhile. It sets `tail_out` and then
+        // looks at `next`, we store `next` and then look at `tail_out` (both SeqCst): one of
+        // us sees the other. If it is us, take the track back unless it was already taken.
+        if self.shared.ring.as_ref().is_some_and(|rs| rs.tail_out.load(Ordering::SeqCst))
+            && next.compare_exchange(p, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed).is_ok()
+        {
+            return false;
+        }
+        true
+    }
+
+    /// Nothing follows the current track any more (the queue changed).
+    pub fn clear_next(&self) {
+        let _tracks = self.tidy().0;
+        self.shared.slots.next.store(std::ptr::null_mut(), Ordering::Release);
+    }
+
     pub fn position_secs(&self) -> f64 {
         let st = &self.shared;
-        let pos = match &st.ring {
-            None => st.pos.load(Ordering::Relaxed) as f64 / st.track.sample_rate as f64,
-            Some(rs) => {
-                rs.base_frame.load(Ordering::Relaxed) as f64 / rs.source_rate
-                    + rs.played.load(Ordering::Relaxed) as f64 / rs.device_rate
+        let (tracks, [heard, ..]) = self.tidy();
+        // SAFETY: owned by `tracks`, held locked.
+        let t = unsafe { &*heard };
+        let pending = st.slots.seek_req.load(Ordering::Acquire);
+        let pos = if pending != NO_SEEK && st.slots.seek_track.load(Ordering::Acquire) == heard {
+            pending as f64 / t.sample_rate as f64
+        } else {
+            match &st.ring {
+                None => st.pos.load(Ordering::Relaxed) as f64 / t.sample_rate as f64,
+                Some(rs) => {
+                    rs.base_frame.load(Ordering::Relaxed) as f64 / rs.source_rate
+                        + rs.played.load(Ordering::Relaxed) as f64 / rs.device_rate
+                }
             }
         };
-        pos.min(self.duration_secs())
+        let duration = t.duration_secs();
+        drop(tracks);
+        pos.min(duration)
     }
 
     pub fn duration_secs(&self) -> f64 {
-        self.shared.track.duration_secs()
+        self.heard().duration_secs()
     }
 
     pub fn is_finished(&self) -> bool {
@@ -535,19 +694,28 @@ impl Playback {
         self.shared.paused.store(paused, Ordering::Relaxed);
     }
 
-    pub fn seek(&self, secs: f64) {
-        let t = &self.shared.track;
-        let frame = ((secs.max(0.0) * t.sample_rate as f64) as usize).min(t.frames());
-        match &self.shared.ring {
-            None => self.shared.pos.store(frame, Ordering::Relaxed),
-            Some(rs) => rs.seek_req.store(frame, Ordering::Release),
+    /// Jump within the track being heard. False when this playback can't: the processing
+    /// has already moved on to the next track (the last ~half second of this one is still in
+    /// the buffer) — then start this track anew at that point instead.
+    pub fn seek(&self, secs: f64) -> bool {
+        let (tracks, [heard, cur, _]) = self.tidy();
+        if self.shared.ring.is_some() && cur != heard {
+            return false;
         }
+        // SAFETY: owned by `tracks`, held locked.
+        let t = unsafe { &*heard };
+        let frame = ((secs.max(0.0) * t.sample_rate as f64) as usize).min(t.frames());
+        let s = &self.shared.slots;
+        s.seek_track.store(heard, Ordering::Release);
+        s.seek_req.store(frame, Ordering::Release);
         self.shared.finished.store(t.is_complete() && frame >= t.frames(), Ordering::Relaxed);
+        drop(tracks);
+        true
     }
 
     /// Playback is waiting for audio that hasn't been decoded/downloaded yet.
     pub fn is_buffering(&self) -> bool {
-        let t = &self.shared.track;
+        let t = self.heard();
         if t.is_complete() || self.is_finished() {
             return false;
         }
@@ -559,13 +727,13 @@ impl Playback {
 
     /// How far decoding/downloading has got, in seconds (for a buffer bar on the scrubber).
     pub fn buffered_secs(&self) -> f64 {
-        let t = &self.shared.track;
+        let t = self.heard();
         t.ready_frames() as f64 / t.sample_rate as f64
     }
 
     /// The decoder stopped on an error (a dropped connection, a corrupt file).
     pub fn source_error(&self) -> Option<String> {
-        self.shared.track.error()
+        self.heard().error()
     }
 
     /// Apply new equaliser settings to what plays, without a restart: the callback crossfades
@@ -603,22 +771,35 @@ impl Drop for Playback {
 
 /// The render thread: pulls source audio from RAM, runs the processing chain, keeps the ring
 /// topped up. Not realtime — it may sleep, and only has to stay ahead of the DAC on average.
-fn render_loop(track: Arc<Track>, rs: Arc<RingState>, mut chain: Chain, start_frame: usize) {
+///
+/// At the end of a track it carries straight on with the one lined up next, through the same
+/// chain (no reset: filters ring on across the join as they would within a track), and tells
+/// the callback at which output frame the new track begins to be heard.
+fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_frame: usize) {
     // Our own thread: flush-to-zero for its whole life (the FIR's tails, see fpu.rs).
     let _ftz = crate::fpu::FlushDenormals::on();
     const BLOCK: usize = 2048;
+    let mut cur = slots.cur.load(Ordering::Acquire);
     let mut src = start_frame;
+    // Where this stretch of the current track started (a seek, or 0 for a following track).
+    let mut stretch = start_frame;
+    let mut flushed = false;
     let mut out: Vec<f32> = Vec::new();
     let mut sent = 0usize;
     let nap = || std::thread::sleep(Duration::from_millis(2));
 
     while !rs.quit.load(Ordering::Acquire) {
+        // SAFETY: `cur` stays in a slot (and so owned by the Playback) until we move it on.
+        let track = unsafe { &*cur };
         if let Some(eq) = &rs.eq {
             eq.mailbox.collect();
         }
-        let seek = rs.seek_req.swap(NO_SEEK, Ordering::AcqRel);
-        if seek != NO_SEEK {
+        let seek = slots.seek_req.swap(NO_SEEK, Ordering::AcqRel);
+        if seek != NO_SEEK && slots.seek_track.load(Ordering::Acquire) == cur {
             src = seek.min(track.frames());
+            stretch = src;
+            flushed = false;
+            rs.tail_out.store(false, Ordering::Release);
             chain.reset();
             out.clear();
             sent = 0;
@@ -647,18 +828,48 @@ fn render_loop(track: Arc<Track>, rs: Arc<RingState>, mut chain: Chain, start_fr
         let complete = track.is_complete();
         let input = track.slice(src, BLOCK);
         if input.is_empty() {
-            if complete {
-                rs.render_done.store(true, Ordering::Release);
-            } else {
+            if !complete {
                 rs.starved.store(true, Ordering::Relaxed);
+            } else if !flushed {
+                let next = slots.next.load(Ordering::Acquire);
+                if next.is_null() {
+                    // The end: let the chain's tail out (filter delay, resampler). From here
+                    // a track lined up late can't join; queue_next says so.
+                    rs.tail_out.store(true, Ordering::SeqCst);
+                    if !slots.next.load(Ordering::SeqCst).is_null() {
+                        // Lined up just now, before it could see `tail_out`: join after all.
+                        rs.tail_out.store(false, Ordering::Release);
+                        continue;
+                    }
+                    let processed = chain.process(&[], true);
+                    out.clear();
+                    out.extend(processed.iter().map(|&v| v as f32));
+                    sent = 0;
+                    flushed = true;
+                    continue;
+                }
+                if rs.boundary.load(Ordering::Acquire) == NO_BOUNDARY {
+                    // The next track joins on. Its first frame is heard once the device has
+                    // played this track's remaining frames (at the device rate).
+                    let rest = (track.frames().saturating_sub(stretch)) as f64 * rs.device_rate / rs.source_rate;
+                    slots.cur.store(next, Ordering::Release);
+                    let _ = slots.next.compare_exchange(next, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed);
+                    rs.boundary.store(rest.round() as u64, Ordering::Release);
+                    cur = next;
+                    src = 0;
+                    stretch = 0;
+                    continue;
+                }
+                // A very short track is still waiting to be heard: one join at a time.
+            } else {
+                rs.render_done.store(true, Ordering::Release);
             }
             nap();
             continue;
         }
         rs.starved.store(false, Ordering::Relaxed);
         src += input.len() / track.channels;
-        let last = complete && src >= track.ready_frames();
-        let processed = chain.process(input, last);
+        let processed = chain.process(input, false);
         out.clear();
         // Not clamped yet: the callback's EQ may still lower the level (its preamp).
         out.extend(processed.iter().map(|&v| v as f32));
@@ -674,6 +885,7 @@ impl Shared {
         // slower on the CPU and can make the callback miss its deadline.
         let _ftz = crate::fpu::FlushDenormals::on();
         let st = self;
+        let slots = &*st.slots;
         let paused = st.paused.load(Ordering::Relaxed);
         let frames = buffers
             .iter()
@@ -682,29 +894,58 @@ impl Shared {
             .unwrap_or(0);
 
         match &st.ring {
-            // Bit-perfect path: straight from the decoded track.
+            // Bit-perfect path: straight from the decoded track, on into the next one.
             None => {
-                let track = &*st.track;
-                // `complete` first: if decoding had finished, `ready` read after it is final.
-                let complete = track.is_complete();
-                let ready = track.ready_frames();
-                let pos = st.pos.load(Ordering::Relaxed);
-                // Past `ready` on a track still decoding = buffering: play silence, keep position.
-                let avail = if paused { 0 } else { ready.saturating_sub(pos).min(frames) };
-                let peaks = if st.dop {
-                    fill_dop(buffers, avail, &st.dop_phase, |f, dc| dop_sample(track, pos + f, dc))
-                } else {
-                    fill(buffers, 0..frames, avail, |f, dc| track_sample(track, pos + f, dc))
-                };
-                st.meter(peaks);
-                if !paused {
-                    let new_pos = pos + avail;
-                    // compare_exchange so a seek() that landed mid-callback isn't overwritten.
-                    let _ = st.pos.compare_exchange(pos, new_pos, Ordering::Relaxed, Ordering::Relaxed);
-                    if complete && new_pos >= ready {
-                        st.finished.store(true, Ordering::Relaxed);
+                let mut cur = slots.cur.load(Ordering::Acquire);
+                let seek = slots.seek_req.load(Ordering::Acquire);
+                if seek != NO_SEEK
+                    && slots.seek_req.compare_exchange(seek, NO_SEEK, Ordering::AcqRel, Ordering::Relaxed).is_ok()
+                    && slots.seek_track.load(Ordering::Acquire) == cur
+                {
+                    st.pos.store(seek, Ordering::Relaxed);
+                }
+                let mut done = 0;
+                let mut peaks = [0f32; 2];
+                loop {
+                    // SAFETY: `cur` is in a slot, so the Playback owns it.
+                    let track = unsafe { &*cur };
+                    // `complete` first: if decoding had finished, `ready` read after it is final.
+                    let complete = track.is_complete();
+                    let ready = track.ready_frames();
+                    let pos = st.pos.load(Ordering::Relaxed);
+                    // Past `ready` on a track still decoding = buffering: play silence, keep position.
+                    let avail = if paused { 0 } else { ready.saturating_sub(pos).min(frames - done) };
+                    let ended = !paused && complete && pos + avail >= ready;
+                    let next = if ended { slots.next.load(Ordering::Acquire) } else { std::ptr::null_mut() };
+                    // Joining the next track: only this track's frames now, the rest from it.
+                    let to = if next.is_null() { frames } else { done + avail };
+                    let p = if st.dop {
+                        fill_dop(buffers, done..to, avail, &st.dop_phase, |f, dc| dop_sample(track, pos + f, dc))
+                    } else {
+                        fill(buffers, done..to, avail, |f, dc| track_sample(track, pos + f, dc))
+                    };
+                    peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
+                    done += avail;
+                    st.pos.store(pos + avail, Ordering::Relaxed);
+                    if next.is_null() {
+                        if ended {
+                            st.finished.store(true, Ordering::Relaxed);
+                        }
+                        break;
+                    }
+                    // Store the new slot before clearing the old one (see `Slots`).
+                    slots.cur.store(next, Ordering::Release);
+                    slots.heard.store(next, Ordering::Release);
+                    let _ = slots.next.compare_exchange(next, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed);
+                    st.pos.store(0, Ordering::Relaxed);
+                    st.finished.store(false, Ordering::Relaxed);
+                    slots.switches.fetch_add(1, Ordering::AcqRel);
+                    cur = next;
+                    if done >= frames {
+                        break;
                     }
                 }
+                st.meter(peaks);
             }
             // Processed path: pre-rendered samples from the ring.
             Some(rs) => {
@@ -749,7 +990,16 @@ impl Shared {
                     }
                 }
                 st.meter(peaks);
-                rs.played.fetch_add(got as u64, Ordering::Relaxed);
+                let played = rs.played.fetch_add(got as u64, Ordering::Relaxed) + got as u64;
+                // The next track's first frame has reached the device: it is what plays now.
+                let boundary = rs.boundary.load(Ordering::Acquire);
+                if boundary != NO_BOUNDARY && played >= boundary {
+                    slots.heard.store(slots.cur.load(Ordering::Acquire), Ordering::Release);
+                    rs.played.store(played - boundary, Ordering::Relaxed);
+                    rs.base_frame.store(0, Ordering::Relaxed);
+                    rs.boundary.store(NO_BOUNDARY, Ordering::Release);
+                    slots.switches.fetch_add(1, Ordering::AcqRel);
+                }
                 if got == frames {
                     rs.refilling.store(false, Ordering::Relaxed);
                 } else if !paused
@@ -806,14 +1056,21 @@ fn fill(
     peaks
 }
 
-/// DoP counterpart of [`fill`]: `avail` frames of DSD from `payload(frame, device_channel)`,
-/// then the DSD idle pattern, every frame under the next marker in the alternation.
-/// Returns a rough level per channel (DSD bit density over 256-bit windows), for the meters.
+/// DoP counterpart of [`fill`]: in the device frames `frames`, `avail` frames of DSD from
+/// `payload(i, device_channel)`, then the DSD idle pattern, every frame under the next marker
+/// in the alternation. Returns a rough level per channel (DSD bit density over 256-bit
+/// windows), for the meters.
 #[inline(always)]
-fn fill_dop(buffers: &mut [OutBuf<'_>], avail: usize, phase: &AtomicBool, payload: impl Fn(usize, usize) -> u16) -> [f32; 2] {
+fn fill_dop(
+    buffers: &mut [OutBuf<'_>],
+    frames: std::ops::Range<usize>,
+    avail: usize,
+    phase: &AtomicBool,
+    payload: impl Fn(usize, usize) -> u16,
+) -> [f32; 2] {
     const WINDOW: usize = 16; // frames → 256 bits per channel
     let start = phase.load(Ordering::Relaxed);
-    let mut frames = 0;
+    let mut written = 0;
     let mut peaks = [0f32; 2];
     let mut ones = [0u32; 2];
     let mut first_channel = 0;
@@ -823,7 +1080,8 @@ fn fill_dop(buffers: &mut [OutBuf<'_>], avail: usize, phase: &AtomicBool, payloa
             continue;
         }
         let mut n = 0;
-        for (f, frame) in buf.data.chunks_exact_mut(nch * fmt.bytes()).enumerate() {
+        let all = buf.data.chunks_exact_mut(nch * fmt.bytes());
+        for (f, frame) in all.skip(frames.start).take(frames.len()).enumerate() {
             let marker: u32 = if start ^ (f & 1 == 1) { 0xFA } else { 0x05 };
             for (c, out) in frame.chunks_exact_mut(fmt.bytes()).enumerate() {
                 let dc = first_channel + c;
@@ -842,10 +1100,10 @@ fn fill_dop(buffers: &mut [OutBuf<'_>], avail: usize, phase: &AtomicBool, payloa
             }
             n = f + 1;
         }
-        frames = frames.max(n);
+        written = written.max(n);
         first_channel += nch;
     }
-    phase.store(start ^ (frames & 1 == 1), Ordering::Relaxed);
+    phase.store(start ^ (written & 1 == 1), Ordering::Relaxed);
     peaks
 }
 
@@ -982,6 +1240,192 @@ mod tests {
         }
     }
 
+    /// Gapless playback: tracks joined end to end, as the device hears them.
+    mod gapless {
+        use super::*;
+        use crate::decode::TrackMeta;
+
+        /// Stereo, every sample distinct: (start + i) / 2^20 on the left, its negative on the right.
+        fn ramp(rate: u32, start: usize, frames: usize) -> Arc<Track> {
+            let samples: Vec<f32> = (start..start + frames).flat_map(|i| {
+                let v = (i + 1) as f32 / 1_048_576.0;
+                [v, -v]
+            }).collect();
+            Arc::new(Track::from_samples(rate, 2, Some(24), &samples, TrackMeta::default()))
+        }
+
+        fn playback(first: Arc<Track>, processing: bool) -> Playback {
+            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop() };
+            Playback::new(first.clone(), &PlayOptions::default(), &plan, first.sample_rate as f64).unwrap()
+        }
+
+        /// One callback of `frames` stereo F32 frames; returns the left channel.
+        fn callback(p: &Playback, frames: usize) -> Vec<f32> {
+            let mut data = vec![0u8; frames * 8];
+            p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: OutFormat::F32 }]);
+            data.chunks_exact(8).map(|f| f32::from_le_bytes(f[..4].try_into().unwrap())).collect()
+        }
+
+        fn expected(frames: usize) -> Vec<f32> {
+            (0..frames).map(|i| (i + 1) as f32 / 1_048_576.0).collect()
+        }
+
+        #[test]
+        fn direct_path_joins_tracks_sample_for_sample() {
+            let (a, b) = (ramp(44_100, 0, 10_000), ramp(44_100, 10_000, 7_000));
+            let p = playback(a.clone(), false);
+            assert!(p.queue_next(b.clone()));
+            assert!(Arc::ptr_eq(&p.upcoming().unwrap(), &b));
+            let mut out = Vec::new();
+            // 997 frames a callback: the join falls inside one.
+            while out.len() < 20_000 {
+                out.extend(callback(&p, 997));
+                if out.len() < 10_000 {
+                    assert!(Arc::ptr_eq(&p.heard(), &a));
+                }
+            }
+            assert_eq!(&out[..17_000], &expected(17_000)[..]);
+            assert!(out[17_000..].iter().all(|&v| v == 0.0));
+            assert!(Arc::ptr_eq(&p.heard(), &b));
+            assert_eq!(p.switches(), 1);
+            assert!(p.is_finished());
+            assert!((p.duration_secs() - 7_000.0 / 44_100.0).abs() < 1e-9);
+            // A is no longer kept.
+            assert_eq!(Arc::strong_count(&a), 1);
+        }
+
+        #[test]
+        fn processed_path_joins_tracks_and_switches_when_heard() {
+            // A is longer than the ring, so it is lined up before the render thread gets to its end.
+            let (a, b) = (ramp(48_000, 0, 60_000), ramp(48_000, 60_000, 20_000));
+            let p = playback(a.clone(), true);
+            assert!(p.queue_next(b.clone()));
+            let rs = p.shared().ring.as_ref().unwrap();
+            let mut out = Vec::new();
+            while out.len() < 90_000 {
+                while rs.ring.available() < 512 * 2 && !rs.render_done.load(Ordering::Acquire) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                out.extend(callback(&p, 512));
+                let heard_b = Arc::ptr_eq(&p.heard(), &b);
+                // The switch follows what is heard, not what the render thread has reached.
+                assert_eq!(heard_b, out.len() > 60_000, "at {}", out.len());
+                if heard_b {
+                    let want = (out.len() - 60_000) as f64 / 48_000.0;
+                    assert!((p.position_secs() - want.min(p.duration_secs())).abs() < 1e-6);
+                }
+            }
+            assert_eq!(&out[..80_000], &expected(80_000)[..]);
+            assert!(p.is_finished());
+            assert_eq!(p.underruns(), 0);
+        }
+
+        #[test]
+        fn a_join_through_the_eq_does_not_click() {
+            // One sine cut in two tracks: through a linear-phase EQ the join must not be heard.
+            let fs = 48_000u32;
+            let sine: Vec<f32> = (0..fs as usize * 2).flat_map(|i| {
+                let v = ((2.0 * std::f64::consts::PI * 440.0 * i as f64 / fs as f64).sin() * 0.25) as f32;
+                [v, v]
+            }).collect();
+            // Longer than the ring, so B is lined up before the render thread reaches the cut.
+            let cut = 70_000 * 2;
+            let a = Arc::new(Track::from_samples(fs, 2, Some(24), &sine[..cut], TrackMeta::default()));
+            let b = Arc::new(Track::from_samples(fs, 2, Some(24), &sine[cut..], TrackMeta::default()));
+            let eq = crate::dsp::eq::EqPreset {
+                phase: Phase::Linear,
+                bands: vec![crate::dsp::eq::Band { kind: crate::dsp::eq::FilterKind::Peak, freq: 2000.0, gain: -3.0, q: 1.0, ..Default::default() }],
+                ..Default::default()
+            };
+            let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
+            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false };
+            let p = Playback::new(a, &opts, &plan, fs as f64).unwrap();
+            assert!(p.queue_next(b));
+            let rs = p.shared().ring.as_ref().unwrap();
+            let mut out = Vec::new();
+            while out.len() < 90_000 {
+                while rs.ring.available() < 512 * 2 && !rs.render_done.load(Ordering::Acquire) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                out.extend(callback(&p, 512));
+            }
+            // 440 Hz at 0.25: neighbouring samples differ by at most ~0.0145.
+            let step = out[1_000..90_000].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0f32, f32::max);
+            assert!(step < 0.016, "click at the join: {step}");
+            let level = out[68_000..72_000].iter().fold(0f32, |m, v| m.max(v.abs()));
+            assert!((level - 0.25).abs() < 0.01, "level at the join {level}");
+        }
+
+        #[test]
+        fn dop_markers_alternate_across_the_join() {
+            fn dop(frames: usize, fill: u8) -> Arc<Track> {
+                let t = Track::new_dop(2_822_400, 2, TrackMeta::default(), frames);
+                t.push_dop(&vec![fill; frames * 4]);
+                t.finish(None);
+                Arc::new(t)
+            }
+            let (a, b) = (dop(1_001, 0x69), dop(700, 0x96));
+            let p = playback(a, false);
+            assert!(p.queue_next(b));
+            let mut markers = Vec::new();
+            let mut payload = Vec::new();
+            for _ in 0..4 {
+                let mut data = vec![0u8; 512 * 2 * 3];
+                p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: OutFormat::I24Packed }]);
+                for f in data.chunks(6) {
+                    markers.push(f[2]);
+                    payload.push(f[1]);
+                }
+            }
+            assert!(markers.windows(2).all(|w| w[0] != w[1]), "markers break");
+            assert!(payload[..1_001].iter().all(|&b| b == 0x69));
+            assert!(payload[1_001..1_701].iter().all(|&b| b == 0x96));
+        }
+
+        #[test]
+        fn a_different_rate_or_kind_does_not_join() {
+            let p = playback(ramp(44_100, 0, 1_000), false);
+            assert!(!p.queue_next(ramp(96_000, 0, 1_000)));
+            let mono = Arc::new(Track::from_samples(44_100, 1, Some(16), &[0.0; 100], TrackMeta::default()));
+            assert!(!p.queue_next(mono));
+            assert!(p.upcoming().is_none());
+            // Lined up, then the queue changed.
+            assert!(p.queue_next(ramp(44_100, 0, 1_000)));
+            p.clear_next();
+            assert!(p.upcoming().is_none());
+        }
+
+        #[test]
+        fn seeking_into_a_track_whose_end_is_already_rendered_asks_for_a_restart() {
+            let (a, b) = (ramp(48_000, 0, 60_000), ramp(48_000, 60_000, 48_000));
+            let p = playback(a, true);
+            assert!(p.queue_next(b));
+            assert!(p.seek(0.1), "A still being rendered: an ordinary seek");
+            // Play until the render thread is on B while A's end is still in the ring.
+            let rs = p.shared().ring.as_ref().unwrap();
+            let slots = &p.shared().slots;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while slots.cur.load(Ordering::Acquire) == slots.heard.load(Ordering::Acquire) {
+                assert!(Instant::now() < deadline);
+                callback(&p, 512);
+                std::thread::sleep(Duration::from_micros(200));
+            }
+            assert!(!p.seek(0.1));
+        }
+
+        #[test]
+        fn a_track_lined_up_after_the_tail_is_out_is_refused() {
+            let p = playback(ramp(48_000, 0, 2_000), true);
+            let rs = p.shared().ring.as_ref().unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !rs.tail_out.load(Ordering::Acquire) {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            assert!(!p.queue_next(ramp(48_000, 0, 1_000)));
+        }
+    }
+
     /// A device asking for more than the scratch holds gets all of it, not silence at the end.
     #[test]
     fn a_callback_bigger_than_the_scratch_is_served_whole() {
@@ -1051,7 +1495,7 @@ mod tests {
         for _ in 0..2 {
             let mut data = vec![0u8; 3 * 2 * 3];
             let mut bufs = [OutBuf { data: &mut data, channels: 2, format: OutFormat::I24Packed }];
-            fill_dop(&mut bufs, 2, &phase, |f, c| (f * 2 + c) as u16);
+            fill_dop(&mut bufs, 0..3, 2, &phase, |f, c| (f * 2 + c) as u16);
             for frame in data.chunks(6) {
                 assert_eq!(frame[2], frame[5], "both channels share a frame's marker");
                 markers.push(frame[2]);

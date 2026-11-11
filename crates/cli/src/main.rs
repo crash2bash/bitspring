@@ -10,7 +10,6 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use hifi_engine::output::{self, Device, DeviceInfo, PlayOptions, Player};
 use hifi_engine::dsp::crossfeed::CrossfeedLevel;
-use hifi_engine::dsp::eq::EqProfile;
 use hifi_engine::dsp::{DspSettings, Upsample};
 use hifi_engine::dsp::lossy::LossySettings;
 use hifi_engine::dsd::{self, DsdMode};
@@ -29,9 +28,10 @@ enum Cmd {
     Devices,
     /// Decode a file and print what's inside.
     Info { file: PathBuf },
-    /// Play a file.
+    /// Play files, one after another without a break where they share a format.
     Play {
-        file: PathBuf,
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
         /// Device index (from `devices`) or part of its name/UID. Default: system output.
         #[arg(short, long)]
         device: Option<String>,
@@ -69,14 +69,16 @@ fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Devices => list_devices(),
         Cmd::Info { file } => info(file),
-        Cmd::Play { file, device, shared, upsample, eq, crossfeed, headroom, restore_highs, dop } => {
+        Cmd::Play { files, device, shared, upsample, eq, crossfeed, headroom, restore_highs, dop } => {
             let dsp = DspSettings {
                 upsample: upsample.map_or(Upsample::Off, |k| Upsample::UpTo(k * 1000.0)),
                 eq: match eq {
-                    Some(p) => Some(EqProfile::parse_autoeq(
+                    Some(p) => hifi_engine::dsp::eq_io::import(
                         &p.file_stem().unwrap_or_default().to_string_lossy(),
                         &std::fs::read_to_string(&p)?,
-                    )?),
+                    )?
+                    .into_iter()
+                    .next(),
                     None => None,
                 },
                 crossfeed: match crossfeed.as_deref() {
@@ -87,9 +89,11 @@ fn main() -> Result<()> {
                     Some(other) => bail!("unknown crossfeed level {other:?}"),
                 },
                 lossy: LossySettings { headroom, restore_highs },
+                convolution: None,
+                eq_bypass: false,
             };
             let mode = if dop { DsdMode::Dop } else { DsdMode::Pcm };
-            play(file, device, mode, PlayOptions { exclusive: !shared, dsp, ..Default::default() })
+            play(files, device, mode, PlayOptions { exclusive: !shared, dsp, ..Default::default() })
         }
         #[cfg(target_os = "macos")]
         Cmd::Rate { device, hz } => {
@@ -208,17 +212,70 @@ fn pick_device(query: Option<&str>) -> Result<DeviceInfo> {
     }
 }
 
-fn play(file: PathBuf, device: Option<String>, dsd_mode: DsdMode, opts: PlayOptions) -> Result<()> {
+fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: PlayOptions) -> Result<()> {
     let dev = pick_device(device.as_deref())?;
-    print!("Opening {}… ", file.display());
-    std::io::stdout().flush()?;
-    let t0 = Instant::now();
-    let track: Arc<Track> = open_file(&file, dsd_mode)?;
-    println!("{:.2?}", t0.elapsed());
+    let open = |file: &PathBuf| -> Result<Arc<Track>> {
+        print!("Opening {}… ", file.display());
+        std::io::stdout().flush()?;
+        let t0 = Instant::now();
+        let track = open_file(file, dsd_mode)?;
+        println!("{:.2?}", t0.elapsed());
+        Ok(track)
+    };
 
-    let player = Player::start(dev.device, track, &opts)?;
-    let p = &player.path;
-    println!("Output:  {} ({:?})", dev.name, p.transport);
+    let stop = Arc::new(AtomicBool::new(false));
+    let s = stop.clone();
+    ctrlc::set_handler(move || s.store(true, Ordering::Relaxed))?;
+
+    let mut i = 0;
+    let mut track = open(&files[0])?;
+    loop {
+        let mut player = Player::start(dev.device.clone(), track, &opts)?;
+        describe(&dev.name, &player.path);
+        // The next file, opened ahead: joined on, or to start anew if it couldn't be.
+        let mut ahead: Option<(usize, Arc<Track>)> = None;
+        let mut switches = player.switches();
+        while !player.is_finished() && !stop.load(Ordering::Relaxed) {
+            if player.switches() != switches {
+                switches = player.switches();
+                i += 1;
+                ahead = None;
+                player.path = player.path.for_next(&player.heard());
+                println!("\n→ joined on without a break: {}", files[i].display());
+                describe(&dev.name, &player.path);
+            }
+            let (pos, dur) = (player.position_secs(), player.duration_secs());
+            if ahead.is_none() && i + 1 < files.len() && dur - pos < 20.0 {
+                println!();
+                let t = open(&files[i + 1])?;
+                if player.queue_next(t.clone()) {
+                    println!("  lined up to follow without a break");
+                } else {
+                    println!("  can't follow without a break (another format): starts anew");
+                }
+                ahead = Some((i + 1, t));
+            }
+            print!("\r  {} / {}  ", mmss(pos), mmss(dur));
+            std::io::stdout().flush()?;
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        println!();
+        if let Some(peak) = player.output_peak() {
+            println!("Peak:    {:.1} dBFS, underruns: {}", 20.0 * peak.max(1e-9).log10(), player.underruns());
+        }
+        drop(player); // releases hog mode and restores the device's previous rate
+        match ahead {
+            Some((j, t)) if !stop.load(Ordering::Relaxed) => {
+                i = j;
+                track = t;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+fn describe(dev_name: &str, p: &hifi_engine::output::SignalPath) {
+    println!("Output:  {} ({:?})", dev_name, p.transport);
     match p.dsd {
         Some(d) => println!(
             "Source:  {} ({:.4} MHz), {}",
@@ -272,22 +329,6 @@ fn play(file: PathBuf, device: Option<String>, dsd_mode: DsdMode, opts: PlayOpti
     }
     println!("Path:    {}", if p.bit_perfect { "BIT-PERFECT ✓" } else { "not bit-perfect" });
 
-    let stop = Arc::new(AtomicBool::new(false));
-    let s = stop.clone();
-    ctrlc::set_handler(move || s.store(true, Ordering::Relaxed))?;
-
-    while !player.is_finished() && !stop.load(Ordering::Relaxed) {
-        let (pos, dur) = (player.position_secs(), player.duration_secs());
-        print!("\r  {} / {}  ", mmss(pos), mmss(dur));
-        std::io::stdout().flush()?;
-        std::thread::sleep(Duration::from_millis(200));
-    }
-    println!();
-    if let Some(peak) = player.output_peak() {
-        println!("Peak:    {:.1} dBFS, underruns: {}", 20.0 * peak.max(1e-9).log10(), player.underruns());
-    }
-    drop(player); // releases hog mode and restores the device's previous rate
-    Ok(())
 }
 
 fn mmss(secs: f64) -> String {

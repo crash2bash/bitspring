@@ -257,9 +257,7 @@ pub extern "system" fn Java_dev_local_hifi_PlaybackService_nativeCommand(_env: J
             3 => crate::jump(&state, 1),
             4 => crate::jump(&state, -1),
             5 => {
-                if let Some(p) = state.player.lock().unwrap().as_ref() {
-                    p.seek(arg);
-                }
+                crate::seek_to(&state, arg);
             }
             _ => {}
         }
