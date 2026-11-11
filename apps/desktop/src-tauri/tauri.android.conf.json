@@ -3,7 +3,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Hifi",
+        "title": "BitSpring",
         "backgroundColor": "#16232a",
         "create": false
       }

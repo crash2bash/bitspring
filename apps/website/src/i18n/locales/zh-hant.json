@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — 免費的 bit-perfect 音樂播放器，支援 macOS 與 Windows",
+  "meta.title": "BitSpring — 免費的 bit-perfect 音樂播放器，支援 macOS 與 Windows",
   "meta.description": "免費的音樂播放器，檔案裡是什麼，DAC 收到的就是什麼。支援 FLAC、ALAC、WAV，DSD 最高 DSD1024，取樣率最高 768 kHz。等化器、交叉饋送、升頻，需要時再開。",
-  "meta.og_title": "Hifi — 一位元不差",
+  "meta.og_title": "BitSpring — 一位元不差",
   "meta.og_description": "免費的 bit-perfect 音樂播放器，支援 macOS 與 Windows。",
-
-  "nav.home_label": "Hifi，回到頂端",
+  "nav.home_label": "BitSpring，回到頂端",
   "nav.sections_label": "頁面區塊",
   "nav.how": "運作原理",
   "nav.formats": "格式",
   "nav.enhance": "音效強化",
   "nav.download": "下載",
   "nav.language": "語言",
-
   "hero.title": "一位元不差",
   "hero.lede": "免費的 macOS 與 Windows 音樂播放器。檔案裡是什麼，DAC 收到的就是什麼：不重新取樣、不經系統混音器，沒有意外。",
-
   "cta.appstore": "從 Mac App Store 下載",
   "cta.windows": "下載 Windows 版",
   "cta.appstore_soon": "即將登上 Mac App Store",
   "cta.windows_soon": "Windows 版即將推出",
-
   "path.title": "從檔案到 DAC，沒有一個位元被更動",
   "path.file": "檔案",
   "path.file_detail": "FLAC，24 bit，96 kHz。取樣資料按原樣讀取。",
@@ -30,12 +26,10 @@
   "path.samples": "已傳送取樣",
   "path.changed": "已更動位元",
   "path.foot": "macOS 上使用 CoreAudio 獨占（hog）模式與整數輸出；Windows 上使用 WASAPI Exclusive。",
-
   "formats.title": "從 CD 到 768 kHz",
   "formats.lede": "播放器會把 DAC 切換到每首曲目的取樣率。若 DAC 不支援該取樣率，音訊會經過細緻的重新取樣，播放器也會明白告訴你。",
   "formats.dsd": "DAC 支援時，DSD 透過 DoP 原生播放；不支援時，以 176.4 kHz PCM 播放。",
   "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、DSF、DFF、MP3、AAC、Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD 音質",
   "rates.video": "影片與錄音室錄音",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "當今 DAC 的上限",
   "rates.dsd": "單一位元，{mhz} MHz",
-
   "enhance.title": "想換種聲音？請便",
   "enhance.lede": "音效強化預設全部關閉。開啟任何一項，播放器的指示器就會從「Bit-perfect」變成「處理中」，並列出對聲音做了哪些處理。",
   "enhance.upsampling": "升頻",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "輕、中、強三段。消除音樂在腦袋裡響的感覺。",
   "enhance.lossy": "針對 MP3 與 AAC",
   "enhance.lossy_detail": "自動保留餘裕避免削波，還能溫和補回編碼器截止頻率以上的高頻。",
-
   "app.title": "聲音經歷的每一步，一目了然",
   "app.lede": "檔案格式、DAC 取樣率與每一步處理，都直接顯示在主畫面上。",
   "app.alt": "播放器視窗：播放佇列、正在播放，以及附訊號路徑的 Bit-perfect 指示器",
-
   "download.title": "免費",
   "download.lede": "不用訂閱，沒有廣告，不需帳號。就是一個播放器。",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "開發中",
-
   "footer.top": "回到頂端",
-
   "cta.mac": "下載 Mac 版",
   "cta.mac_soon": "Mac 版即將推出",
   "cta.ios": "在 App Store 下載",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Android 版即將推出",
   "cta.other_platforms": "其他平台",
   "cta.all_platforms": "下載",
-
-  "dl.meta_title": "下載 Hifi，支援 macOS、Windows、iPhone 與 Android",
+  "dl.meta_title": "下載 BitSpring，支援 macOS、Windows、iPhone 與 Android",
   "dl.meta_description": "為你的裝置下載免費的 bit-perfect 音樂播放器。",
-  "dl.title": "下載 Hifi",
+  "dl.title": "下載 BitSpring",
   "dl.for_mac": "適用於你的 Mac",
   "dl.for_windows": "適用於你的 Windows 電腦",
   "dl.for_ios": "適用於你的 iPhone 或 iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "選擇你的平台",
   "dl.appstore_note": "透過 App Store 安裝與更新。",
   "dl.mac_file": "下載 .dmg 檔案",
-  "dl.mac_file_note": "打開後，將 Hifi 拖到「應用程式」檔案夾。",
+  "dl.mac_file_note": "打開後，將 BitSpring 拖到「應用程式」檔案夾。",
   "dl.mac_file_hint": "第一次打開時 macOS 會阻擋它：打開「系統設定」→「隱私權與安全性」，按一下「強制打開」。",
   "dl.windows_file": "下載安裝程式（.exe）",
   "dl.windows_file_note": "適用於 Windows 10 與 11。",
@@ -103,5 +91,19 @@
   "dl.redirecting": "正在開啟 App Store……",
   "dl.soon": "即將推出",
   "dl.other": "其他平台",
-  "dl.back": "返回網站"
+  "dl.back": "返回網站",
+  "footer.source": "原始碼",
+  "footer.privacy": "隱私權",
+  "footer.support": "支援",
+  "privacy.meta_title": "BitSpring 隱私權政策",
+  "privacy.meta_description": "BitSpring 不蒐集任何資料：沒有帳號，沒有分析，沒有廣告，沒有追蹤。",
+  "privacy.title": "隱私權",
+  "privacy.lead": "BitSpring 不蒐集任何關於你的資料。沒有帳號，沒有分析，沒有廣告，也沒有追蹤。",
+  "privacy.device": "你的音樂、播放清單、等化器預設和設定都保留在你的裝置上。App 不會上傳其中任何內容。",
+  "privacy.network": "App 只會在你要求時才連線上網。來自本網站的版本會向 GitHub 詢問是否有更新並下載；GitHub 能看到任何下載都會顯示的資訊，也就是你的 IP 位址和 App 版本。如果你登入 Qobuz 或 TIDAL，App 只會與該服務通訊，你的登入資訊保留在你的裝置上。App Store 版本完全不會連線上網。",
+  "privacy.site": "本網站不設定 Cookie，也不執行分析。你的瀏覽器會記住你選擇的語言，這些資訊不會離開瀏覽器。與任何網站代管服務一樣，Vercel 會保存標準的伺服器記錄。",
+  "privacy.open": "BitSpring 是開放原始碼，所以任何人都可以在程式碼中驗證以上所有內容。",
+  "privacy.contact": "有疑問嗎？",
+  "privacy.contact_link": "在 GitHub 上提問",
+  "privacy.updated": "最後更新於 2026 年 11 月 11 日。"
 }

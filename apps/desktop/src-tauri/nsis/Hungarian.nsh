@@ -1,4 +1,4 @@
-; Hifi installer strings: Hungarian (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Hungarian (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_HUNGARIAN} "Összetevők hozzáadása/újratelepítése"
 LangString alreadyInstalled ${LANG_HUNGARIAN} "Már telepítve van"
 LangString alreadyInstalledLong ${LANG_HUNGARIAN} "A(z) ${PRODUCTNAME} ${VERSION} már telepítve van. Válassza ki a végrehajtandó műveletet, majd a folytatáshoz kattintson a Tovább gombra."

@@ -277,7 +277,7 @@
   $effect(() => {
     void i18n.locale;
     if (!isMac || !inTauri) return;
-    const labels = Object.fromEntries(MENU_KEYS.map((k) => [`menu.${k}`, t(`menu.${k}`, { app: "Hifi" })]));
+    const labels = Object.fromEntries(MENU_KEYS.map((k) => [`menu.${k}`, t(`menu.${k}`, { app: "BitSpring" })]));
     api.setMenuLabels(labels).catch(() => {});
   });
 
@@ -386,7 +386,7 @@
 
 <div class="app" class:drag-over={dragOver}>
   <header data-tauri-drag-region class:mac={isMac} class:chrome-right={isMac && i18n.system.dir === "rtl"}>
-    <span class="wordmark" data-tauri-drag-region>Hifi</span>
+    <span class="wordmark" data-tauri-drag-region>BitSpring</span>
     <nav class="tabs" aria-label={t("nav.screens")}>
       <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>{t("nav.player")}</button>
       <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>{t("nav.library")}</button>

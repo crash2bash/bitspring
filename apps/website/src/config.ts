@@ -2,7 +2,7 @@
 // "coming soon"; fill them in at release and all pages in every language pick them up.
 //
 // Files (.dmg / .exe / .apk) can live on GitHub Releases: the repository is public, and
-// https://github.com/crash2bash/hi-fi/releases/latest/download/<asset-name> always points at
+// https://github.com/crash2bash/bitspring/releases/latest/download/<asset-name> always points at
 // the newest release, as long as the asset keeps the same name.
 export const LINKS: {
   /** Mac App Store page, e.g. https://apps.apple.com/app/id0000000000 */
@@ -17,10 +17,10 @@ export const LINKS: {
   android: string | null;
 } = {
   macAppStore: null,
-  macFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-mac.dmg",
+  macFile: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-mac.dmg",
   iosAppStore: null,
-  windowsFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-windows-setup.exe",
-  android: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-android.apk",
+  windowsFile: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-windows-setup.exe",
+  android: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-android.apk",
 };
 
 // Public origin of the site, e.g. "https://hifi.example". Used at build time for hreflang,

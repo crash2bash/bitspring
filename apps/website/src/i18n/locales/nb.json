@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — gratis bit-perfect musikkspiller for macOS og Windows",
+  "meta.title": "BitSpring — gratis bit-perfect musikkspiller for macOS og Windows",
   "meta.description": "En gratis musikkspiller som sender DAC-en din nøyaktig det som ligger i filen. FLAC, ALAC, WAV, DSD opptil DSD1024, opptil 768 kHz. EQ, crossfeed og oppsampling når du vil.",
-  "meta.og_title": "Hifi — bit for bit",
+  "meta.og_title": "BitSpring — bit for bit",
   "meta.og_description": "En gratis bit-perfect musikkspiller for macOS og Windows.",
-
-  "nav.home_label": "Hifi, til toppen",
+  "nav.home_label": "BitSpring, til toppen",
   "nav.sections_label": "Seksjoner",
   "nav.how": "Slik fungerer det",
   "nav.formats": "Formater",
   "nav.enhance": "Forbedringer",
   "nav.download": "Last ned",
   "nav.language": "Språk",
-
   "hero.title": "Bit for bit",
   "hero.lede": "En gratis musikkspiller for macOS og Windows. DAC-en din får nøyaktig det som ligger i filen: ingen resampling, ingen systemmikser, ingen overraskelser.",
-
   "cta.appstore": "Last ned fra Mac App Store",
   "cta.windows": "Last ned for Windows",
   "cta.appstore_soon": "Kommer til Mac App Store",
   "cta.windows_soon": "Kommer til Windows",
-
   "path.title": "Ikke én eneste bit endres mellom filen og DAC-en",
   "path.file": "Fil",
   "path.file_detail": "FLAC, 24 bit, 96 kHz. Samplene leses nøyaktig slik de er lagret.",
@@ -30,12 +26,10 @@
   "path.samples": "Sendte samples",
   "path.changed": "Endrede bits",
   "path.foot": "På macOS: CoreAudio i eksklusiv modus (hog mode) med heltallsutgang. På Windows: WASAPI Exclusive.",
-
   "formats.title": "Fra CD til 768 kHz",
   "formats.lede": "Spilleren stiller DAC-en om til samplingsfrekvensen for hvert spor. Takler ikke DAC-en frekvensen, blir lyden forsiktig resamplet, og spilleren sier ifra.",
   "formats.dsd": "DSD spilles nativt via DoP hvis DAC-en din støtter det, ellers som PCM i 176,4 kHz.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD-kvalitet",
   "rates.video": "Video og studioinnspilling",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Taket for dagens DAC-er",
   "rates.dsd": "Én bit, {mhz} MHz",
-
   "enhance.title": "Vil du ha en annen lyd? Vær så god",
   "enhance.lede": "Forbedringene er slått av som standard. Slå på en av dem, så bytter spillerens indikator fra «Bit-perfect» til «Behandling» og viser nøyaktig hva som gjøres med lyden.",
   "enhance.upsampling": "Oppsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Lett, middels eller sterk. Fjerner følelsen av at musikken spiller inne i hodet ditt.",
   "enhance.lossy": "For MP3 og AAC",
   "enhance.lossy_detail": "Headroom mot klipping slår seg på av seg selv, og diskanten over kodekens grensefrekvens kan forsiktig gjenskapes.",
-
   "app.title": "Du ser alt som skjer med lyden",
   "app.lede": "Filformat, DAC-ens samplingsfrekvens og hvert behandlingstrinn, rett på hovedskjermen.",
   "app.alt": "Spillervinduet: kø, spilles nå og Bit-perfect-indikatoren med signalveien",
-
   "download.title": "Gratis",
   "download.lede": "Ingen abonnement, ingen reklame, ingen konto. Bare en spiller.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "På vei",
-
   "footer.top": "Til toppen",
-
   "cta.mac": "Last ned for Mac",
   "cta.mac_soon": "Kommer til Mac",
   "cta.ios": "Last ned fra App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Kommer til Android",
   "cta.other_platforms": "Andre plattformer",
   "cta.all_platforms": "Last ned",
-
-  "dl.meta_title": "Last ned Hifi for macOS, Windows, iPhone og Android",
+  "dl.meta_title": "Last ned BitSpring for macOS, Windows, iPhone og Android",
   "dl.meta_description": "Den gratis bit-perfect musikkspilleren for enheten din.",
-  "dl.title": "Last ned Hifi",
+  "dl.title": "Last ned BitSpring",
   "dl.for_mac": "For din Mac",
   "dl.for_windows": "For din Windows-PC",
   "dl.for_ios": "For din iPhone eller iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "Velg plattform",
   "dl.appstore_note": "Installeres og oppdateres via App Store.",
   "dl.mac_file": "Last ned .dmg-filen",
-  "dl.mac_file_note": "Åpne den og dra Hifi til «Programmer».",
+  "dl.mac_file_note": "Åpne den og dra BitSpring til «Programmer».",
   "dl.mac_file_hint": "Første gang stopper macOS appen: Åpne Systeminnstillinger → Personvern og sikkerhet, og klikk på «Åpne likevel».",
   "dl.windows_file": "Last ned installasjonsprogrammet (.exe)",
   "dl.windows_file_note": "For Windows 10 og 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Åpner App Store…",
   "dl.soon": "Kommer snart",
   "dl.other": "Andre plattformer",
-  "dl.back": "Tilbake til nettstedet"
+  "dl.back": "Tilbake til nettstedet",
+  "footer.source": "Kildekode",
+  "footer.privacy": "Personvern",
+  "footer.support": "Støtte",
+  "privacy.meta_title": "BitSprings personvernerklæring",
+  "privacy.meta_description": "BitSpring samler ikke inn noe: ingen konto, ingen analyse, ingen annonser, ingen sporing.",
+  "privacy.title": "Personvern",
+  "privacy.lead": "BitSpring samler ikke inn noe om deg. Det finnes ingen konto, ingen analyse, ingen reklame og ingen sporing.",
+  "privacy.device": "Musikken din, spillelistene dine, equalizer-forhåndsinnstillingene dine og innstillingene dine blir på enheten din. Appen laster ikke opp noe av det.",
+  "privacy.network": "Appen går bare på nett for det du ber den om. Versjonen fra dette nettstedet spør GitHub om det finnes en oppdatering og laster den ned; GitHub ser det enhver nedlasting viser, IP-adressen din og appversjonen. Hvis du logger inn på Qobuz eller TIDAL, snakker appen bare med den tjenesten, og påloggingen din blir på enheten din. App Store-versjonene går ikke på nett i det hele tatt.",
+  "privacy.site": "Dette nettstedet setter ingen informasjonskapsler og kjører ingen analyse. Nettleseren din husker språket du valgte, og det forlater den aldri. Som enhver nettvert lagrer Vercel vanlige serverlogger.",
+  "privacy.open": "BitSpring er åpen kildekode, så alle kan sjekke alt dette i koden.",
+  "privacy.contact": "Spørsmål?",
+  "privacy.contact_link": "Spør på GitHub",
+  "privacy.updated": "Sist oppdatert 11. november 2026."
 }

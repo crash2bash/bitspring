@@ -7,6 +7,7 @@
 mod android_media;
 #[cfg(target_os = "ios")]
 mod ios_media;
+mod bookmarks;
 mod eq;
 mod library;
 mod playlists;
@@ -384,7 +385,7 @@ fn open_for_at(path: &std::path::Path, mode: DsdMode, start_secs: f64) -> CmdRes
 #[tauri::command]
 fn system_locales() -> Vec<String> {
     // Android: the app's own configuration, which includes a language picked for this app in
-    // Settings → Apps → Hifi → Language (sys-locale reads only the system-wide one).
+    // Settings → Apps → BitSpring → Language (sys-locale reads only the system-wide one).
     #[cfg(target_os = "android")]
     {
         let own = android_media::locales();

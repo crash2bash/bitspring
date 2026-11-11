@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — reproductor de música bit-perfect gratuito para macOS y Windows",
+  "meta.title": "BitSpring — reproductor de música bit-perfect gratuito para macOS y Windows",
   "meta.description": "Un reproductor de música gratuito que envía a tu DAC exactamente lo que hay en el archivo. FLAC, ALAC, WAV, DSD hasta DSD1024, hasta 768 kHz. Ecualizador, crossfeed y sobremuestreo cuando los quieras.",
-  "meta.og_title": "Hifi — bit a bit",
+  "meta.og_title": "BitSpring — bit a bit",
   "meta.og_description": "Un reproductor de música bit-perfect gratuito para macOS y Windows.",
-
-  "nav.home_label": "Hifi, volver arriba",
+  "nav.home_label": "BitSpring, volver arriba",
   "nav.sections_label": "Secciones",
   "nav.how": "Cómo funciona",
   "nav.formats": "Formatos",
   "nav.enhance": "Mejoras",
   "nav.download": "Descargar",
   "nav.language": "Idioma",
-
   "hero.title": "Bit a bit",
   "hero.lede": "Un reproductor de música gratuito para macOS y Windows. Tu DAC recibe exactamente lo que hay en el archivo: sin remuestreo, sin mezclador del sistema, sin sorpresas.",
-
   "cta.appstore": "Descárgalo en el Mac App Store",
   "cta.windows": "Descargar para Windows",
   "cta.appstore_soon": "Próximamente en el Mac App Store",
   "cta.windows_soon": "Próximamente para Windows",
-
   "path.title": "Entre el archivo y el DAC no cambia ni un solo bit",
   "path.file": "Archivo",
   "path.file_detail": "FLAC, 24 bits, 96 kHz. Las muestras se leen tal como están guardadas.",
@@ -30,12 +26,10 @@
   "path.samples": "Muestras enviadas",
   "path.changed": "Bits modificados",
   "path.foot": "En macOS: modo exclusivo (hog mode) de CoreAudio con salida en enteros. En Windows: WASAPI Exclusive.",
-
   "formats.title": "Del CD a 768 kHz",
   "formats.lede": "El reproductor cambia tu DAC a la frecuencia de muestreo de cada pista. Si el DAC no la admite, el audio se remuestrea con cuidado, y el reproductor te lo indica.",
   "formats.dsd": "El DSD se reproduce de forma nativa por DoP si tu DAC lo admite, o como PCM a 176,4 kHz si no.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "Calidad CD",
   "rates.video": "Vídeo y grabación de estudio",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "El techo de los DAC actuales",
   "rates.dsd": "Un bit, {mhz} MHz",
-
   "enhance.title": "¿Quieres otro sonido? Adelante",
   "enhance.lede": "Las mejoras vienen desactivadas. Activa cualquiera y el indicador del reproductor pasa de «Bit-perfect» a «Procesando» y muestra exactamente qué se le está haciendo al sonido.",
   "enhance.upsampling": "Sobremuestreo",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Suave, medio o fuerte. Elimina la sensación de que la música suena dentro de tu cabeza.",
   "enhance.lossy": "Para MP3 y AAC",
   "enhance.lossy_detail": "El margen contra el clipping se activa solo, y los agudos por encima del corte del códec se pueden restaurar con suavidad.",
-
   "app.title": "Todo lo que le pasa al sonido, a la vista",
   "app.lede": "Formato del archivo, frecuencia del DAC y cada paso del procesamiento, en la pantalla principal.",
   "app.alt": "La ventana del reproductor: cola, reproducción actual e indicador Bit-perfect con la ruta de la señal",
-
   "download.title": "Gratis",
   "download.lede": "Sin suscripción, sin anuncios, sin cuenta. Solo un reproductor.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "En desarrollo",
-
   "footer.top": "Volver arriba",
-
   "cta.mac": "Descargar para Mac",
   "cta.mac_soon": "Próximamente para Mac",
   "cta.ios": "Descárgalo en el App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Próximamente para Android",
   "cta.other_platforms": "Otras plataformas",
   "cta.all_platforms": "Descargar",
-
-  "dl.meta_title": "Descarga Hifi para macOS, Windows, iPhone y Android",
+  "dl.meta_title": "Descarga BitSpring para macOS, Windows, iPhone y Android",
   "dl.meta_description": "El reproductor de música bit-perfect gratuito para tu dispositivo.",
-  "dl.title": "Descarga Hifi",
+  "dl.title": "Descarga BitSpring",
   "dl.for_mac": "Para tu Mac",
   "dl.for_windows": "Para tu PC con Windows",
   "dl.for_ios": "Para tu iPhone o iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "Elige tu plataforma",
   "dl.appstore_note": "Se instala y se actualiza desde el App Store.",
   "dl.mac_file": "Descargar el archivo .dmg",
-  "dl.mac_file_note": "Ábrelo y arrastra Hifi a «Aplicaciones».",
+  "dl.mac_file_note": "Ábrelo y arrastra BitSpring a «Aplicaciones».",
   "dl.mac_file_hint": "La primera vez, macOS la bloquea: abre Ajustes del Sistema → Privacidad y seguridad y haz clic en «Abrir igualmente».",
   "dl.windows_file": "Descargar el instalador (.exe)",
   "dl.windows_file_note": "Para Windows 10 y 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Abriendo el App Store…",
   "dl.soon": "Próximamente",
   "dl.other": "Otras plataformas",
-  "dl.back": "Volver al sitio"
+  "dl.back": "Volver al sitio",
+  "footer.source": "Código fuente",
+  "footer.privacy": "Privacidad",
+  "footer.support": "Soporte",
+  "privacy.meta_title": "Política de privacidad de BitSpring",
+  "privacy.meta_description": "BitSpring no recopila nada: sin cuenta, sin analíticas, sin anuncios, sin seguimiento.",
+  "privacy.title": "Privacidad",
+  "privacy.lead": "BitSpring no recopila nada sobre ti. No hay cuenta, ni analíticas, ni publicidad, ni seguimiento.",
+  "privacy.device": "Tu música, tus listas de reproducción, tus ajustes preestablecidos del ecualizador y tus ajustes se quedan en tu dispositivo. La app no sube ninguno de ellos.",
+  "privacy.network": "La app solo se conecta a internet para lo que tú le pides. La versión de este sitio web consulta a GitHub si hay una actualización y la descarga; GitHub ve lo que muestra cualquier descarga, tu dirección IP y la versión de la app. Si inicias sesión en Qobuz o TIDAL, la app habla únicamente con ese servicio, y tu inicio de sesión se queda en tu dispositivo. Las versiones de la App Store no se conectan a internet en absoluto.",
+  "privacy.site": "Este sitio web no usa cookies ni analíticas. Tu navegador recuerda el idioma que elegiste, y eso nunca sale de él. Como cualquier servidor web, Vercel guarda registros estándar del servidor.",
+  "privacy.open": "BitSpring es de código abierto, así que cualquiera puede comprobar todo esto en su código.",
+  "privacy.contact": "¿Preguntas?",
+  "privacy.contact_link": "Pregunta en GitHub",
+  "privacy.updated": "Última actualización: 11 de noviembre de 2026."
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"Hifi"</string>
-    <string name="main_activity_title">"Hifi"</string>
+    <string name="app_name">"BitSpring"</string>
+    <string name="main_activity_title">"BitSpring"</string>
     <!-- The media notification; other languages in values-*/strings.xml, from src/lib/locales. -->
     <string name="playback_channel">"Now Playing"</string>
     <string name="action_prev">"Previous track"</string>

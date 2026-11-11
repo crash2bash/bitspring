@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — gratis bit-perfect muziekspeler voor macOS en Windows",
+  "meta.title": "BitSpring — gratis bit-perfect muziekspeler voor macOS en Windows",
   "meta.description": "Een gratis muziekspeler die je DAC precies stuurt wat er in het bestand staat. FLAC, ALAC, WAV, DSD tot DSD1024, tot 768 kHz. EQ, crossfeed en upsampling als je dat wilt.",
-  "meta.og_title": "Hifi — bit voor bit",
+  "meta.og_title": "BitSpring — bit voor bit",
   "meta.og_description": "Een gratis bit-perfect muziekspeler voor macOS en Windows.",
-
-  "nav.home_label": "Hifi, terug naar boven",
+  "nav.home_label": "BitSpring, terug naar boven",
   "nav.sections_label": "Secties",
   "nav.how": "Hoe het werkt",
   "nav.formats": "Formaten",
   "nav.enhance": "Verbeteringen",
   "nav.download": "Downloaden",
   "nav.language": "Taal",
-
   "hero.title": "Bit voor bit",
   "hero.lede": "Een gratis muziekspeler voor macOS en Windows. Je DAC krijgt precies wat er in het bestand staat: geen resampling, geen systeemmixer, geen verrassingen.",
-
   "cta.appstore": "Download in de Mac App Store",
   "cta.windows": "Downloaden voor Windows",
   "cta.appstore_soon": "Binnenkort in de Mac App Store",
   "cta.windows_soon": "Binnenkort voor Windows",
-
   "path.title": "Tussen bestand en DAC verandert geen enkele bit",
   "path.file": "Bestand",
   "path.file_detail": "FLAC, 24 bit, 96 kHz. Samples worden gelezen precies zoals ze zijn opgeslagen.",
@@ -30,12 +26,10 @@
   "path.samples": "Verzonden samples",
   "path.changed": "Gewijzigde bits",
   "path.foot": "Op macOS: CoreAudio in exclusieve modus (hog mode) met integer-uitvoer. Op Windows: WASAPI Exclusive.",
-
   "formats.title": "Van cd tot 768 kHz",
   "formats.lede": "De speler zet je DAC op de samplerate van elk nummer. Kan de DAC die niet aan, dan wordt het geluid zorgvuldig geresampled, en dat laat de speler je weten.",
   "formats.dsd": "DSD speelt native via DoP als je DAC dat ondersteunt, en anders als PCM op 176,4 kHz.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "Cd-kwaliteit",
   "rates.video": "Video en studio-opname",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Het plafond van de huidige DAC’s",
   "rates.dsd": "Eén bit, {mhz} MHz",
-
   "enhance.title": "Ander geluid? Ga je gang",
   "enhance.lede": "Verbeteringen staan standaard uit. Zet er een aan en de indicator in de speler springt van “Bit-perfect” naar “Verwerking” en laat precies zien wat er met het geluid gebeurt.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Licht, gemiddeld of sterk. Haalt het gevoel weg dat de muziek in je hoofd speelt.",
   "enhance.lossy": "Voor MP3 en AAC",
   "enhance.lossy_detail": "Headroom tegen clipping gaat vanzelf aan, en het hoog boven de afsnijfrequentie van de codec kan voorzichtig worden hersteld.",
-
   "app.title": "Alles wat er met het geluid gebeurt, in één oogopslag",
   "app.lede": "Bestandsformaat, samplerate van de DAC en elke verwerkingsstap, gewoon op het hoofdscherm.",
   "app.alt": "Het spelervenster: wachtrij, nu aan het spelen en de Bit-perfect-indicator met het signaalpad",
-
   "download.title": "Gratis",
   "download.lede": "Geen abonnement, geen advertenties, geen account. Gewoon een speler.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "In ontwikkeling",
-
   "footer.top": "Terug naar boven",
-
   "cta.mac": "Downloaden voor Mac",
   "cta.mac_soon": "Binnenkort voor Mac",
   "cta.ios": "Download in de App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Binnenkort voor Android",
   "cta.other_platforms": "Andere platforms",
   "cta.all_platforms": "Downloaden",
-
-  "dl.meta_title": "Download Hifi voor macOS, Windows, iPhone en Android",
+  "dl.meta_title": "Download BitSpring voor macOS, Windows, iPhone en Android",
   "dl.meta_description": "De gratis bit-perfect muziekspeler voor je apparaat.",
-  "dl.title": "Download Hifi",
+  "dl.title": "Download BitSpring",
   "dl.for_mac": "Voor je Mac",
   "dl.for_windows": "Voor je Windows-pc",
   "dl.for_ios": "Voor je iPhone of iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "Kies je platform",
   "dl.appstore_note": "Installatie en updates via de App Store.",
   "dl.mac_file": "Download het .dmg-bestand",
-  "dl.mac_file_note": "Open het en sleep Hifi naar “Apps”.",
+  "dl.mac_file_note": "Open het en sleep BitSpring naar “Apps”.",
   "dl.mac_file_hint": "De eerste keer houdt macOS de app tegen: open Systeeminstellingen → Privacy en beveiliging en klik op ‘Open toch’.",
   "dl.windows_file": "Download het installatieprogramma (.exe)",
   "dl.windows_file_note": "Voor Windows 10 en 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "App Store wordt geopend…",
   "dl.soon": "Binnenkort",
   "dl.other": "Andere platforms",
-  "dl.back": "Terug naar de site"
+  "dl.back": "Terug naar de site",
+  "footer.source": "Broncode",
+  "footer.privacy": "Privacy",
+  "footer.support": "Support",
+  "privacy.meta_title": "Privacybeleid van BitSpring",
+  "privacy.meta_description": "BitSpring verzamelt niets: geen account, geen analyse, geen advertenties, geen tracking.",
+  "privacy.title": "Privacy",
+  "privacy.lead": "BitSpring verzamelt niets over jou. Er is geen account, geen analyse, geen reclame en geen tracking.",
+  "privacy.device": "Je muziek, afspeellijsten, equalizerpresets en instellingen blijven op je apparaat. De app uploadt niets daarvan.",
+  "privacy.network": "De app gaat alleen online voor wat jij ervan vraagt. De versie van deze website vraagt GitHub of er een update is en downloadt die; GitHub ziet wat elke download laat zien, je IP-adres en de appversie. Als je inlogt bij Qobuz of TIDAL, praat de app alleen met die dienst, en je login blijft op je apparaat. De App Store-versies gaan helemaal niet online.",
+  "privacy.site": "Deze website plaatst geen cookies en voert geen analyse uit. Je browser onthoudt de taal die je koos, en die verlaat de browser nooit. Zoals elke webhost bewaart Vercel standaard serverlogs.",
+  "privacy.open": "BitSpring is open source, dus iedereen kan dit allemaal in de code controleren.",
+  "privacy.contact": "Vragen?",
+  "privacy.contact_link": "Vraag het op GitHub",
+  "privacy.updated": "Laatst bijgewerkt op 11 november 2026."
 }

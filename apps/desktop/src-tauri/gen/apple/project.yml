@@ -1,6 +1,6 @@
 name: hifi-desktop
 options:
-  bundleIdPrefix: dev.local.hifi
+  bundleIdPrefix: app.bitspring
   deploymentTarget:
     iOS: 15.0
 fileGroups: [../../src]
@@ -10,8 +10,8 @@ configs:
 settingGroups:
   app:
     base:
-      PRODUCT_NAME: Hifi
-      PRODUCT_BUNDLE_IDENTIFIER: dev.local.hifi
+      PRODUCT_NAME: BitSpring
+      PRODUCT_BUNDLE_IDENTIFIER: app.bitspring.player
 targetTemplates:
   app:
     type: application
@@ -67,6 +67,8 @@ targets:
     settings:
       base:
         ENABLE_BITCODE: false
+        # iPhone only for now: the phone layout isn't made for iPad screens (iPads still run it).
+        TARGETED_DEVICE_FAMILY: 1
         ARCHS: [arm64]
         VALID_ARCHS: arm64 
         LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)

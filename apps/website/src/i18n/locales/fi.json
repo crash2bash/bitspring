@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — ilmainen bit-perfect-musiikkisoitin macOS:lle ja Windowsille",
+  "meta.title": "BitSpring — ilmainen bit-perfect-musiikkisoitin macOS:lle ja Windowsille",
   "meta.description": "Ilmainen musiikkisoitin, joka lähettää DAC:lle täsmälleen sen, mitä tiedostossa on. FLAC, ALAC, WAV, DSD aina DSD1024:ään asti, jopa 768 kHz. EQ, crossfeed ja ylinäytteistys silloin, kun haluat.",
-  "meta.og_title": "Hifi — bitti bitiltä",
+  "meta.og_title": "BitSpring — bitti bitiltä",
   "meta.og_description": "Ilmainen bit-perfect-musiikkisoitin macOS:lle ja Windowsille.",
-
-  "nav.home_label": "Hifi, takaisin ylös",
+  "nav.home_label": "BitSpring, takaisin ylös",
   "nav.sections_label": "Osiot",
   "nav.how": "Näin se toimii",
   "nav.formats": "Formaatit",
   "nav.enhance": "Parannukset",
   "nav.download": "Lataa",
   "nav.language": "Kieli",
-
   "hero.title": "Bitti bitiltä",
   "hero.lede": "Ilmainen musiikkisoitin macOS:lle ja Windowsille. DAC saa täsmälleen sen, mitä tiedostossa on: ei näytetaajuuden muunnosta, ei järjestelmän mikseriä, ei yllätyksiä.",
-
   "cta.appstore": "Lataa Mac App Storesta",
   "cta.windows": "Lataa Windowsille",
   "cta.appstore_soon": "Tulossa Mac App Storeen",
   "cta.windows_soon": "Tulossa Windowsille",
-
   "path.title": "Tiedoston ja DAC:n välillä ei muutu yksikään bitti",
   "path.file": "Tiedosto",
   "path.file_detail": "FLAC, 24-bittinen, 96 kHz. Näytteet luetaan täsmälleen sellaisina kuin ne on tallennettu.",
@@ -30,12 +26,10 @@
   "path.samples": "Lähetetyt näytteet",
   "path.changed": "Muuttuneet bitit",
   "path.foot": "macOS:ssä CoreAudion yksinomainen tila (hog mode) ja kokonaislukulähtö. Windowsissa WASAPI Exclusive.",
-
   "formats.title": "CD:stä 768 kHz:iin",
   "formats.lede": "Soitin vaihtaa DAC:n kunkin kappaleen omaan näytetaajuuteen. Jos DAC ei tue taajuutta, ääni muunnetaan huolellisesti, ja soitin kertoo siitä.",
   "formats.dsd": "DSD soi natiivisti DoP:n kautta, jos DAC tukee sitä, ja muuten 176,4 kHz:n PCM:nä.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD-laatu",
   "rates.video": "Video ja studiotallennus",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Nykyisten DAC:ien yläraja",
   "rates.dsd": "Yksi bitti, {mhz} MHz",
-
   "enhance.title": "Haluatko erilaisen äänen? Ole hyvä",
   "enhance.lede": "Parannukset ovat oletuksena pois päältä. Kytke mikä tahansa niistä päälle, niin soittimen ilmaisin vaihtuu tilasta ”Bit-perfect” tilaan ”Käsittely” ja näyttää tarkalleen, mitä äänelle tehdään.",
   "enhance.upsampling": "Ylinäytteistys",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Kevyt, keskivahva tai voimakas. Poistaa tunteen, että musiikki soi pään sisällä.",
   "enhance.lossy": "MP3:lle ja AAC:lle",
   "enhance.lossy_detail": "Klippaukselta suojaava pelivara kytkeytyy päälle itsestään, ja koodekin rajataajuuden yläpuolista diskanttia voi palauttaa hienovaraisesti.",
-
   "app.title": "Näet kaiken, mitä äänelle tapahtuu",
   "app.lede": "Tiedostomuoto, DAC:n näytetaajuus ja jokainen käsittelyvaihe suoraan päänäkymässä.",
   "app.alt": "Soittimen ikkuna: jono, nyt soi ja Bit-perfect-ilmaisin signaalitien kanssa",
-
   "download.title": "Ilmainen",
   "download.lede": "Ei tilausta, ei mainoksia, ei tiliä. Pelkkä soitin.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "Työn alla",
-
   "footer.top": "Takaisin ylös",
-
   "cta.mac": "Lataa Macille",
   "cta.mac_soon": "Tulossa Macille",
   "cta.ios": "Lataa App Storesta",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Tulossa Androidille",
   "cta.other_platforms": "Muut alustat",
   "cta.all_platforms": "Lataa",
-
-  "dl.meta_title": "Lataa Hifi macOS:lle, Windowsille, iPhonelle ja Androidille",
+  "dl.meta_title": "Lataa BitSpring macOS:lle, Windowsille, iPhonelle ja Androidille",
   "dl.meta_description": "Ilmainen bit-perfect-musiikkisoitin laitteellesi.",
-  "dl.title": "Lataa Hifi",
+  "dl.title": "Lataa BitSpring",
   "dl.for_mac": "Macillesi",
   "dl.for_windows": "Windows-tietokoneellesi",
   "dl.for_ios": "iPhonellesi tai iPadillesi",
@@ -92,7 +80,7 @@
   "dl.choose": "Valitse alusta",
   "dl.appstore_note": "Asennus ja päivitykset App Storen kautta.",
   "dl.mac_file": "Lataa .dmg-tiedosto",
-  "dl.mac_file_note": "Avaa tiedosto ja vedä Hifi kansioon ”Ohjelmat”.",
+  "dl.mac_file_note": "Avaa tiedosto ja vedä BitSpring kansioon ”Ohjelmat”.",
   "dl.mac_file_hint": "Ensimmäisellä kerralla macOS estää sovelluksen: avaa Järjestelmäasetukset → Yksityisyys ja turvallisuus ja valitse ”Avaa silti”.",
   "dl.windows_file": "Lataa asennusohjelma (.exe)",
   "dl.windows_file_note": "Windows 10:lle ja 11:lle.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Avataan App Storea…",
   "dl.soon": "Tulossa pian",
   "dl.other": "Muut alustat",
-  "dl.back": "Takaisin sivustolle"
+  "dl.back": "Takaisin sivustolle",
+  "footer.source": "Lähdekoodi",
+  "footer.privacy": "Tietosuoja",
+  "footer.support": "Tuki",
+  "privacy.meta_title": "BitSpringin tietosuojakäytäntö",
+  "privacy.meta_description": "BitSpring ei kerää mitään: ei tiliä, ei analytiikkaa, ei mainoksia, ei seurantaa.",
+  "privacy.title": "Tietosuoja",
+  "privacy.lead": "BitSpring ei kerää sinusta mitään. Tiliä, analytiikkaa, mainontaa tai seurantaa ei ole.",
+  "privacy.device": "Musiikkisi, soittolistasi, taajuuskorjaimen esiasetuksesi ja asetuksesi pysyvät laitteellasi. Sovellus ei lähetä niistä mitään.",
+  "privacy.network": "Sovellus ottaa yhteyden verkkoon vain sen takia, mitä siltä pyydät. Tältä verkkosivustolta ladattu versio kysyy GitHubilta, onko päivitystä saatavilla, ja lataa sen; GitHub näkee sen, minkä mikä tahansa lataus paljastaa, eli IP-osoitteesi ja sovelluksen version. Jos kirjaudut Qobuziin tai TIDALiin, sovellus puhuu vain sen palvelun kanssa, ja kirjautumisesi pysyy laitteellasi. App Store -versiot eivät ota yhteyttä verkkoon lainkaan.",
+  "privacy.site": "Tämä verkkosivusto ei aseta evästeitä eikä käytä analytiikkaa. Selaimesi muistaa valitsemasi kielen, eikä se poistu koskaan selaimesta. Kuten mikä tahansa verkkopalvelin, Vercel säilyttää tavallisia palvelinlokeja.",
+  "privacy.open": "BitSpring on avointa lähdekoodia, joten kuka tahansa voi tarkistaa kaiken tämän sen koodista.",
+  "privacy.contact": "Kysyttävää?",
+  "privacy.contact_link": "Kysy GitHubissa",
+  "privacy.updated": "Päivitetty viimeksi 11. marraskuuta 2026."
 }

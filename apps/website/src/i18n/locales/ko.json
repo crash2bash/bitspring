@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — macOS·Windows용 무료 비트 퍼펙트 음악 플레이어",
+  "meta.title": "BitSpring — macOS·Windows용 무료 비트 퍼펙트 음악 플레이어",
   "meta.description": "파일에 담긴 그대로 DAC에 보내는 무료 음악 플레이어. FLAC, ALAC, WAV, DSD1024까지의 DSD, 최대 768 kHz 지원. EQ, 크로스피드, 업샘플링은 원할 때만.",
-  "meta.og_title": "Hifi — 비트 그대로",
+  "meta.og_title": "BitSpring — 비트 그대로",
   "meta.og_description": "macOS와 Windows용 무료 비트 퍼펙트 음악 플레이어.",
-
-  "nav.home_label": "Hifi, 맨 위로",
+  "nav.home_label": "BitSpring, 맨 위로",
   "nav.sections_label": "섹션",
   "nav.how": "작동 방식",
   "nav.formats": "포맷",
   "nav.enhance": "사운드 조정",
   "nav.download": "다운로드",
   "nav.language": "언어",
-
   "hero.title": "비트 그대로",
   "hero.lede": "macOS와 Windows용 무료 음악 플레이어. DAC는 파일에 담긴 그대로를 받습니다. 리샘플링도, 시스템 믹서도, 뜻밖의 변화도 없습니다.",
-
   "cta.appstore": "Mac App Store에서 다운로드",
   "cta.windows": "Windows용 다운로드",
   "cta.appstore_soon": "Mac App Store 출시 예정",
   "cta.windows_soon": "Windows 버전 출시 예정",
-
   "path.title": "파일에서 DAC까지, 단 1비트도 바뀌지 않습니다",
   "path.file": "파일",
   "path.file_detail": "FLAC, 24비트, 96 kHz. 샘플을 저장된 그대로 읽습니다.",
@@ -30,12 +26,10 @@
   "path.samples": "전송된 샘플",
   "path.changed": "바뀐 비트",
   "path.foot": "macOS에서는 CoreAudio 독점(hog) 모드와 정수 출력, Windows에서는 WASAPI Exclusive를 사용합니다.",
-
   "formats.title": "CD부터 768 kHz까지",
   "formats.lede": "플레이어는 곡마다 DAC를 해당 샘플레이트로 전환합니다. DAC가 지원하지 않는 샘플레이트라면 정교하게 리샘플링하고, 그 사실을 분명히 알려 줍니다.",
   "formats.dsd": "DSD는 DAC가 지원하면 DoP로 네이티브 재생하고, 지원하지 않으면 176.4 kHz PCM으로 재생합니다.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD 음질",
   "rates.video": "영상 및 스튜디오 녹음",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "현재 DAC의 한계",
   "rates.dsd": "1비트, {mhz} MHz",
-
   "enhance.title": "다른 소리를 원하세요? 얼마든지",
   "enhance.lede": "사운드 조정은 기본적으로 모두 꺼져 있습니다. 하나라도 켜면 플레이어 표시기가 “Bit-perfect”에서 “처리 중”으로 바뀌고, 소리에 어떤 처리를 하는지 정확히 보여 줍니다.",
   "enhance.upsampling": "업샘플링",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "약, 중, 강 세 단계. 음악이 머릿속에서 울리는 듯한 느낌을 없애 줍니다.",
   "enhance.lossy": "MP3와 AAC를 위해",
   "enhance.lossy_detail": "클리핑을 막는 헤드룸이 자동으로 켜지고, 코덱이 잘라 낸 고음역을 부드럽게 복원할 수 있습니다.",
-
   "app.title": "소리에 일어나는 모든 일을 한눈에",
   "app.lede": "파일 포맷, DAC 샘플레이트, 모든 처리 단계를 메인 화면에서 바로 보여 줍니다.",
   "app.alt": "플레이어 창: 재생 대기열, 현재 재생 중인 곡, 신호 경로가 표시된 Bit-perfect 표시기",
-
   "download.title": "무료",
   "download.lede": "구독도, 광고도, 계정도 필요 없습니다. 오직 플레이어일 뿐입니다.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "개발 중",
-
   "footer.top": "맨 위로",
-
   "cta.mac": "Mac용 다운로드",
   "cta.mac_soon": "Mac 버전 출시 예정",
   "cta.ios": "App Store에서 다운로드",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Android 버전 출시 예정",
   "cta.other_platforms": "다른 플랫폼",
   "cta.all_platforms": "다운로드",
-
-  "dl.meta_title": "macOS, Windows, iPhone, Android용 Hifi 다운로드",
+  "dl.meta_title": "macOS, Windows, iPhone, Android용 BitSpring 다운로드",
   "dl.meta_description": "내 기기에 맞는 무료 비트 퍼펙트 음악 플레이어를 받으세요.",
-  "dl.title": "Hifi 다운로드",
+  "dl.title": "BitSpring 다운로드",
   "dl.for_mac": "Mac용",
   "dl.for_windows": "Windows PC용",
   "dl.for_ios": "iPhone 및 iPad용",
@@ -92,7 +80,7 @@
   "dl.choose": "플랫폼을 선택하세요",
   "dl.appstore_note": "App Store에서 설치하고 업데이트합니다.",
   "dl.mac_file": ".dmg 파일 다운로드",
-  "dl.mac_file_note": "파일을 열고 Hifi를 ‘응용 프로그램’ 폴더로 드래그하세요.",
+  "dl.mac_file_note": "파일을 열고 BitSpring를 ‘응용 프로그램’ 폴더로 드래그하세요.",
   "dl.mac_file_hint": "처음 실행할 때 macOS가 차단합니다. ‘시스템 설정’ → ‘개인정보 보호 및 보안’에서 ‘그래도 열기’를 클릭하세요.",
   "dl.windows_file": "설치 프로그램(.exe) 다운로드",
   "dl.windows_file_note": "Windows 10 및 11 지원.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "App Store를 여는 중…",
   "dl.soon": "출시 예정",
   "dl.other": "다른 플랫폼",
-  "dl.back": "사이트로 돌아가기"
+  "dl.back": "사이트로 돌아가기",
+  "footer.source": "소스 코드",
+  "footer.privacy": "개인정보 보호",
+  "footer.support": "지원",
+  "privacy.meta_title": "BitSpring 개인정보 처리방침",
+  "privacy.meta_description": "BitSpring은 아무것도 수집하지 않습니다. 계정도, 분석도, 광고도, 추적도 없습니다.",
+  "privacy.title": "개인정보 보호",
+  "privacy.lead": "BitSpring은 여러분에 대해 아무것도 수집하지 않습니다. 계정도, 분석도, 광고도, 추적도 없습니다.",
+  "privacy.device": "음악, 재생목록, 이퀄라이저 프리셋, 설정은 모두 기기에 그대로 남습니다. 앱은 이 중 어떤 것도 업로드하지 않습니다.",
+  "privacy.network": "앱은 여러분이 요청한 일을 할 때만 온라인에 접속합니다. 이 웹사이트에서 받은 버전은 GitHub에 업데이트가 있는지 묻고 내려받습니다. GitHub는 어떤 다운로드에서든 보이는 정보, 즉 IP 주소와 앱 버전을 봅니다. Qobuz나 TIDAL에 로그인하면 앱은 해당 서비스와만 통신하며, 로그인 정보는 기기에 남습니다. App Store 버전은 온라인에 전혀 접속하지 않습니다.",
+  "privacy.site": "이 웹사이트는 쿠키를 설정하지 않으며 분석도 하지 않습니다. 브라우저는 선택한 언어를 기억하지만, 그 정보는 브라우저 밖으로 나가지 않습니다. 다른 웹 호스트와 마찬가지로 Vercel은 표준 서버 로그를 보관합니다.",
+  "privacy.open": "BitSpring은 오픈 소스이므로 누구나 코드에서 이 모든 것을 확인할 수 있습니다.",
+  "privacy.contact": "궁금한 점이 있으신가요?",
+  "privacy.contact_link": "GitHub에서 문의하기",
+  "privacy.updated": "최종 업데이트: 2026년 11월 11일"
 }

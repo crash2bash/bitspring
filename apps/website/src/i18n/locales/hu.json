@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi – ingyenes, bit-perfect zenelejátszó macOS-re és Windowsra",
+  "meta.title": "BitSpring – ingyenes, bit-perfect zenelejátszó macOS-re és Windowsra",
   "meta.description": "Ingyenes zenelejátszó, amely pontosan azt küldi a DAC-nak, ami a fájlban van. FLAC, ALAC, WAV, DSD egészen DSD1024-ig, akár 768 kHz-ig. Hangszínszabályzó, crossfeed és upsampling, ha kell.",
-  "meta.og_title": "Hifi – bitről bitre",
+  "meta.og_title": "BitSpring – bitről bitre",
   "meta.og_description": "Ingyenes, bit-perfect zenelejátszó macOS-re és Windowsra.",
-
-  "nav.home_label": "Hifi, vissza az oldal tetejére",
+  "nav.home_label": "BitSpring, vissza az oldal tetejére",
   "nav.sections_label": "Szakaszok",
   "nav.how": "Hogyan működik",
   "nav.formats": "Formátumok",
   "nav.enhance": "Hangfeldolgozás",
   "nav.download": "Letöltés",
   "nav.language": "Nyelv",
-
   "hero.title": "Bitről bitre",
   "hero.lede": "Ingyenes zenelejátszó macOS-re és Windowsra. A DAC pontosan azt kapja, ami a fájlban van: nincs újramintavételezés, nincs rendszerkeverő, nincsenek meglepetések.",
-
   "cta.appstore": "Letöltés a Mac App Store-ból",
   "cta.windows": "Letöltés Windowsra",
   "cta.appstore_soon": "Hamarosan a Mac App Store-ban",
   "cta.windows_soon": "Hamarosan Windowsra",
-
   "path.title": "A fájl és a DAC között egyetlen bit sem változik",
   "path.file": "Fájl",
   "path.file_detail": "FLAC, 24 bit, 96 kHz. A minták pontosan úgy kerülnek beolvasásra, ahogy a fájlban vannak.",
@@ -30,12 +26,10 @@
   "path.samples": "Elküldött minták",
   "path.changed": "Megváltozott bitek",
   "path.foot": "macOS-en: CoreAudio exkluzív (hog) mód, egész számos kimenettel. Windowson: WASAPI Exclusive.",
-
   "formats.title": "A CD-től a 768 kHz-ig",
   "formats.lede": "A lejátszó minden számnál a saját mintavételi frekvenciájára kapcsolja a DAC-ot. Ha a DAC ezt nem tudja, a hangot gondosan újramintavételezi – és ezt jelzi is.",
   "formats.dsd": "A DSD natívan, DoP-n keresztül szól, ha a DAC támogatja; ha nem, 176,4 kHz-es PCM-ként.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD-minőség",
   "rates.video": "Videó és stúdiófelvétel",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "A mai DAC-ok felső határa",
   "rates.dsd": "Egy bit, {mhz} MHz",
-
   "enhance.title": "Más hangzást szeretnél? Csak nyugodtan",
   "enhance.lede": "A hangfeldolgozó funkciók alapból ki vannak kapcsolva. Ha bármelyiket bekapcsolod, a lejátszó jelzője „Bit-perfect” helyett „Feldolgozás” feliratra vált, és pontosan felsorolja, mi történik a hanggal.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Enyhe, közepes vagy erős. Megszünteti azt az érzést, hogy a zene a fejedben szól.",
   "enhance.lossy": "MP3-hoz és AAC-hez",
   "enhance.lossy_detail": "A túlvezérlés elleni tartalék magától bekapcsol, a kodek vágási frekvenciája feletti magasak pedig finoman visszaállíthatók.",
-
   "app.title": "Minden, ami a hanggal történik, szem előtt",
   "app.lede": "Fájlformátum, a DAC mintavételi frekvenciája és minden feldolgozási lépés – közvetlenül a főképernyőn.",
   "app.alt": "A lejátszó ablaka: lejátszási sor, most szól, és a Bit-perfect jelző a jelúttal",
-
   "download.title": "Ingyenes",
   "download.lede": "Nincs előfizetés, nincs reklám, nincs fiók. Csak egy lejátszó.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "Fejlesztés alatt",
-
   "footer.top": "Vissza a tetejére",
-
   "cta.mac": "Letöltés Macre",
   "cta.mac_soon": "Hamarosan Macre",
   "cta.ios": "Letöltés az App Store-ból",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Hamarosan Androidra",
   "cta.other_platforms": "Más platformok",
   "cta.all_platforms": "Letöltés",
-
-  "dl.meta_title": "Hifi letöltése macOS-re, Windowsra, iPhone-ra és Androidra",
+  "dl.meta_title": "BitSpring letöltése macOS-re, Windowsra, iPhone-ra és Androidra",
   "dl.meta_description": "Ingyenes, bit-perfect zenelejátszó az eszközödre.",
-  "dl.title": "Hifi letöltése",
+  "dl.title": "BitSpring letöltése",
   "dl.for_mac": "A Macedre",
   "dl.for_windows": "A windowsos gépedre",
   "dl.for_ios": "Az iPhone-odra vagy iPadedre",
@@ -92,7 +80,7 @@
   "dl.choose": "Válassz platformot",
   "dl.appstore_note": "Telepítés és frissítések az App Store-on keresztül.",
   "dl.mac_file": "A .dmg fájl letöltése",
-  "dl.mac_file_note": "Nyisd meg, és húzd a Hifit az „Alkalmazások” mappába.",
+  "dl.mac_file_note": "Nyisd meg, és húzd a BitSpringt az „Alkalmazások” mappába.",
   "dl.mac_file_hint": "Első indításkor a macOS letiltja: nyisd meg a Rendszerbeállítások → Adatvédelem és biztonság részt, és kattints a „Megnyitás mindenképp” gombra.",
   "dl.windows_file": "A telepítő letöltése (.exe)",
   "dl.windows_file_note": "Windows 10-hez és 11-hez.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Az App Store megnyitása…",
   "dl.soon": "Hamarosan",
   "dl.other": "Más platformok",
-  "dl.back": "Vissza a webhelyre"
+  "dl.back": "Vissza a webhelyre",
+  "footer.source": "Forráskód",
+  "footer.privacy": "Adatvédelem",
+  "footer.support": "Támogatás",
+  "privacy.meta_title": "A BitSpring adatvédelmi irányelvei",
+  "privacy.meta_description": "A BitSpring semmit nem gyűjt: nincs fiók, nincs analitika, nincs reklám, nincs követés.",
+  "privacy.title": "Adatvédelem",
+  "privacy.lead": "A BitSpring semmit sem gyűjt rólad. Nincs fiók, nincs analitika, nincs reklám és nincs követés.",
+  "privacy.device": "A zenéd, a lejátszási listáid, az equalizer-előbeállításaid és a beállításaid az eszközödön maradnak. Az alkalmazás ezek közül semmit nem tölt fel.",
+  "privacy.network": "Az alkalmazás csak azért megy online, amit kérsz tőle. A weboldalról letöltött verzió megkérdezi a GitHubot, van-e frissítés, és letölti azt; a GitHub azt látja, amit bármelyik letöltés mutat: az IP-címedet és az alkalmazás verzióját. Ha bejelentkezel a Qobuzba vagy a TIDAL-ba, az alkalmazás csak azzal a szolgáltatással kommunikál, és a bejelentkezésed az eszközödön marad. Az App Store-os verziók egyáltalán nem mennek online.",
+  "privacy.site": "Ez a weboldal nem állít be sütiket, és nem használ analitikát. A böngésződ megjegyzi a választott nyelvet, és az soha nem hagyja el a böngészőt. Mint minden webtárhely, a Vercel is szokásos szerver-naplókat őriz.",
+  "privacy.open": "A BitSpring nyílt forráskódú, így bárki ellenőrizheti mindezt a kódjában.",
+  "privacy.contact": "Kérdésed van?",
+  "privacy.contact_link": "Kérdezz a GitHubon",
+  "privacy.updated": "Utolsó frissítés: 2026. november 11."
 }

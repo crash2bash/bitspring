@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The UI's languages (src/lib/locales): Android 13+ lists them under Settings → Apps → Hifi → Language. -->
+<!-- The UI's languages (src/lib/locales): Android 13+ lists them under Settings → Apps → BitSpring → Language. -->
 <locale-config xmlns:android="http://schemas.android.com/apk/res/android">
     <locale android:name="en" />
     <locale android:name="de" />

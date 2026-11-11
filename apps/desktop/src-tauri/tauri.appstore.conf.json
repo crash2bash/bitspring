@@ -1,6 +1,13 @@
 {
+  "identifier": "app.bitspring.player",
   "bundle": {
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "macOS": {
+      "entitlements": "AppStore.entitlements",
+      "files": {
+        "Resources/PrivacyInfo.xcprivacy": "gen/apple/hifi-desktop_iOS/PrivacyInfo.xcprivacy"
+      }
+    }
   },
   "plugins": {
     "updater": null

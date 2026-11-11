@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — bezplatný bit-perfect přehrávač pro macOS a Windows",
+  "meta.title": "BitSpring — bezplatný bit-perfect přehrávač pro macOS a Windows",
   "meta.description": "Bezplatný hudební přehrávač, který do převodníku pošle přesně to, co je v souboru. FLAC, ALAC, WAV, DSD až do DSD1024, až 768 kHz. EQ, crossfeed a upsampling, když o ně stojíte.",
-  "meta.og_title": "Hifi — bit po bitu",
+  "meta.og_title": "BitSpring — bit po bitu",
   "meta.og_description": "Bezplatný bit-perfect hudební přehrávač pro macOS a Windows.",
-
-  "nav.home_label": "Hifi, zpět nahoru",
+  "nav.home_label": "BitSpring, zpět nahoru",
   "nav.sections_label": "Sekce",
   "nav.how": "Jak to funguje",
   "nav.formats": "Formáty",
   "nav.enhance": "Vylepšení",
   "nav.download": "Stáhnout",
   "nav.language": "Jazyk",
-
   "hero.title": "Bit po bitu",
   "hero.lede": "Bezplatný hudební přehrávač pro macOS a Windows. Váš DAC dostane přesně to, co je v souboru: žádné převzorkování, žádný systémový mixér, žádná překvapení.",
-
   "cta.appstore": "Stáhnout v Mac App Store",
   "cta.windows": "Stáhnout pro Windows",
   "cta.appstore_soon": "Brzy v Mac App Store",
   "cta.windows_soon": "Brzy pro Windows",
-
   "path.title": "Mezi souborem a převodníkem se nezmění ani jeden bit",
   "path.file": "Soubor",
   "path.file_detail": "FLAC, 24 bitů, 96 kHz. Vzorky se čtou přesně tak, jak jsou uložené.",
@@ -30,12 +26,10 @@
   "path.samples": "Odeslané vzorky",
   "path.changed": "Změněné bity",
   "path.foot": "Na macOS: výhradní režim CoreAudio (hog mode) s celočíselným výstupem. Na Windows: WASAPI Exclusive.",
-
   "formats.title": "Od CD po 768 kHz",
   "formats.lede": "Přehrávač přepne převodník na vzorkovací frekvenci každé skladby. Pokud ji DAC nezvládne, zvuk se pečlivě převzorkuje a přehrávač vám to řekne.",
   "formats.dsd": "DSD hraje nativně přes DoP, pokud to váš DAC podporuje, jinak jako PCM 176,4 kHz.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "Kvalita CD",
   "rates.video": "Video a studiové nahrávání",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Strop dnešních převodníků",
   "rates.dsd": "Jeden bit, {mhz} MHz",
-
   "enhance.title": "Chcete jiný zvuk? Prosím",
   "enhance.lede": "Vylepšení jsou ve výchozím stavu vypnutá. Zapněte kterékoli z nich a indikátor v přehrávači se přepne z „Bit-perfect“ na „Zpracování“ a vypíše, co přesně se se zvukem děje.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Slabý, střední nebo silný. Odstraní pocit, že hudba hraje uvnitř hlavy.",
   "enhance.lossy": "Pro MP3 a AAC",
   "enhance.lossy_detail": "Rezerva proti přebuzení se zapne sama a výšky nad ořezovou frekvencí kodeku lze citlivě obnovit.",
-
   "app.title": "Vidíte všechno, co se děje se zvukem",
   "app.lede": "Formát souboru, vzorkovací frekvence převodníku a každý krok zpracování, přímo na hlavní obrazovce.",
   "app.alt": "Okno přehrávače: fronta, právě hraje a indikátor Bit-perfect s cestou signálu",
-
   "download.title": "Zdarma",
   "download.lede": "Žádné předplatné, žádné reklamy, žádný účet. Prostě přehrávač.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "Připravujeme",
-
   "footer.top": "Zpět nahoru",
-
   "cta.mac": "Stáhnout pro Mac",
   "cta.mac_soon": "Brzy pro Mac",
   "cta.ios": "Stáhnout v App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Brzy pro Android",
   "cta.other_platforms": "Další platformy",
   "cta.all_platforms": "Stáhnout",
-
-  "dl.meta_title": "Stáhněte si Hifi pro macOS, Windows, iPhone a Android",
+  "dl.meta_title": "Stáhněte si BitSpring pro macOS, Windows, iPhone a Android",
   "dl.meta_description": "Bezplatný bit-perfect hudební přehrávač pro vaše zařízení.",
-  "dl.title": "Stáhněte si Hifi",
+  "dl.title": "Stáhněte si BitSpring",
   "dl.for_mac": "Pro váš Mac",
   "dl.for_windows": "Pro váš počítač s Windows",
   "dl.for_ios": "Pro váš iPhone nebo iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "Vyberte platformu",
   "dl.appstore_note": "Instalace a aktualizace přes App Store.",
   "dl.mac_file": "Stáhnout soubor .dmg",
-  "dl.mac_file_note": "Otevřete ho a přetáhněte Hifi do složky „Aplikace“.",
+  "dl.mac_file_note": "Otevřete ho a přetáhněte BitSpring do složky „Aplikace“.",
   "dl.mac_file_hint": "Při prvním spuštění ji macOS zablokuje: otevřete Nastavení systému → Soukromí a zabezpečení a klikněte na „Přesto otevřít“.",
   "dl.windows_file": "Stáhnout instalátor (.exe)",
   "dl.windows_file_note": "Pro Windows 10 a 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Otevírá se App Store…",
   "dl.soon": "Již brzy",
   "dl.other": "Další platformy",
-  "dl.back": "Zpět na web"
+  "dl.back": "Zpět na web",
+  "footer.source": "Zdrojový kód",
+  "footer.privacy": "Soukromí",
+  "footer.support": "Podpora",
+  "privacy.meta_title": "Zásady ochrany soukromí BitSpring",
+  "privacy.meta_description": "BitSpring nic neshromažďuje: žádný účet, žádná analytika, žádné reklamy, žádné sledování.",
+  "privacy.title": "Soukromí",
+  "privacy.lead": "BitSpring o vás nic neshromažďuje. Nemá účet, analytiku, reklamu ani sledování.",
+  "privacy.device": "Vaše hudba, playlisty, předvolby ekvalizéru a nastavení zůstávají ve vašem zařízení. Aplikace nic z toho nenahrává.",
+  "privacy.network": "Aplikace se připojuje k internetu jen kvůli tomu, o co ji požádáte. Verze z tohoto webu se na GitHubu ptá, zda existuje aktualizace, a stáhne ji; GitHub vidí to, co ukazuje každé stahování, vaši IP adresu a verzi aplikace. Pokud se přihlásíte ke Qobuz nebo TIDAL, aplikace komunikuje jen s touto službou a vaše přihlášení zůstává ve vašem zařízení. Verze z App Store se k internetu nepřipojují vůbec.",
+  "privacy.site": "Tento web nenastavuje žádné cookies a nepoužívá žádnou analytiku. Váš prohlížeč si pamatuje jazyk, který jste zvolili, a ten ho nikdy neopustí. Jako každý webhosting si Vercel uchovává běžné serverové logy.",
+  "privacy.open": "BitSpring je open source, takže vše výše může kdokoli ověřit v jeho kódu.",
+  "privacy.contact": "Máte otázky?",
+  "privacy.contact_link": "Zeptejte se na GitHubu",
+  "privacy.updated": "Naposledy aktualizováno 11. listopadu 2026."
 }

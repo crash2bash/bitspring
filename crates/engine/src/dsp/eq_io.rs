@@ -370,9 +370,9 @@ fn fmt(v: f64, dp: usize) -> String {
 }
 
 fn export_apo(p: &EqPreset) -> String {
-    let mut out = format!("# {}\n# Exported from Hifi\n", p.name);
+    let mut out = format!("# {}\n# Exported from BitSpring\n", p.name);
     if p.phase == Phase::Linear {
-        out.push_str("# Hifi plays this preset in linear phase; Equalizer APO runs it in minimum phase.\n");
+        out.push_str("# BitSpring plays this preset in linear phase; Equalizer APO runs it in minimum phase.\n");
     }
     out.push_str(&format!("Preamp: {} dB\n", fmt(p.effective_preamp(EXPORT_RATE), 1)));
     let mut n = 0;

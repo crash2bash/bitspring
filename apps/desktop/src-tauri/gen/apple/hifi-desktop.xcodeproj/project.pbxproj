@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01DD17D26E0832CCF24E8412 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D5A5241FC106EFC6E624EC8E /* WebKit.framework */; };
 		2F46708384AEB36AC5080EC3 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E5AB1AC7204FE395BED51C3 /* MetalKit.framework */; };
+		73591E6472E9DF51A20D9171 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D903769E197170C06E6F34FB /* PrivacyInfo.xcprivacy */; };
 		89906F1DC76EF5C8366D7067 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17D80D88E7F0E23F03A0F492 /* Metal.framework */; };
 		9E4CE26312384C9E4B915418 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1263F2778537BAB218CEBC04 /* main.mm */; };
 		A7ECC6BEA4C68F08F65D6E95 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B7046211E52D51BDCFF6933 /* AudioToolbox.framework */; };
@@ -31,7 +32,10 @@
 		1523867689D94562AF153D82 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		17D80D88E7F0E23F03A0F492 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		27ED2CB3C0816C38DD3F481F /* hifi-desktop_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "hifi-desktop_iOS.entitlements"; sourceTree = "<group>"; };
+		30283FFCC4A04C9DA1FC3324 /* stream_off.rs */ = {isa = PBXFileReference; path = stream_off.rs; sourceTree = "<group>"; };
 		358557A33ED7F4262524267D /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		42D85BAB60ABD56D06782A13 /* bookmarks.rs */ = {isa = PBXFileReference; path = bookmarks.rs; sourceTree = "<group>"; };
+		44690E05C08A64DC3AC41245 /* eq.rs */ = {isa = PBXFileReference; path = eq.rs; sourceTree = "<group>"; };
 		4A6656ED9879DA0CB6EC4EE2 /* ios_media.rs */ = {isa = PBXFileReference; path = ios_media.rs; sourceTree = "<group>"; };
 		643108E444010BE2A75B3AE7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		6FE72201F9E3ECC881DB4DDA /* AVFAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFAudio.framework; path = System/Library/Frameworks/AVFAudio.framework; sourceTree = SDKROOT; };
@@ -40,11 +44,17 @@
 		8E5AB1AC7204FE395BED51C3 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		93BF50C939686F155BE0C005 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		9B447D0568EA44F2704BD121 /* library.rs */ = {isa = PBXFileReference; path = library.rs; sourceTree = "<group>"; };
+		9F5ACA78207D435118DEF4B4 /* stream_on.rs */ = {isa = PBXFileReference; path = stream_on.rs; sourceTree = "<group>"; };
+		A6E3EC9175F634960C61F72D /* update_off.rs */ = {isa = PBXFileReference; path = update_off.rs; sourceTree = "<group>"; };
 		A7FB6A4BE525031744FB60DE /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		A9544832C7A8914FD6973DC2 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		AF24A3A18135241EBC13A451 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		B807B6C96DF40FCCC4E95F37 /* update_on.rs */ = {isa = PBXFileReference; path = update_on.rs; sourceTree = "<group>"; };
+		C44A032B8C1400E9712344FB /* playlists.rs */ = {isa = PBXFileReference; path = playlists.rs; sourceTree = "<group>"; };
 		CDF57B977552D378E140454F /* MediaPlayer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaPlayer.framework; path = System/Library/Frameworks/MediaPlayer.framework; sourceTree = SDKROOT; };
 		D5A5241FC106EFC6E624EC8E /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		D903769E197170C06E6F34FB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E47F63D442B53F60BEBE844A /* android_media.rs */ = {isa = PBXFileReference; path = android_media.rs; sourceTree = "<group>"; };
 		F0C1A756685FF87A245FC48F /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		F97391E9C440B7476E367D4B /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		FD82BE19DE2532ED948A8D32 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
@@ -93,6 +103,7 @@
 			children = (
 				27ED2CB3C0816C38DD3F481F /* hifi-desktop_iOS.entitlements */,
 				643108E444010BE2A75B3AE7 /* Info.plist */,
+				D903769E197170C06E6F34FB /* PrivacyInfo.xcprivacy */,
 			);
 			path = "hifi-desktop_iOS";
 			sourceTree = "<group>";
@@ -108,10 +119,18 @@
 		7DE7DD1C257F147690188A0D /* src */ = {
 			isa = PBXGroup;
 			children = (
+				E47F63D442B53F60BEBE844A /* android_media.rs */,
+				42D85BAB60ABD56D06782A13 /* bookmarks.rs */,
+				44690E05C08A64DC3AC41245 /* eq.rs */,
 				4A6656ED9879DA0CB6EC4EE2 /* ios_media.rs */,
 				FD82BE19DE2532ED948A8D32 /* lib.rs */,
 				9B447D0568EA44F2704BD121 /* library.rs */,
 				F0C1A756685FF87A245FC48F /* main.rs */,
+				C44A032B8C1400E9712344FB /* playlists.rs */,
+				30283FFCC4A04C9DA1FC3324 /* stream_off.rs */,
+				9F5ACA78207D435118DEF4B4 /* stream_on.rs */,
+				A6E3EC9175F634960C61F72D /* update_off.rs */,
+				B807B6C96DF40FCCC4E95F37 /* update_on.rs */,
 			);
 			name = src;
 			path = ../../src;
@@ -166,14 +185,14 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		"TEMP_B7EBA916-96A7-4871-8845-DF44E9F3F94E" /* arm64 */ = {
+		"TEMP_007FCCED-64CC-4614-AE5C-A9DD01CDB789" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
 			sourceTree = "<group>";
 		};
-		"TEMP_F55669A0-BF94-48D6-A787-FA8B9F8B8A9C" /* x86_64 */ = {
+		"TEMP_69F6A5D0-AC45-4A37-B91F-38AA31EAFBBA" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -240,6 +259,7 @@
 			files = (
 				EED6E24AD6BB6423EA6E48AB /* Assets.xcassets in Resources */,
 				CB809F3F87191A4294476192 /* LaunchScreen.storyboard in Resources */,
+				73591E6472E9DF51A20D9171 /* PrivacyInfo.xcprivacy in Resources */,
 				E4F50F441E506C5787D56BEE /* assets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -305,10 +325,10 @@
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = dev.local.hifi;
-				PRODUCT_NAME = Hifi;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bitspring.player;
+				PRODUCT_NAME = "BitSpring";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VALID_ARCHS = arm64;
 			};
 			name = release;
@@ -455,10 +475,10 @@
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = dev.local.hifi;
-				PRODUCT_NAME = Hifi;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bitspring.player;
+				PRODUCT_NAME = "BitSpring";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VALID_ARCHS = arm64;
 			};
 			name = debug;

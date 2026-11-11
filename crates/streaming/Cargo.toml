@@ -2,7 +2,7 @@
 name = "hifi-streaming"
 version = "0.1.0"
 edition = "2024"
-description = "Qobuz and TIDAL for the Hifi player (builds outside the App Store only)"
+description = "Qobuz and TIDAL for the BitSpring player (builds outside the App Store only)"
 
 [dependencies]
 anyhow = "1.0.104"

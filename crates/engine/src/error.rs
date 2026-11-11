@@ -153,7 +153,7 @@ impl fmt::Display for UserError {
             OutputFailed { detail } => write!(f, "output error: {detail}"),
             ProfileUnreadable { detail } => write!(f, "couldn't read the profile: {detail}"),
             UpdateFailed { detail } => write!(f, "the update failed: {detail}"),
-            InstallNotAllowed => write!(f, "allow Hifi to install apps, then try again"),
+            InstallNotAllowed => write!(f, "allow BitSpring to install apps, then try again"),
             EqFormat => write!(f, "not an equaliser preset in any format we read (Equalizer APO, AutoEQ, GraphicEQ, EasyEffects, CSV)"),
             EqEmpty => write!(f, "the preset has no filters"),
             EqNotFound => write!(f, "the preset isn't there any more"),

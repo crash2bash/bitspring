@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Mac App Store build (npm run build:appstore). The website build isn't sandboxed and
+     uses none of this. -->
+<plist version="1.0">
+<dict>
+	<!-- Required for the Mac App Store. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Music folders picked in the open panel (read), and EQ presets and playlists saved
+	     through the save panel (write). -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- Keeps those folders across launches (bookmarks.rs). -->
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+	<!-- ~/Music, without asking: where most libraries already are. -->
+	<key>com.apple.security.assets.music.read-only</key>
+	<true/>
+	<!-- Exports that go straight to Downloads. -->
+	<key>com.apple.security.files.downloads.read-write</key>
+	<true/>
+</dict>
+</plist>

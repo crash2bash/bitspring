@@ -1,4 +1,4 @@
-; Hifi installer strings: Danish (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Danish (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_DANISH} "Tilføj/geninstaller komponenter"
 LangString alreadyInstalled ${LANG_DANISH} "Allerede installeret"
 LangString alreadyInstalledLong ${LANG_DANISH} "${PRODUCTNAME} ${VERSION} er allerede installeret. Vælg den handling, du vil udføre, og klik på Næste for at fortsætte."

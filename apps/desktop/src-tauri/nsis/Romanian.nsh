@@ -1,4 +1,4 @@
-; Hifi installer strings: Romanian (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Romanian (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_ROMANIAN} "Adăugare/reinstalare componente"
 LangString alreadyInstalled ${LANG_ROMANIAN} "Deja instalat"
 LangString alreadyInstalledLong ${LANG_ROMANIAN} "${PRODUCTNAME} ${VERSION} este deja instalat. Selectați operațiunea pe care doriți să o efectuați și faceți clic pe Înainte pentru a continua."

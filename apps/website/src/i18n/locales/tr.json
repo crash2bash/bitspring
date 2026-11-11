@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — macOS ve Windows için ücretsiz, bit-perfect müzik çalar",
+  "meta.title": "BitSpring — macOS ve Windows için ücretsiz, bit-perfect müzik çalar",
   "meta.description": "DAC'ına dosyada ne varsa birebir onu gönderen ücretsiz müzik çalar. FLAC, ALAC, WAV, DSD1024'e kadar DSD, 768 kHz'e kadar. İstediğinde ekolayzır, crossfeed ve upsampling.",
-  "meta.og_title": "Hifi — biti bitine",
+  "meta.og_title": "BitSpring — biti bitine",
   "meta.og_description": "macOS ve Windows için ücretsiz, bit-perfect müzik çalar.",
-
-  "nav.home_label": "Hifi, başa dön",
+  "nav.home_label": "BitSpring, başa dön",
   "nav.sections_label": "Bölümler",
   "nav.how": "Nasıl çalışır",
   "nav.formats": "Formatlar",
   "nav.enhance": "İyileştirmeler",
   "nav.download": "İndir",
   "nav.language": "Dil",
-
   "hero.title": "Biti bitine",
   "hero.lede": "macOS ve Windows için ücretsiz bir müzik çalar. DAC'ın dosyada ne varsa birebir onu alır: yeniden örnekleme yok, sistem mikseri yok, sürpriz yok.",
-
   "cta.appstore": "Mac App Store'dan indirin",
   "cta.windows": "Windows için indir",
   "cta.appstore_soon": "Yakında Mac App Store'da",
   "cta.windows_soon": "Yakında Windows'ta",
-
   "path.title": "Dosyadan DAC'a tek bir bit bile değişmez",
   "path.file": "Dosya",
   "path.file_detail": "FLAC, 24 bit, 96 kHz. Örnekler, dosyada saklandığı gibi okunur.",
@@ -30,12 +26,10 @@
   "path.samples": "Gönderilen örnek",
   "path.changed": "Değişen bit",
   "path.foot": "macOS'te: tam sayı çıkışlı CoreAudio özel (hog) modu. Windows'ta: WASAPI Exclusive.",
-
   "formats.title": "CD'den 768 kHz'e",
   "formats.lede": "Çalar, DAC'ını her parçanın örnekleme hızına geçirir. DAC o hızı desteklemiyorsa ses özenle yeniden örneklenir ve çalar bunu sana açıkça söyler.",
   "formats.dsd": "DAC'ın destekliyorsa DSD, DoP üzerinden native olarak çalınır; desteklemiyorsa 176,4 kHz PCM'e dönüştürülür.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD kalitesi",
   "rates.video": "Video ve stüdyo kaydı",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Bugünkü DAC'ların sınırı",
   "rates.dsd": "Tek bit, {mhz} MHz",
-
   "enhance.title": "Farklı bir ses mi istiyorsun? Buyur",
   "enhance.lede": "İyileştirmeler varsayılan olarak kapalıdır. Herhangi birini açtığında çalardaki gösterge “Bit-perfect” yerine “İşleme” olur ve sese tam olarak ne yapıldığını listeler.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Hafif, orta veya güçlü. Müziğin kafanın içinde çaldığı hissini ortadan kaldırır.",
   "enhance.lossy": "MP3 ve AAC için",
   "enhance.lossy_detail": "Clipping'e karşı headroom kendiliğinden devreye girer, kodeğin kesme frekansının üzerindeki tizler de özenle geri getirilebilir.",
-
   "app.title": "Sese ne oluyorsa, gözünün önünde",
   "app.lede": "Dosya formatı, DAC'ın örnekleme hızı ve her işleme adımı doğrudan ana ekranda.",
   "app.alt": "Çalar penceresi: çalma sırası, şimdi çalan ve sinyal yolunu gösteren Bit-perfect göstergesi",
-
   "download.title": "Ücretsiz",
   "download.lede": "Abonelik yok, reklam yok, hesap yok. Sadece bir çalar.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "Hazırlanıyor",
-
   "footer.top": "Başa dön",
-
   "cta.mac": "Mac için indir",
   "cta.mac_soon": "Yakında Mac'te",
   "cta.ios": "App Store'dan indirin",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Yakında Android'de",
   "cta.other_platforms": "Diğer platformlar",
   "cta.all_platforms": "İndir",
-
-  "dl.meta_title": "Hifi'yi macOS, Windows, iPhone ve Android için indir",
+  "dl.meta_title": "BitSpring'yi macOS, Windows, iPhone ve Android için indir",
   "dl.meta_description": "Cihazın için ücretsiz, bit-perfect müzik çalar.",
-  "dl.title": "Hifi'yi indir",
+  "dl.title": "BitSpring'yi indir",
   "dl.for_mac": "Mac'in için",
   "dl.for_windows": "Windows bilgisayarın için",
   "dl.for_ios": "iPhone'un veya iPad'in için",
@@ -92,7 +80,7 @@
   "dl.choose": "Platformunu seç",
   "dl.appstore_note": "App Store üzerinden yüklenir ve güncellenir.",
   "dl.mac_file": ".dmg dosyasını indir",
-  "dl.mac_file_note": "Dosyayı aç ve Hifi'yi “Uygulamalar” klasörüne sürükle.",
+  "dl.mac_file_note": "Dosyayı aç ve BitSpring'yi “Uygulamalar” klasörüne sürükle.",
   "dl.mac_file_hint": "İlk açılışta macOS uygulamayı durdurur: Sistem Ayarları → Gizlilik ve Güvenlik’i açıp “Yine de Aç”a tıkla.",
   "dl.windows_file": "Yükleyiciyi indir (.exe)",
   "dl.windows_file_note": "Windows 10 ve 11 için.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "App Store açılıyor…",
   "dl.soon": "Yakında",
   "dl.other": "Diğer platformlar",
-  "dl.back": "Siteye dön"
+  "dl.back": "Siteye dön",
+  "footer.source": "Kaynak kodu",
+  "footer.privacy": "Gizlilik",
+  "footer.support": "Destek",
+  "privacy.meta_title": "BitSpring gizlilik politikası",
+  "privacy.meta_description": "BitSpring hiçbir şey toplamaz: hesap yok, analiz yok, reklam yok, izleme yok.",
+  "privacy.title": "Gizlilik",
+  "privacy.lead": "BitSpring hakkında seni ilgilendiren hiçbir şey toplamaz. Hesap, analiz, reklam ve izleme yoktur.",
+  "privacy.device": "Müziğin, çalma listelerin, ekolayzır ön ayarların ve ayarların cihazında kalır. Uygulama bunların hiçbirini yüklemez.",
+  "privacy.network": "Uygulama yalnızca senin ondan istediğin şey için internete bağlanır. Bu web sitesinden indirilen sürüm GitHub'a güncelleme olup olmadığını sorar ve indirir; GitHub her indirmenin gösterdiğini görür: IP adresini ve uygulama sürümünü. Qobuz veya TIDAL'da oturum açarsan uygulama yalnızca o hizmetle konuşur ve oturum bilgilerin cihazında kalır. App Store sürümleri hiç internete bağlanmaz.",
+  "privacy.site": "Bu web sitesi çerez ayarlamaz ve analiz çalıştırmaz. Tarayıcın seçtiğin dili hatırlar ve bu bilgi tarayıcından asla çıkmaz. Her web barındırıcısı gibi Vercel de standart sunucu günlükleri tutar.",
+  "privacy.open": "BitSpring açık kaynaklıdır, bu yüzden bunların hepsini herkes kodundan kontrol edebilir.",
+  "privacy.contact": "Sorun mu var?",
+  "privacy.contact_link": "GitHub'da sor",
+  "privacy.updated": "Son güncelleme: 11 Kasım 2026."
 }

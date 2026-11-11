@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 
 /// Reads `path` as JSON. `None` when there is no file yet (a fresh start).
 ///
-/// A file that exists but can't be read as `T` (damaged, or written by a newer Hifi before a
+/// A file that exists but can't be read as `T` (damaged, or written by a newer BitSpring before a
 /// downgrade) is moved aside to `<name>.bad-<unix time>` and `None` is returned. Treating it as
 /// empty instead would let the next save overwrite the user's playlists or presets with
 /// nothing; this way the data is still on disk.

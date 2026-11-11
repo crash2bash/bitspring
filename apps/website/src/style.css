@@ -810,6 +810,47 @@ main,
   color: var(--porcelain);
 }
 
+.footer {
+  flex-wrap: wrap;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+/* ---- privacy page ------------------------------------------------------------------------ */
+
+/* One readable column of plain text; the download page's big title stays. */
+.dl.prose {
+  gap: 20px;
+  max-width: calc(36em + 2 * var(--gutter));
+  margin-inline: auto;
+  font-size: var(--t-md);
+  line-height: 1.6;
+  color: var(--mist);
+}
+
+.prose .dl-title {
+  margin-bottom: 20px;
+}
+
+.prose .prose-lead {
+  color: var(--porcelain);
+  font-size: var(--t-lg);
+  line-height: 1.4;
+}
+
+.prose a {
+  color: var(--brass);
+}
+
+.prose .prose-note {
+  color: var(--mist-dim);
+  font-size: var(--t-sm);
+}
+
 /* ---- download page ----------------------------------------------------------------------- */
 
 .lang-end {

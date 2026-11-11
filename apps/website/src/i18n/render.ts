@@ -72,6 +72,7 @@ export function renderPage(template: string, locale: Locale, opts: { site: strin
   const computed: Record<string, string> = {
     home: localeUrl(locale),
     download: localeUrl(locale) + "download/",
+    privacy: localeUrl(locale) + "privacy/",
   };
 
   return template

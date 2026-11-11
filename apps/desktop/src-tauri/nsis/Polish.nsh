@@ -1,4 +1,4 @@
-; Hifi installer strings: Polish (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Polish (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_POLISH} "Dodaj/zainstaluj ponownie składniki"
 LangString alreadyInstalled ${LANG_POLISH} "Już zainstalowano"
 LangString alreadyInstalledLong ${LANG_POLISH} "Program ${PRODUCTNAME} ${VERSION} jest już zainstalowany. Wybierz operację, którą chcesz wykonać, i kliknij Dalej, aby kontynuować."

@@ -1,6 +1,6 @@
 [package]
 name = "hifi-desktop"
-version = "0.4.1"
+version = "0.5.0"
 description = "Bit-perfect music player"
 edition = "2024"
 
@@ -31,6 +31,11 @@ block2 = "0.6"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSData", "NSDictionary", "NSString", "NSValue"] }
 objc2-media-player = { version = "0.3", default-features = false, features = ["std", "block2", "MPMediaItem", "MPNowPlayingInfoCenter", "MPRemoteCommand", "MPRemoteCommandCenter", "MPRemoteCommandEvent"] }
+
+# Security-scoped bookmarks: the sandboxed Mac App Store build keeps its music folders.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSData", "NSError", "NSString", "NSURL"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

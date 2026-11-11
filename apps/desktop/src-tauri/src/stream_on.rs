@@ -197,7 +197,7 @@ fn serve_redirect(listeners: Vec<TcpListener>, redirect: &str, tx: mpsc::Sender<
                         let n = conn.read(&mut buf).unwrap_or(0);
                         let head = String::from_utf8_lossy(&buf[..n]);
                         let path = head.lines().next().and_then(|l| l.split_whitespace().nth(1)).unwrap_or("/");
-                        let body = "<!doctype html><meta charset=utf-8><title>Hifi</title><p style=\"font:16px system-ui;margin:40px\">&#10003;</p>";
+                        let body = "<!doctype html><meta charset=utf-8><title>BitSpring</title><p style=\"font:16px system-ui;margin:40px\">&#10003;</p>";
                         let _ = write!(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                         let (route, query) = path.split_once('?').unwrap_or((path, ""));
                         if route == expected && query.split('&').any(|kv| kv.starts_with("code_autorisation=") || kv.starts_with("code=")) {

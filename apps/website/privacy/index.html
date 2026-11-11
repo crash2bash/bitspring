@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- Template: rendered once per language by src/i18n/render.ts (see the syntax there).
+     The App Store listings link here as the privacy policy. -->
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!--@redirect-->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{privacy.meta_title}}</title>
+    <meta name="description" content="{{privacy.meta_description}}" />
+    <meta name="theme-color" content="#121d23" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{privacy.meta_title}}" />
+    <meta property="og:description" content="{{privacy.meta_description}}" />
+    <!--@og-->
+    <!--@alternates-->
+    <link rel="icon" href="/favicon.png" />
+    <!--@runtime-->
+  </head>
+  <body class="dl-page">
+    <header class="nav">
+      <a class="nav-logo" href="{{@home}}" aria-label="{{dl.back}}">
+        <svg viewBox="0 0 28 20" aria-hidden="true">
+          <g fill="currentColor">
+            <rect x="1" y="9" width="2" height="9" rx="1" />
+            <rect x="7" y="3" width="2" height="15" rx="1" />
+            <rect x="13" y="6" width="2" height="12" rx="1" />
+            <rect x="19" y="1" width="2" height="17" rx="1" />
+            <rect x="25" y="11" width="2" height="7" rx="1" />
+          </g>
+        </svg>
+        BitSpring
+      </a>
+      <label class="lang lang-end">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="8" />
+          <path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2z" />
+        </svg>
+        <span class="lang-current" data-lang-current></span>
+        <span class="visually-hidden">{{nav.language}}</span>
+        <select class="lang-select" data-lang-select><!--@lang-options--></select>
+      </label>
+    </header>
+
+    <main class="dl prose">
+      <h1 class="dl-title">{{privacy.title}}</h1>
+      <p class="prose-lead">{{privacy.lead}}</p>
+      <p>{{privacy.device}}</p>
+      <p>{{privacy.network}}</p>
+      <p>{{privacy.site}}</p>
+      <p>{{privacy.open}}</p>
+      <p>
+        {{privacy.contact}}
+        <a href="https://github.com/crash2bash/bitspring/issues" rel="noopener">{{privacy.contact_link}}</a>
+      </p>
+      <p class="prose-note">{{privacy.updated}}</p>
+    </main>
+
+    <footer class="footer">
+      <span>© 2026 BitSpring</span>
+      <nav class="footer-links" aria-label="BitSpring">
+        <a href="https://github.com/crash2bash/bitspring" rel="noopener">{{footer.source}}</a>
+        <a href="{{@privacy}}">{{footer.privacy}}</a>
+        <a href="https://github.com/crash2bash/bitspring/issues" rel="noopener">{{footer.support}}</a>
+      </nav>
+      <a href="{{@home}}">{{dl.back}}</a>
+    </footer>
+
+    <script type="module" src="/src/privacy.ts"></script>
+  </body>
+</html>

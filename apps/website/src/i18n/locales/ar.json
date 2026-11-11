@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — مشغّل موسيقى مجاني بدقة Bit-perfect لنظامي macOS وWindows",
+  "meta.title": "BitSpring — مشغّل موسيقى مجاني بدقة Bit-perfect لنظامي macOS وWindows",
   "meta.description": "مشغّل موسيقى مجاني يرسل إلى الـDAC ما في الملف تمامًا. يدعم FLAC وALAC وWAV، وDSD حتى DSD1024، ومعدلات حتى 768 كيلوهرتز. معادل صوت وتغذية متقاطعة ورفع لمعدل العيّنات متى أردت.",
-  "meta.og_title": "Hifi — بتًّا ببت",
+  "meta.og_title": "BitSpring — بتًّا ببت",
   "meta.og_description": "مشغّل موسيقى مجاني بدقة Bit-perfect لنظامي macOS وWindows.",
-
-  "nav.home_label": "Hifi، العودة إلى الأعلى",
+  "nav.home_label": "BitSpring، العودة إلى الأعلى",
   "nav.sections_label": "الأقسام",
   "nav.how": "آلية العمل",
   "nav.formats": "الصيغ",
   "nav.enhance": "المحسّنات",
   "nav.download": "التنزيل",
   "nav.language": "اللغة",
-
   "hero.title": "بتًّا ببت",
   "hero.lede": "مشغّل موسيقى مجاني لنظامي macOS وWindows. يصل إلى الـDAC ما في الملف تمامًا: دون إعادة أخذ العيّنات، ودون مازج النظام، ودون مفاجآت.",
-
   "cta.appstore": "حمّله من Mac App Store",
   "cta.windows": "نزّله لنظام Windows",
   "cta.appstore_soon": "قريبًا على Mac App Store",
   "cta.windows_soon": "قريبًا لنظام Windows",
-
   "path.title": "لا يتغيّر بت واحد بين الملف والـDAC",
   "path.file": "الملف",
   "path.file_detail": "FLAC، 24 بت، 96 كيلوهرتز. تُقرأ العيّنات كما خُزّنت تمامًا.",
@@ -30,12 +26,10 @@
   "path.samples": "العيّنات المُرسلة",
   "path.changed": "البتات المتغيّرة",
   "path.foot": "على macOS: وضع CoreAudio الحصري (hog) مع إخراج بأعداد صحيحة. على Windows: وضع WASAPI Exclusive.",
-
   "formats.title": "من CD إلى 768 كيلوهرتز",
   "formats.lede": "يضبط المشغّل الـDAC على معدل العيّنات الخاص بكل مقطع. وإن لم يدعم الـDAC ذلك المعدل، يُعاد أخذ العيّنات بعناية، ويخبرك المشغّل بذلك صراحةً.",
   "formats.dsd": "يُشغَّل DSD أصليًا عبر DoP إن كان الـDAC يدعمه، أو بصيغة PCM بمعدل 176.4 كيلوهرتز إن لم يكن.",
   "formats.files": "FLAC، ALAC، WAV، AIFF، CAF، MKA، DSF، DFF، MP3، AAC، Ogg Vorbis",
-
   "rates.khz": "كيلوهرتز",
   "rates.cd": "جودة CD",
   "rates.video": "الفيديو والتسجيل في الاستوديو",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "سقف محوّلات DAC اليوم",
   "rates.dsd": "بت واحد، {mhz} ميجاهرتز",
-
   "enhance.title": "تريد صوتًا مختلفًا؟ تفضّل",
   "enhance.lede": "المحسّنات معطّلة افتراضيًا. فعّل أيًّا منها، فيتحوّل مؤشر المشغّل من «Bit-perfect» إلى «معالجة» ويعرض بالضبط ما يُجرى على الصوت.",
   "enhance.upsampling": "رفع معدل العيّنات",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "خفيفة أو متوسطة أو قوية. تزيل الإحساس بأن الموسيقى تُعزف داخل رأسك.",
   "enhance.lossy": "لملفات MP3 وAAC",
   "enhance.lossy_detail": "يُفعَّل هامش الحماية من التشبّع (clipping) تلقائيًا، ويمكن استعادة الترددات العالية فوق حد القطع في الترميز بلطف.",
-
   "app.title": "كل ما يحدث للصوت، أمام عينيك",
   "app.lede": "صيغة الملف، ومعدل عيّنات الـDAC، وكل خطوة معالجة، على الشاشة الرئيسية مباشرةً.",
   "app.alt": "نافذة المشغّل: قائمة التشغيل، والمقطع الحالي، ومؤشر Bit-perfect مع مسار الإشارة",
-
   "download.title": "مجاني",
   "download.lede": "بلا اشتراك، ولا إعلانات، ولا حساب. مجرد مشغّل.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "قيد التطوير",
-
   "footer.top": "العودة إلى الأعلى",
-
   "cta.mac": "نزّله لجهاز Mac",
   "cta.mac_soon": "قريبًا لجهاز Mac",
   "cta.ios": "تنزيل من App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "قريبًا لأجهزة Android",
   "cta.other_platforms": "منصات أخرى",
   "cta.all_platforms": "تنزيل",
-
-  "dl.meta_title": "نزّل Hifi لأنظمة macOS وWindows وiPhone وAndroid",
+  "dl.meta_title": "نزّل BitSpring لأنظمة macOS وWindows وiPhone وAndroid",
   "dl.meta_description": "احصل على مشغّل الموسيقى المجاني بدقة Bit-perfect لجهازك.",
-  "dl.title": "تنزيل Hifi",
+  "dl.title": "تنزيل BitSpring",
   "dl.for_mac": "لجهاز Mac",
   "dl.for_windows": "لحاسوب Windows",
   "dl.for_ios": "لجهاز iPhone أو iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "اختر منصتك",
   "dl.appstore_note": "يُثبَّت ويُحدَّث عبر App Store.",
   "dl.mac_file": "نزّل ملف ‎.dmg",
-  "dl.mac_file_note": "افتحه واسحب Hifi إلى مجلد «التطبيقات».",
+  "dl.mac_file_note": "افتحه واسحب BitSpring إلى مجلد «التطبيقات».",
   "dl.mac_file_hint": "عند التشغيل الأول سيوقفه macOS: افتح «إعدادات النظام» ثم «الخصوصية والأمن» وانقر «الفتح على أي حال».",
   "dl.windows_file": "نزّل برنامج التثبيت (‎.exe)",
   "dl.windows_file_note": "لنظامي Windows 10 و11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "جارٍ فتح App Store…",
   "dl.soon": "قريبًا",
   "dl.other": "منصات أخرى",
-  "dl.back": "العودة إلى الموقع"
+  "dl.back": "العودة إلى الموقع",
+  "footer.source": "الشيفرة المصدرية",
+  "footer.privacy": "الخصوصية",
+  "footer.support": "الدعم",
+  "privacy.meta_title": "سياسة خصوصية BitSpring",
+  "privacy.meta_description": "لا يجمع BitSpring أي شيء: لا حساب، ولا تحليلات، ولا إعلانات، ولا تتبّع.",
+  "privacy.title": "الخصوصية",
+  "privacy.lead": "لا يجمع BitSpring أي شيء عنك. لا يوجد حساب ولا تحليلات ولا إعلانات ولا تتبّع.",
+  "privacy.device": "تبقى موسيقاك وقوائم التشغيل وإعدادات المعادل المسبقة وإعداداتك على جهازك. لا يرفع التطبيق أيًّا منها.",
+  "privacy.network": "لا يتصل التطبيق بالإنترنت إلا لما تطلبه منه. تسأل النسخة المأخوذة من هذا الموقع GitHub عمّا إذا كان هناك تحديث وتنزّله؛ ويرى GitHub ما يظهره أي تنزيل: عنوان IP الخاص بك وإصدار التطبيق. إذا سجّلت الدخول إلى Qobuz أو TIDAL، فإن التطبيق يتحدث مع تلك الخدمة وحدها، وتبقى بيانات تسجيل الدخول على جهازك. أما نسخ App Store فلا تتصل بالإنترنت إطلاقًا.",
+  "privacy.site": "لا يضع هذا الموقع أي ملفات تعريف ارتباط ولا يشغّل أي تحليلات. يتذكّر متصفحك اللغة التي اخترتها، ولا تغادر هذه المعلومة المتصفح أبدًا. وكأي مضيف ويب، يحتفظ Vercel بسجلات الخادم المعتادة.",
+  "privacy.open": "BitSpring مفتوح المصدر، لذا يمكن لأي شخص التحقق من كل هذا في شيفرته.",
+  "privacy.contact": "لديك أسئلة؟",
+  "privacy.contact_link": "اسأل على GitHub",
+  "privacy.updated": "آخر تحديث: 11 نوفمبر 2026."
 }

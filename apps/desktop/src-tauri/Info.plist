@@ -32,5 +32,9 @@
 		<string>ja</string>
 		<string>ko</string>
 	</array>
+	<!-- Only standard HTTPS (streaming, updates in the website build): exempt from export
+	     compliance, so App Store Connect doesn't ask for documents on every upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

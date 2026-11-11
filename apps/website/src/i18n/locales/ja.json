@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — macOS・Windows対応の無料ビットパーフェクト音楽プレーヤー",
+  "meta.title": "BitSpring — macOS・Windows対応の無料ビットパーフェクト音楽プレーヤー",
   "meta.description": "ファイルに記録されたデータを、そのままDACへ届ける無料の音楽プレーヤー。FLAC、ALAC、WAV、DSD1024までのDSD、最大768 kHzに対応。イコライザー、クロスフィード、アップサンプリングも必要なときだけ。",
-  "meta.og_title": "Hifi — 寸分違わず",
+  "meta.og_title": "BitSpring — 寸分違わず",
   "meta.og_description": "macOS・Windows対応の無料ビットパーフェクト音楽プレーヤー。",
-
-  "nav.home_label": "Hifi、ページの先頭へ",
+  "nav.home_label": "BitSpring、ページの先頭へ",
   "nav.sections_label": "セクション",
   "nav.how": "しくみ",
   "nav.formats": "フォーマット",
   "nav.enhance": "サウンド調整",
   "nav.download": "ダウンロード",
   "nav.language": "言語",
-
   "hero.title": "寸分違わず",
   "hero.lede": "macOSとWindowsで使える無料の音楽プレーヤー。DACに届くのは、ファイルに記録されたデータそのもの。リサンプリングなし、システムミキサーなし、余計なことは一切なし。",
-
   "cta.appstore": "Mac App Storeからダウンロード",
   "cta.windows": "Windows版をダウンロード",
   "cta.appstore_soon": "Mac App Storeに近日登場",
   "cta.windows_soon": "Windows版は近日公開",
-
   "path.title": "ファイルからDACまで、1ビットも変わらない",
   "path.file": "ファイル",
   "path.file_detail": "FLAC、24bit、96 kHz。サンプルは記録されたとおりに読み出します。",
@@ -30,12 +26,10 @@
   "path.samples": "送信サンプル数",
   "path.changed": "変更ビット数",
   "path.foot": "macOSではCoreAudioの排他（hog）モードと整数出力、WindowsではWASAPI Exclusiveを使用。",
-
   "formats.title": "CDから768 kHzまで",
   "formats.lede": "プレーヤーはDACを曲ごとのサンプリングレートに切り替えます。DACが対応していないレートなら丁寧にリサンプリングし、そのことをはっきり表示します。",
   "formats.dsd": "DSDは、DACが対応していればDoPでネイティブ再生。非対応なら176.4 kHzのPCMで再生します。",
   "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、DSF、DFF、MP3、AAC、Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "CD音質",
   "rates.video": "映像・スタジオ録音",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "現行DACの上限",
   "rates.dsd": "1ビット、{mhz} MHz",
-
   "enhance.title": "音を変えたい？ご自由に",
   "enhance.lede": "サウンド調整は初期設定ですべてオフ。どれかをオンにすると、プレーヤーのインジケーターが「Bit-perfect」から「処理中」に切り替わり、音に何をしているかを正確に一覧表示します。",
   "enhance.upsampling": "アップサンプリング",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "弱・中・強の3段階。音楽が頭の中で鳴っているような感覚を解消します。",
   "enhance.lossy": "MP3・AAC向け",
   "enhance.lossy_detail": "クリッピングを防ぐヘッドルームが自動でオンに。コーデックがカットした高域も、控えめに補完できます。",
-
   "app.title": "音に起きていることが、すべて見える",
   "app.lede": "ファイル形式、DACのサンプリングレート、すべての処理ステップをメイン画面にそのまま表示。",
   "app.alt": "プレーヤーのウィンドウ：再生キュー、再生中の曲、信号経路付きのBit-perfectインジケーター",
-
   "download.title": "無料",
   "download.lede": "サブスクなし、広告なし、アカウント不要。ただ、音楽を再生するだけ。",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "開発中",
-
   "footer.top": "ページの先頭へ",
-
   "cta.mac": "Mac版をダウンロード",
   "cta.mac_soon": "Mac版は近日公開",
   "cta.ios": "App Storeからダウンロード",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Android版は近日公開",
   "cta.other_platforms": "その他のプラットフォーム",
   "cta.all_platforms": "ダウンロード",
-
-  "dl.meta_title": "Hifiをダウンロード — macOS・Windows・iPhone・Android対応",
+  "dl.meta_title": "BitSpringをダウンロード — macOS・Windows・iPhone・Android対応",
   "dl.meta_description": "お使いのデバイスに、無料のビットパーフェクト音楽プレーヤーを。",
-  "dl.title": "Hifiをダウンロード",
+  "dl.title": "BitSpringをダウンロード",
   "dl.for_mac": "お使いのMac向け",
   "dl.for_windows": "お使いのWindows PC向け",
   "dl.for_ios": "お使いのiPhone・iPad向け",
@@ -92,7 +80,7 @@
   "dl.choose": "プラットフォームを選択",
   "dl.appstore_note": "インストールとアップデートはApp Storeから。",
   "dl.mac_file": ".dmgファイルをダウンロード",
-  "dl.mac_file_note": "ファイルを開き、Hifiを「アプリケーション」フォルダにドラッグします。",
+  "dl.mac_file_note": "ファイルを開き、BitSpringを「アプリケーション」フォルダにドラッグします。",
   "dl.mac_file_hint": "初回起動時は macOS に止められます。「システム設定」→「プライバシーとセキュリティ」を開き、「このまま開く」をクリックしてください。",
   "dl.windows_file": "インストーラー（.exe）をダウンロード",
   "dl.windows_file_note": "Windows 10・11対応。",
@@ -103,5 +91,19 @@
   "dl.redirecting": "App Storeを開いています…",
   "dl.soon": "近日公開",
   "dl.other": "その他のプラットフォーム",
-  "dl.back": "サイトに戻る"
+  "dl.back": "サイトに戻る",
+  "footer.source": "ソースコード",
+  "footer.privacy": "プライバシー",
+  "footer.support": "サポート",
+  "privacy.meta_title": "BitSpringのプライバシーポリシー",
+  "privacy.meta_description": "BitSpringは何も収集しません。アカウントも、解析も、広告も、トラッキングもありません。",
+  "privacy.title": "プライバシー",
+  "privacy.lead": "BitSpringはあなたに関する情報を一切収集しません。アカウントも、解析も、広告も、トラッキングもありません。",
+  "privacy.device": "音楽、プレイリスト、イコライザーのプリセット、設定はすべてお使いのデバイスに残ります。アプリがそれらをアップロードすることはありません。",
+  "privacy.network": "アプリがオンラインに接続するのは、あなたが求めた操作のときだけです。このウェブサイトから入手したバージョンは、GitHubにアップデートがあるかどうかを問い合わせ、ダウンロードします。GitHubに見えるのは、どのダウンロードでも分かる情報、つまりIPアドレスとアプリのバージョンです。QobuzまたはTIDALにサインインした場合、アプリはそのサービスとだけ通信し、サインイン情報はお使いのデバイスに残ります。App Store版は、まったくオンラインに接続しません。",
+  "privacy.site": "このウェブサイトはCookieを設定せず、解析も行いません。ブラウザは選んだ言語を記憶しますが、その情報がブラウザの外に出ることはありません。一般的なウェブホストと同様に、Vercelは標準的なサーバーログを保存します。",
+  "privacy.open": "BitSpringはオープンソースなので、これらすべてを誰でもコードで確認できます。",
+  "privacy.contact": "ご質問は？",
+  "privacy.contact_link": "GitHubで質問する",
+  "privacy.updated": "最終更新日：2026年11月11日"
 }

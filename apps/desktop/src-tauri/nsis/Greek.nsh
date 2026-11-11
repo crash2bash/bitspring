@@ -1,4 +1,4 @@
-; Hifi installer strings: Greek (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Greek (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_GREEK} "Προσθήκη/επανεγκατάσταση στοιχείων"
 LangString alreadyInstalled ${LANG_GREEK} "Είναι ήδη εγκατεστημένο"
 LangString alreadyInstalledLong ${LANG_GREEK} "Το ${PRODUCTNAME} ${VERSION} είναι ήδη εγκατεστημένο. Επιλέξτε την ενέργεια που θέλετε να εκτελέσετε και κάντε κλικ στο Επόμενο για να συνεχίσετε."

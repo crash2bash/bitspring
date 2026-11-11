@@ -1,4 +1,4 @@
-; Hifi installer strings: Finnish (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Finnish (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_FINNISH} "Lisää tai asenna komponentit uudelleen"
 LangString alreadyInstalled ${LANG_FINNISH} "Asennettu jo"
 LangString alreadyInstalledLong ${LANG_FINNISH} "${PRODUCTNAME} ${VERSION} on jo asennettu. Valitse suoritettava toiminto ja jatka valitsemalla Seuraava."

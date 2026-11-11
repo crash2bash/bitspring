@@ -106,7 +106,7 @@ mod platform {
     use std::time::Duration;
 
     /// The same manifest Tauri's updater reads on the desktop.
-    const MANIFEST: &str = "https://github.com/crash2bash/hi-fi/releases/latest/download/latest.json";
+    const MANIFEST: &str = "https://github.com/crash2bash/bitspring/releases/latest/download/latest.json";
     const PLATFORM: &str = "android-aarch64";
     /// More than any APK of ours will ever be; stops a runaway download.
     const MAX_APK: u64 = 300 * 1024 * 1024;
@@ -118,7 +118,7 @@ mod platform {
             // A stalled download ends with an error instead of hanging forever (an APK takes
             // well under this even on a slow connection).
             .timeout_recv_body(Some(Duration::from_secs(15 * 60)))
-            .user_agent(concat!("Hifi/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("BitSpring/", env!("CARGO_PKG_VERSION")))
             .build()
             .into()
     }
@@ -168,16 +168,17 @@ mod platform {
         let current = app.package_info().version.to_string();
         tauri::async_runtime::spawn_blocking(move || {
             let Some(l) = latest()?.filter(|l| newer(l, &current)) else { return Ok(()) };
-            // Only from our own release downloads.
-            if !l.url.starts_with("https://github.com/crash2bash/hi-fi/releases/") {
+            // Only from our own release downloads (the repository was called hi-fi up to 0.4.1;
+            // GitHub redirects that name, and latest.json keeps it for the older builds).
+            if !["https://github.com/crash2bash/bitspring/releases/", "https://github.com/crash2bash/hi-fi/releases/"].iter().any(|p| l.url.starts_with(p)) {
                 return Err(failed("unexpected download address"));
             }
-            // Before downloading: the first time, Android must be told to let Hifi install apps.
+            // Before downloading: the first time, Android must be told to let BitSpring install apps.
             if !crate::android_media::install_allowed() {
                 return Err(UserError::InstallNotAllowed);
             }
             let dir = crate::android_media::cache_dir().ok_or_else(|| failed("no cache folder"))?.join("updates");
-            let path = dir.join(format!("Hifi-{}.apk", l.version));
+            let path = dir.join(format!("BitSpring-{}.apk", l.version));
             // Downloaded already (the installer was cancelled last time): hand it over again.
             // Only a finished download is ever named .apk; it arrives as .part.
             if path.is_file() {

@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — player muzical gratuit, bit-perfect, pentru macOS și Windows",
+  "meta.title": "BitSpring — player muzical gratuit, bit-perfect, pentru macOS și Windows",
   "meta.description": "Un player muzical gratuit care trimite DAC-ului exact ce este în fișier. FLAC, ALAC, WAV, DSD până la DSD1024, până la 768 kHz. Egalizator, crossfeed și upsampling, când ai nevoie de ele.",
-  "meta.og_title": "Hifi — bit cu bit",
+  "meta.og_title": "BitSpring — bit cu bit",
   "meta.og_description": "Un player muzical gratuit, bit-perfect, pentru macOS și Windows.",
-
-  "nav.home_label": "Hifi, înapoi sus",
+  "nav.home_label": "BitSpring, înapoi sus",
   "nav.sections_label": "Secțiuni",
   "nav.how": "Cum funcționează",
   "nav.formats": "Formate",
   "nav.enhance": "Îmbunătățiri",
   "nav.download": "Descarcă",
   "nav.language": "Limbă",
-
   "hero.title": "Bit cu bit",
   "hero.lede": "Un player muzical gratuit pentru macOS și Windows. DAC-ul tău primește exact ce este în fișier: fără reeșantionare, fără mixerul sistemului, fără surprize.",
-
   "cta.appstore": "Descarcă din Mac App Store",
   "cta.windows": "Descarcă pentru Windows",
   "cta.appstore_soon": "În curând în Mac App Store",
   "cta.windows_soon": "În curând pentru Windows",
-
   "path.title": "Între fișier și DAC nu se schimbă niciun bit",
   "path.file": "Fișier",
   "path.file_detail": "FLAC, 24 de biți, 96 kHz. Eșantioanele sunt citite exact așa cum sunt stocate.",
@@ -30,12 +26,10 @@
   "path.samples": "Eșantioane trimise",
   "path.changed": "Biți modificați",
   "path.foot": "Pe macOS: CoreAudio în mod exclusiv (hog), cu ieșire în format întreg. Pe Windows: WASAPI Exclusive.",
-
   "formats.title": "De la CD la 768 kHz",
   "formats.lede": "Playerul comută DAC-ul pe frecvența de eșantionare a fiecărei piese. Dacă DAC-ul nu suportă acea frecvență, sunetul este reeșantionat cu grijă, iar playerul îți spune asta.",
   "formats.dsd": "DSD se redă nativ prin DoP dacă DAC-ul îl suportă, iar dacă nu, ca PCM la 176,4 kHz.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "Calitate CD",
   "rates.video": "Video și înregistrări de studio",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Limita DAC-urilor de azi",
   "rates.dsd": "Un bit, {mhz} MHz",
-
   "enhance.title": "Vrei alt sunet? Nicio problemă",
   "enhance.lede": "Îmbunătățirile sunt dezactivate implicit. Activează oricare dintre ele, iar indicatorul playerului trece de la „Bit-perfect” la „Procesare” și arată exact ce se face cu sunetul.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Ușor, mediu sau puternic. Elimină senzația că muzica se aude în interiorul capului.",
   "enhance.lossy": "Pentru MP3 și AAC",
   "enhance.lossy_detail": "Headroom-ul anti-clipping se activează singur, iar înaltele de peste pragul de tăiere al codecului pot fi refăcute delicat.",
-
   "app.title": "Tot ce se întâmplă cu sunetul, la vedere",
   "app.lede": "Formatul fișierului, frecvența DAC-ului și fiecare etapă de procesare, direct pe ecranul principal.",
   "app.alt": "Fereastra playerului: coada de redare, piesa curentă și indicatorul Bit-perfect cu traseul semnalului",
-
   "download.title": "Gratuit",
   "download.lede": "Fără abonament, fără reclame, fără cont. Doar un player.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "În lucru",
-
   "footer.top": "Înapoi sus",
-
   "cta.mac": "Descarcă pentru Mac",
   "cta.mac_soon": "În curând pentru Mac",
   "cta.ios": "Descarcă din App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "În curând pentru Android",
   "cta.other_platforms": "Alte platforme",
   "cta.all_platforms": "Descarcă",
-
-  "dl.meta_title": "Descarcă Hifi pentru macOS, Windows, iPhone și Android",
+  "dl.meta_title": "Descarcă BitSpring pentru macOS, Windows, iPhone și Android",
   "dl.meta_description": "Playerul muzical gratuit, bit-perfect, pentru dispozitivul tău.",
-  "dl.title": "Descarcă Hifi",
+  "dl.title": "Descarcă BitSpring",
   "dl.for_mac": "Pentru Mac-ul tău",
   "dl.for_windows": "Pentru PC-ul tău cu Windows",
   "dl.for_ios": "Pentru iPhone-ul sau iPad-ul tău",
@@ -92,7 +80,7 @@
   "dl.choose": "Alege platforma",
   "dl.appstore_note": "Se instalează și se actualizează prin App Store.",
   "dl.mac_file": "Descarcă fișierul .dmg",
-  "dl.mac_file_note": "Deschide-l și trage Hifi în „Aplicații”.",
+  "dl.mac_file_note": "Deschide-l și trage BitSpring în „Aplicații”.",
   "dl.mac_file_hint": "La prima pornire, macOS o blochează: deschide Configurări sistem → Confidențialitate și securitate și apasă „Deschide oricum”.",
   "dl.windows_file": "Descarcă programul de instalare (.exe)",
   "dl.windows_file_note": "Pentru Windows 10 și 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Se deschide App Store…",
   "dl.soon": "În curând",
   "dl.other": "Alte platforme",
-  "dl.back": "Înapoi la site"
+  "dl.back": "Înapoi la site",
+  "footer.source": "Cod sursă",
+  "footer.privacy": "Confidențialitate",
+  "footer.support": "Asistență",
+  "privacy.meta_title": "Politica de confidențialitate BitSpring",
+  "privacy.meta_description": "BitSpring nu colectează nimic: fără cont, fără analiză, fără reclame, fără urmărire.",
+  "privacy.title": "Confidențialitate",
+  "privacy.lead": "BitSpring nu colectează nimic despre tine. Nu există cont, analiză, publicitate sau urmărire.",
+  "privacy.device": "Muzica ta, listele de redare, presetările egalizatorului și setările rămân pe dispozitivul tău. Aplicația nu încarcă nimic din ele.",
+  "privacy.network": "Aplicația se conectează la internet doar pentru ceea ce îi ceri. Versiunea de pe acest site întreabă GitHub dacă există o actualizare și o descarcă; GitHub vede ce arată orice descărcare, adresa ta IP și versiunea aplicației. Dacă te conectezi la Qobuz sau TIDAL, aplicația vorbește doar cu acel serviciu, iar autentificarea ta rămâne pe dispozitivul tău. Versiunile din App Store nu se conectează deloc la internet.",
+  "privacy.site": "Acest site nu setează cookie-uri și nu rulează analize. Browserul tău reține limba aleasă, iar aceasta nu îl părăsește niciodată. Ca orice gazdă web, Vercel păstrează jurnale standard ale serverului.",
+  "privacy.open": "BitSpring este open source, deci oricine poate verifica toate acestea în codul său.",
+  "privacy.contact": "Ai întrebări?",
+  "privacy.contact_link": "Întreabă pe GitHub",
+  "privacy.updated": "Ultima actualizare: 11 noiembrie 2026."
 }

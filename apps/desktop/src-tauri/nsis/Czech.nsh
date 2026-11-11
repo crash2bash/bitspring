@@ -1,4 +1,4 @@
-; Hifi installer strings: Czech (Tauri ships none for it; it adds the UTF-8 BOM itself)
+; BitSpring installer strings: Czech (Tauri ships none for it; it adds the UTF-8 BOM itself)
 LangString addOrReinstall ${LANG_CZECH} "Přidat/přeinstalovat součásti"
 LangString alreadyInstalled ${LANG_CZECH} "Již nainstalováno"
 LangString alreadyInstalledLong ${LANG_CZECH} "Aplikace ${PRODUCTNAME} ${VERSION} je již nainstalována. Vyberte operaci, kterou chcete provést, a pokračujte kliknutím na Další."

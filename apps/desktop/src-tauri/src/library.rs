@@ -14,11 +14,16 @@ use tauri::{AppHandle, Manager, State};
 struct Persisted {
     folders: Vec<String>,
     tracks: Vec<TrackInfo>,
+    /// Folder → security-scoped bookmark (macOS: what lets the sandboxed build read the folder
+    /// again after a relaunch; see bookmarks.rs).
+    #[serde(default)]
+    bookmarks: HashMap<String, String>,
 }
 
 #[derive(Default)]
 struct Inner {
     folders: Vec<String>,
+    bookmarks: HashMap<String, String>,
     tracks: Arc<Vec<TrackInfo>>,
     albums: Arc<Vec<Album>>,
     /// (done, total) while a scan runs.
@@ -84,7 +89,7 @@ fn phone_music_dirs(_app: &AppHandle) -> Vec<String> {
 }
 
 /// Where a phone saves exported playlists: the folder the user reaches from outside the app
-/// (iPhone: Files → Hifi; Android: the app's own Music folder). Desktop: Downloads.
+/// (iPhone: Files → BitSpring; Android: the app's own Music folder). Desktop: Downloads.
 pub fn export_dir(app: &AppHandle) -> Option<PathBuf> {
     if cfg!(mobile) {
         phone_music_dirs(app).last().map(PathBuf::from)
@@ -100,6 +105,28 @@ fn music_dir(app: &AppHandle) -> Option<String> {
     Some(d.to_string_lossy().into_owned())
 }
 
+/// Open the saved bookmarks so the folders can be read (and scanned) again. A folder that was
+/// moved or renamed since comes back under its new path.
+fn reopen_folders(g: &mut Inner) {
+    let saved = std::mem::take(&mut g.bookmarks);
+    for (folder, bookmark) in saved {
+        match crate::bookmarks::open(&bookmark) {
+            Some((now, fresh)) => {
+                if now != folder {
+                    for f in g.folders.iter_mut().filter(|f| **f == folder) {
+                        *f = now.clone();
+                    }
+                }
+                g.bookmarks.insert(now, fresh.unwrap_or(bookmark));
+            }
+            // Gone for now (an unplugged drive): keep it, it may open next time.
+            None => {
+                g.bookmarks.insert(folder, bookmark);
+            }
+        }
+    }
+}
+
 impl Library {
     /// Load the saved index, then refresh it in the background (new or changed files only).
     pub fn load(app: &AppHandle) -> Self {
@@ -109,9 +136,11 @@ impl Library {
             g.albums = Arc::new(group_albums(&saved.tracks));
             g.tracks = Arc::new(saved.tracks);
             g.folders = saved.folders;
+            g.bookmarks = saved.bookmarks;
+            reopen_folders(&mut g);
         }
         // On a phone the library is fixed folders, not ones the user picks: on iPhone the app's
-        // own (Files → On My iPhone → Hifi, or Finder file sharing) — the only one the sandbox
+        // own (Files → On My iPhone → BitSpring, or Finder file sharing) — the only one the sandbox
         // lets us keep; on Android the shared Music folder plus the app's own.
         if cfg!(mobile) {
             let dirs = phone_music_dirs(app);
@@ -130,13 +159,13 @@ impl Library {
     }
 
     fn rescan(&self, app: AppHandle) {
-        let (folders, previous) = {
+        let (folders, previous, bookmarks) = {
             let mut g = self.0.lock().unwrap();
             if g.progress.is_some() {
                 return; // one scan at a time
             }
             g.progress = Some((0, 0));
-            (g.folders.iter().map(PathBuf::from).collect::<Vec<_>>(), g.tracks.clone())
+            (g.folders.iter().map(PathBuf::from).collect::<Vec<_>>(), g.tracks.clone(), g.bookmarks.clone())
         };
         let lib = self.clone();
         std::thread::spawn(move || {
@@ -155,7 +184,11 @@ impl Library {
                     }
                 },
             );
-            let saved = Persisted { folders: folders.iter().map(|p| p.to_string_lossy().into_owned()).collect(), tracks: result.tracks.clone() };
+            let saved = Persisted {
+                folders: folders.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+                tracks: result.tracks.clone(),
+                bookmarks,
+            };
             if let Some(p) = index_path(&app) {
                 // Best effort: a failed write only means the next launch starts from an older index.
                 let _ = hifi_engine::store::save_json(&p, &saved);
@@ -262,6 +295,10 @@ pub fn library_add_folder(app: AppHandle, lib: State<'_, Library>, path: String)
     {
         let mut g = lib.0.lock().unwrap();
         if !g.folders.contains(&path) {
+            // Made now, while the open panel's permission is live: the only moment it can be.
+            if let Some(b) = crate::bookmarks::create(&path) {
+                g.bookmarks.insert(path.clone(), b);
+            }
             g.folders.push(path);
         }
     }
@@ -271,7 +308,11 @@ pub fn library_add_folder(app: AppHandle, lib: State<'_, Library>, path: String)
 
 #[tauri::command]
 pub fn library_remove_folder(app: AppHandle, lib: State<'_, Library>, path: String) -> LibraryStatus {
-    lib.0.lock().unwrap().folders.retain(|f| *f != path);
+    {
+        let mut g = lib.0.lock().unwrap();
+        g.folders.retain(|f| *f != path);
+        g.bookmarks.remove(&path);
+    }
     lib.rescan(app);
     lib.status()
 }

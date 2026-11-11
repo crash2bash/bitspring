@@ -11,6 +11,7 @@ import { renderPage } from "./src/i18n/render";
 const PAGES: Record<string, string> = {
   "": "index.html",
   "download/": "download/index.html",
+  "privacy/": "privacy/index.html",
 };
 
 const LOCALE_PATH = "[a-z]{2}(?:-[a-z]+)?";

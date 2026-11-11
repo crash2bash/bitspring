@@ -19,7 +19,7 @@ import android.os.Looper
 import android.os.SystemClock
 
 /**
- * Keeps Hifi alive with the screen off (a foreground "media playback" service) and shows the
+ * Keeps BitSpring alive with the screen off (a foreground "media playback" service) and shows the
  * media notification / lock-screen player. All audio is in Rust; this only mirrors what Rust
  * tells it (update / progress / clear) and sends button presses back (nativeCommand).
  */
@@ -54,7 +54,7 @@ class PlaybackService : Service() {
 
     private fun session(ctx: Context): MediaSession {
       session?.let { return it }
-      val s = MediaSession(ctx.applicationContext, "Hifi")
+      val s = MediaSession(ctx.applicationContext, "BitSpring")
       s.setCallback(object : MediaSession.Callback() {
         override fun onPlay() = nativeCommand(CMD_PLAY, 0.0)
         override fun onPause() = nativeCommand(CMD_PAUSE, 0.0)
@@ -132,7 +132,7 @@ class PlaybackService : Service() {
       val m = metadata
       val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(ctx)
       return b.setSmallIcon(android.R.drawable.ic_media_play)
-        .setContentTitle(m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Hifi")
+        .setContentTitle(m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "BitSpring")
         .setContentText(m?.getString(MediaMetadata.METADATA_KEY_ARTIST))
         .setLargeIcon(m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART))
         .setContentIntent(open)

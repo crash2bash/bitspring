@@ -317,7 +317,7 @@
         note = t("eq.saved", { path: isIOS ? (where.split("/").pop() ?? where) : where });
         return;
       }
-      const name = all ? "Hifi EQ" : (draft?.name ?? "EQ");
+      const name = all ? "BitSpring EQ" : (draft?.name ?? "EQ");
       const suffix = f === "graphicEq" ? " GraphicEQ" : "";
       const { save } = await import("@tauri-apps/plugin-dialog");
       const path = await save({ defaultPath: `${name}${suffix}.${ext}`, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });

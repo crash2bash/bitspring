@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — δωρεάν bit-perfect player μουσικής για macOS και Windows",
+  "meta.title": "BitSpring — δωρεάν bit-perfect player μουσικής για macOS και Windows",
   "meta.description": "Ένα δωρεάν πρόγραμμα αναπαραγωγής μουσικής που στέλνει στο DAC σας ακριβώς ό,τι υπάρχει στο αρχείο. FLAC, ALAC, WAV, DSD έως DSD1024, έως 768 kHz. EQ, crossfeed και upsampling, όταν τα θέλετε.",
-  "meta.og_title": "Hifi — bit προς bit",
+  "meta.og_title": "BitSpring — bit προς bit",
   "meta.og_description": "Ένα δωρεάν bit-perfect player μουσικής για macOS και Windows.",
-
-  "nav.home_label": "Hifi, επιστροφή στην αρχή",
+  "nav.home_label": "BitSpring, επιστροφή στην αρχή",
   "nav.sections_label": "Ενότητες",
   "nav.how": "Πώς λειτουργεί",
   "nav.formats": "Μορφές",
   "nav.enhance": "Βελτιώσεις",
   "nav.download": "Λήψη",
   "nav.language": "Γλώσσα",
-
   "hero.title": "Bit προς bit",
   "hero.lede": "Ένα δωρεάν player μουσικής για macOS και Windows. Το DAC σας παίρνει ακριβώς ό,τι υπάρχει στο αρχείο: χωρίς resampling, χωρίς τον μίκτη του συστήματος, χωρίς εκπλήξεις.",
-
   "cta.appstore": "Λήψη από το Mac App Store",
   "cta.windows": "Λήψη για Windows",
   "cta.appstore_soon": "Σύντομα στο Mac App Store",
   "cta.windows_soon": "Σύντομα για Windows",
-
   "path.title": "Από το αρχείο ως το DAC δεν αλλάζει ούτε ένα bit",
   "path.file": "Αρχείο",
   "path.file_detail": "FLAC, 24 bit, 96 kHz. Τα δείγματα διαβάζονται ακριβώς όπως είναι αποθηκευμένα.",
@@ -30,12 +26,10 @@
   "path.samples": "Δείγματα που στάλθηκαν",
   "path.changed": "Bit που άλλαξαν",
   "path.foot": "Σε macOS: αποκλειστική λειτουργία CoreAudio (hog mode) με έξοδο ακεραίων. Σε Windows: WASAPI Exclusive.",
-
   "formats.title": "Από CD έως 768 kHz",
   "formats.lede": "Το player γυρίζει το DAC σας στη συχνότητα δειγματοληψίας κάθε κομματιού. Αν το DAC δεν υποστηρίζει αυτή τη συχνότητα, γίνεται προσεκτικό resampling — και το player σάς το λέει.",
   "formats.dsd": "Το DSD παίζει εγγενώς μέσω DoP, αν το υποστηρίζει το DAC σας, αλλιώς ως PCM στα 176,4 kHz.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "kHz",
   "rates.cd": "Ποιότητα CD",
   "rates.video": "Βίντεο και ηχογράφηση στούντιο",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Το ταβάνι των σημερινών DAC",
   "rates.dsd": "Ένα bit, {mhz} MHz",
-
   "enhance.title": "Θέλετε άλλον ήχο; Κανένα πρόβλημα",
   "enhance.lede": "Οι βελτιώσεις είναι απενεργοποιημένες από προεπιλογή. Ενεργοποιήστε οποιαδήποτε και η ένδειξη του player αλλάζει από «Bit-perfect» σε «Επεξεργασία», δείχνοντας ακριβώς τι γίνεται στον ήχο.",
   "enhance.upsampling": "Upsampling",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Ήπιο, μεσαίο ή έντονο. Διώχνει την αίσθηση ότι η μουσική παίζει μέσα στο κεφάλι σας.",
   "enhance.lossy": "Για MP3 και AAC",
   "enhance.lossy_detail": "Το headroom κατά του clipping ενεργοποιείται μόνο του, και οι υψηλές πάνω από το όριο αποκοπής του codec μπορούν να αποκατασταθούν διακριτικά.",
-
   "app.title": "Ό,τι συμβαίνει στον ήχο, σε κοινή θέα",
   "app.lede": "Μορφή αρχείου, συχνότητα του DAC και κάθε βήμα επεξεργασίας, κατευθείαν στην κύρια οθόνη.",
   "app.alt": "Το παράθυρο του player: ουρά αναπαραγωγής, τρέχον κομμάτι και η ένδειξη Bit-perfect με τη διαδρομή του σήματος",
-
   "download.title": "Δωρεάν",
   "download.lede": "Χωρίς συνδρομή, χωρίς διαφημίσεις, χωρίς λογαριασμό. Απλώς ένα player.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "Σε εξέλιξη",
-
   "footer.top": "Επιστροφή στην αρχή",
-
   "cta.mac": "Λήψη για Mac",
   "cta.mac_soon": "Σύντομα για Mac",
   "cta.ios": "Λήψη από το App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Σύντομα για Android",
   "cta.other_platforms": "Άλλες πλατφόρμες",
   "cta.all_platforms": "Λήψη",
-
-  "dl.meta_title": "Λήψη του Hifi για macOS, Windows, iPhone και Android",
+  "dl.meta_title": "Λήψη του BitSpring για macOS, Windows, iPhone και Android",
   "dl.meta_description": "Το δωρεάν bit-perfect player μουσικής για τη συσκευή σας.",
-  "dl.title": "Λήψη του Hifi",
+  "dl.title": "Λήψη του BitSpring",
   "dl.for_mac": "Για το Mac σας",
   "dl.for_windows": "Για τον υπολογιστή σας με Windows",
   "dl.for_ios": "Για το iPhone ή το iPad σας",
@@ -92,7 +80,7 @@
   "dl.choose": "Επιλέξτε πλατφόρμα",
   "dl.appstore_note": "Εγκατάσταση και ενημερώσεις μέσω του App Store.",
   "dl.mac_file": "Λήψη του αρχείου .dmg",
-  "dl.mac_file_note": "Ανοίξτε το και σύρετε το Hifi στις «Εφαρμογές».",
+  "dl.mac_file_note": "Ανοίξτε το και σύρετε το BitSpring στις «Εφαρμογές».",
   "dl.mac_file_hint": "Την πρώτη φορά το macOS τη σταματά: ανοίξτε Ρυθμίσεις συστήματος → Απόρρητο και ασφάλεια και πατήστε «Άνοιγμα ούτως ή άλλως».",
   "dl.windows_file": "Λήψη του προγράμματος εγκατάστασης (.exe)",
   "dl.windows_file_note": "Για Windows 10 και 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Άνοιγμα του App Store…",
   "dl.soon": "Σύντομα",
   "dl.other": "Άλλες πλατφόρμες",
-  "dl.back": "Επιστροφή στον ιστότοπο"
+  "dl.back": "Επιστροφή στον ιστότοπο",
+  "footer.source": "Πηγαίος κώδικας",
+  "footer.privacy": "Απόρρητο",
+  "footer.support": "Υποστήριξη",
+  "privacy.meta_title": "Πολιτική απορρήτου του BitSpring",
+  "privacy.meta_description": "Το BitSpring δεν συλλέγει τίποτα: χωρίς λογαριασμό, χωρίς analytics, χωρίς διαφημίσεις, χωρίς παρακολούθηση.",
+  "privacy.title": "Απόρρητο",
+  "privacy.lead": "Το BitSpring δεν συλλέγει τίποτα για εσάς. Δεν υπάρχει λογαριασμός, analytics, διαφήμιση ή παρακολούθηση.",
+  "privacy.device": "Η μουσική σας, οι λίστες αναπαραγωγής, οι προρυθμίσεις του ισοσταθμιστή και οι ρυθμίσεις σας παραμένουν στη συσκευή σας. Η εφαρμογή δεν ανεβάζει τίποτα από αυτά.",
+  "privacy.network": "Η εφαρμογή συνδέεται στο διαδίκτυο μόνο για ό,τι της ζητήσετε. Η έκδοση από αυτόν τον ιστότοπο ρωτά το GitHub αν υπάρχει ενημέρωση και την κατεβάζει· το GitHub βλέπει ό,τι δείχνει κάθε λήψη, τη διεύθυνση IP σας και την έκδοση της εφαρμογής. Αν συνδεθείτε στο Qobuz ή στο TIDAL, η εφαρμογή μιλά μόνο με εκείνη την υπηρεσία και η σύνδεσή σας παραμένει στη συσκευή σας. Οι εκδόσεις του App Store δεν συνδέονται καθόλου στο διαδίκτυο.",
+  "privacy.site": "Αυτός ο ιστότοπος δεν ορίζει cookies και δεν εκτελεί analytics. Το πρόγραμμα περιήγησής σας θυμάται τη γλώσσα που επιλέξατε και αυτή δεν το εγκαταλείπει ποτέ. Όπως κάθε πάροχος φιλοξενίας, το Vercel κρατά τυπικά αρχεία καταγραφής του διακομιστή.",
+  "privacy.open": "Το BitSpring είναι ανοιχτού κώδικα, οπότε οποιοσδήποτε μπορεί να τα ελέγξει όλα αυτά στον κώδικά του.",
+  "privacy.contact": "Ερωτήσεις;",
+  "privacy.contact_link": "Ρωτήστε στο GitHub",
+  "privacy.updated": "Τελευταία ενημέρωση: 11 Νοεμβρίου 2026."
 }

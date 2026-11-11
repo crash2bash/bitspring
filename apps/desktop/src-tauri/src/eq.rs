@@ -319,7 +319,7 @@ pub fn eq_export(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>, f
         None => {
             let name = {
                 let s = state.eq.lock().unwrap();
-                if ids.len() == 1 { s.get(&ids[0]).map(|p| p.preset.name.clone()).unwrap_or_default() } else { "Hifi EQ".into() }
+                if ids.len() == 1 { s.get(&ids[0]).map(|p| p.preset.name.clone()).unwrap_or_default() } else { "BitSpring EQ".into() }
             };
             let safe: String = name.chars().map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' }).collect();
             crate::library::export_dir(&app).ok_or(UserError::NoAppFolder)?.join(format!("{}.{}", safe.trim(), format.extension()))

@@ -7,7 +7,7 @@
 	<array>
 		<string>audio</string>
 	</array>
-	<!-- The library folder shows up in Files (On My iPhone → Hifi) and in Finder's file sharing. -->
+	<!-- The library folder shows up in Files (On My iPhone → BitSpring) and in Finder's file sharing. -->
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -41,11 +41,14 @@
 		<string>ko</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>Hifi</string>
+	<string>BitSpring</string>
 	<!-- The phone layout is built for portrait. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- Only standard HTTPS: exempt from export compliance (no documents per upload). -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

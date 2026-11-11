@@ -1,25 +1,21 @@
 {
-  "meta.title": "Hifi — безкоштовний bit-perfect плеєр для macOS і Windows",
+  "meta.title": "BitSpring — безкоштовний bit-perfect плеєр для macOS і Windows",
   "meta.description": "Безкоштовний музичний плеєр: ЦАП отримує саме те, що записано у файлі. FLAC, ALAC, WAV, DSD до DSD1024, до 768 кГц. Еквалайзер, кросфід і апсемплінг — за бажанням.",
-  "meta.og_title": "Hifi — біт у біт",
+  "meta.og_title": "BitSpring — біт у біт",
   "meta.og_description": "Безкоштовний bit-perfect плеєр для macOS і Windows.",
-
-  "nav.home_label": "Hifi, нагору",
+  "nav.home_label": "BitSpring, нагору",
   "nav.sections_label": "Розділи",
   "nav.how": "Як це працює",
   "nav.formats": "Формати",
   "nav.enhance": "Покращення",
   "nav.download": "Завантажити",
   "nav.language": "Мова",
-
   "hero.title": "Біт у біт",
   "hero.lede": "Безкоштовний музичний плеєр для macOS і Windows. Ваш ЦАП отримує саме те, що записано у файлі: без перерахунку частоти, без системного мікшера, без сюрпризів.",
-
   "cta.appstore": "Завантажте в Mac App Store",
   "cta.windows": "Завантажити для Windows",
   "cta.appstore_soon": "Незабаром у Mac App Store",
   "cta.windows_soon": "Незабаром для Windows",
-
   "path.title": "Від файлу до ЦАП не змінюється жоден біт",
   "path.file": "Файл",
   "path.file_detail": "FLAC, 24 біти, 96 кГц. Семпли зчитуються такими, як є.",
@@ -30,12 +26,10 @@
   "path.samples": "Передано семплів",
   "path.changed": "Змінено бітів",
   "path.foot": "На macOS — монопольний режим CoreAudio і цілочисельний формат, на Windows — WASAPI Exclusive.",
-
   "formats.title": "Від CD до 768 кГц",
   "formats.lede": "Плеєр перемикає ЦАП на частоту кожного треку. Якщо ЦАП її не підтримує, звук акуратно перераховується — і плеєр прямо про це повідомляє.",
   "formats.dsd": "DSD — нативно через DoP, якщо ЦАП це вміє, або в PCM 176,4 кГц, якщо ні.",
   "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
-
   "rates.khz": "кГц",
   "rates.cd": "Якість CD",
   "rates.video": "Відео і студійний запис",
@@ -45,7 +39,6 @@
   "rates.dxd": "DXD",
   "rates.limit": "Межа сучасних ЦАП",
   "rates.dsd": "Один біт, {mhz} МГц",
-
   "enhance.title": "Хочете іншого звуку? Будь ласка",
   "enhance.lede": "Усі покращення типово вимкнені. Увімкніть будь-яке — індикатор у плеєрі змінить «Bit-perfect» на «Обробка» і покаже, що саме відбувається зі звуком.",
   "enhance.upsampling": "Апсемплінг",
@@ -56,11 +49,9 @@
   "enhance.crossfeed_detail": "Легкий, середній або сильний. Прибирає відчуття, що музика звучить усередині голови.",
   "enhance.lossy": "Для MP3 і AAC",
   "enhance.lossy_detail": "Запас від перевантаження вмикається сам, а верхи понад зрізом кодека можна дбайливо відновити.",
-
   "app.title": "Усе, що відбувається зі звуком, — перед очима",
   "app.lede": "Формат файлу, частота ЦАП і кожен крок обробки — просто на головному екрані.",
   "app.alt": "Вікно плеєра: черга, зараз грає та індикатор Bit-perfect зі шляхом сигналу",
-
   "download.title": "Безкоштовно",
   "download.lede": "Без підписки, реклами й акаунта. Просто плеєр.",
   "platforms.macos": "macOS",
@@ -70,9 +61,7 @@
   "platforms.ios": "iOS",
   "platforms.android": "Android",
   "platforms.soon": "У роботі",
-
   "footer.top": "Нагору",
-
   "cta.mac": "Завантажити для Mac",
   "cta.mac_soon": "Незабаром для Mac",
   "cta.ios": "Завантажте в App Store",
@@ -81,10 +70,9 @@
   "cta.android_soon": "Незабаром для Android",
   "cta.other_platforms": "Інші платформи",
   "cta.all_platforms": "Завантажити",
-
-  "dl.meta_title": "Завантажити Hifi для macOS, Windows, iPhone і Android",
+  "dl.meta_title": "Завантажити BitSpring для macOS, Windows, iPhone і Android",
   "dl.meta_description": "Безкоштовний bit-perfect плеєр для вашого пристрою.",
-  "dl.title": "Завантажити Hifi",
+  "dl.title": "Завантажити BitSpring",
   "dl.for_mac": "Для вашого Mac",
   "dl.for_windows": "Для вашого комп’ютера з Windows",
   "dl.for_ios": "Для вашого iPhone або iPad",
@@ -92,7 +80,7 @@
   "dl.choose": "Оберіть платформу",
   "dl.appstore_note": "Встановлення й оновлення через App Store.",
   "dl.mac_file": "Завантажити файл .dmg",
-  "dl.mac_file_note": "Відкрийте його й перетягніть Hifi у «Програми».",
+  "dl.mac_file_note": "Відкрийте його й перетягніть BitSpring у «Програми».",
   "dl.mac_file_hint": "Під час першого запуску macOS його зупинить: відкрийте «Системні параметри» → «Приватність і безпека» й натисніть «Усе одно відкрити».",
   "dl.windows_file": "Завантажити інсталятор (.exe)",
   "dl.windows_file_note": "Для Windows 10 і 11.",
@@ -103,5 +91,19 @@
   "dl.redirecting": "Відкриваємо App Store…",
   "dl.soon": "Незабаром",
   "dl.other": "Інші платформи",
-  "dl.back": "Повернутися на сайт"
+  "dl.back": "Повернутися на сайт",
+  "footer.source": "Вихідний код",
+  "footer.privacy": "Конфіденційність",
+  "footer.support": "Підтримка",
+  "privacy.meta_title": "Політика конфіденційності BitSpring",
+  "privacy.meta_description": "BitSpring нічого не збирає: ні облікового запису, ні аналітики, ні реклами, ні стеження.",
+  "privacy.title": "Конфіденційність",
+  "privacy.lead": "BitSpring нічого не збирає про вас. Тут немає ні облікового запису, ні аналітики, ні реклами, ні стеження.",
+  "privacy.device": "Ваша музика, плейлисти, пресети еквалайзера й налаштування залишаються на вашому пристрої. Застосунок нічого з цього не вивантажує.",
+  "privacy.network": "Застосунок виходить в інтернет лише для того, що ви в нього просите. Версія з цього сайту питає GitHub, чи є оновлення, і завантажує його; GitHub бачить те, що показує будь-яке завантаження: вашу IP-адресу та версію застосунку. Якщо ви входите в Qobuz або TIDAL, застосунок спілкується лише з цим сервісом, а ваші дані для входу залишаються на вашому пристрої. Версії з App Store взагалі не виходять в інтернет.",
+  "privacy.site": "Цей сайт не встановлює cookie й не використовує аналітику. Ваш браузер запам’ятовує вибрану вами мову, і вона ніколи його не покидає. Як і будь-який вебхостинг, Vercel зберігає стандартні журнали сервера.",
+  "privacy.open": "BitSpring має відкритий вихідний код, тож будь-хто може перевірити все це в ньому.",
+  "privacy.contact": "Є запитання?",
+  "privacy.contact_link": "Запитайте на GitHub",
+  "privacy.updated": "Востаннє оновлено 11 листопада 2026 р."
 }

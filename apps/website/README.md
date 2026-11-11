@@ -1,4 +1,4 @@
-# Hifi website
+# BitSpring website
 
 Landing page for the player: Vite + TypeScript, three.js for the sample field, GSAP ScrollTrigger
 for scroll choreography, Lenis for smooth scrolling (including notched mouse wheels on Windows).

@@ -304,7 +304,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return { ...eqChanged(), ids: [id] } as T;
     }
     case "eq_export":
-      return ((args.path as string | null) ?? `/Users/me/Downloads/${eq.presets.find((p) => p.id === (args.ids as string[])[0])?.name ?? "Hifi EQ"}.txt`) as T;
+      return ((args.path as string | null) ?? `/Users/me/Downloads/${eq.presets.find((p) => p.id === (args.ids as string[])[0])?.name ?? "BitSpring EQ"}.txt`) as T;
     case "eq_export_text":
       return "Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.7\n" as T;
     case "channel_test":

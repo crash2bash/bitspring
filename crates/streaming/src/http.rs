@@ -13,7 +13,7 @@ use hifi_engine::MediaSource;
 use serde_json::Value;
 use ureq::Agent;
 
-const USER_AGENT: &str = concat!("Hifi/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("BitSpring/", env!("CARGO_PKG_VERSION"));
 
 /// For API calls: everything answers within seconds, or not at all.
 pub fn api() -> &'static Agent {
