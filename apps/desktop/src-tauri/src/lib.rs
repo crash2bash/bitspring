@@ -26,7 +26,7 @@ use ios_media as media;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::Duration;
 
 use base64::Engine as _;
@@ -100,6 +100,18 @@ struct AppState {
     play_lock: Mutex<()>,
     /// Why the queue stopped at a track it couldn't play.
     advance_error: Mutex<Option<AdvanceError>>,
+    /// The last status sent to the UI, answered again while a track is starting.
+    last_status: Mutex<Option<StatusDto>>,
+}
+
+/// The player, unless a track is starting right now. Starting holds this lock for as long as
+/// the device takes to switch rates (up to seconds); the UI's polling must not wait for that.
+fn player_now(state: &AppState) -> Option<MutexGuard<'_, Option<Player>>> {
+    match state.player.try_lock() {
+        Ok(g) => Some(g),
+        Err(TryLockError::WouldBlock) => None,
+        Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
+    }
 }
 
 const CROSSFEED_LEVELS: [(&str, CrossfeedLevel); 3] = [
@@ -241,7 +253,7 @@ struct NowPlayingDto {
     rev: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StatusDto {
     active: bool,
@@ -435,7 +447,7 @@ const AUDIO_EXTENSIONS: [&str; 12] = ["flac", "wav", "aif", "aiff", "m4a", "alac
 
 /// Turn dropped files and folders into a flat, ordered list of audio files.
 /// Folders are walked recursively and sorted by path, so an album lands in track order.
-#[tauri::command]
+#[tauri::command(async)]
 fn expand_paths(paths: Vec<String>) -> Vec<String> {
     fn is_audio(p: &std::path::Path) -> bool {
         p.extension()
@@ -469,7 +481,7 @@ fn expand_paths(paths: Vec<String>) -> Vec<String> {
     out.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_devices() -> CmdResult<Vec<DeviceDto>> {
     Ok(output::output_devices().map_err(err)?.iter().map(DeviceDto::from).collect())
 }
@@ -615,15 +627,34 @@ fn play_queue_at(state: &AppState, i: usize) {
     }
 }
 
-/// At the end of a track, start the next one in the queue on the same output.
-fn advance(state: &AppState) {
+/// At the end of a track, start the next one in the queue on the same output. True when
+/// the last track has played out and nothing follows (the player sits finished).
+fn advance(state: &AppState) -> bool {
     let _one = state.play_lock.lock().unwrap();
     if !state.player.lock().unwrap().as_ref().is_some_and(|p| p.is_finished()) {
-        return;
+        return false;
     }
     let next = state.queue.lock().unwrap().index.map(|i| i + 1);
-    if let Some(i) = next.filter(|&i| i < state.queue.lock().unwrap().paths.len()) {
-        play_queue_at(state, i);
+    match next.filter(|&i| i < state.queue.lock().unwrap().paths.len()) {
+        Some(i) => {
+            play_queue_at(state, i);
+            false
+        }
+        None => true,
+    }
+}
+
+/// How long a finished queue keeps the DAC: a quick replay or a new track right after reuses
+/// it as it is; after that, other apps get it back (exclusive mode, the sample rate we set).
+const RELEASE_AFTER: Duration = Duration::from_secs(5);
+
+/// The queue ended a while ago: let go of the output. The track stays shown; Play starts it
+/// again on the same output.
+fn release_if_still_finished(state: &AppState) {
+    let _one = state.play_lock.lock().unwrap();
+    let mut player = state.player.lock().unwrap();
+    if player.as_ref().is_some_and(|p| p.is_finished()) {
+        drop(player.take());
     }
 }
 
@@ -647,7 +678,7 @@ pub(crate) fn jump(state: &AppState, delta: i64) {
     play_queue_at(state, i);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn channel_test(state: State<'_, AppState>, device_uid: String) -> CmdResult<SignalDto> {
     let device = find_device(&device_uid)?;
     // Play at a rate the device already runs at, so the test itself switches nothing.
@@ -658,13 +689,44 @@ fn channel_test(state: State<'_, AppState>, device_uid: String) -> CmdResult<Sig
     start(&state, &device, Arc::new(testsignal::channel_test(rate)), PlayOptions::default())
 }
 
+impl StatusDto {
+    /// Nothing loaded.
+    fn idle(queue_index: Option<usize>, now_rev: u64, advance_error: Option<AdvanceError>, system_volume: Option<f32>) -> Self {
+        Self {
+            active: false,
+            position: 0.0,
+            duration: 0.0,
+            paused: false,
+            finished: false,
+            peak_db: None,
+            underruns: 0,
+            buffering: false,
+            buffered: 0.0,
+            error: None,
+            queue_index,
+            now_rev,
+            advance_error,
+            system_volume,
+        }
+    }
+}
+
 #[tauri::command]
 fn status(state: State<'_, AppState>) -> StatusDto {
     let queue_index = state.queue.lock().unwrap().index;
     let now_rev = state.now_rev.load(Ordering::Acquire);
     let advance_error = state.advance_error.lock().unwrap().clone();
     let system_volume = output::system_volume();
-    match state.player.lock().unwrap().as_ref() {
+    let Some(player) = player_now(&state) else {
+        // A track is starting: the last answer, as waiting for audio (and not finished: what
+        // was finished is being replaced).
+        let last = state.last_status.lock().unwrap().clone();
+        return match last {
+            Some(s) => StatusDto { buffering: true, finished: false, queue_index, now_rev, advance_error, system_volume, ..s },
+            None => StatusDto { buffering: true, ..StatusDto::idle(queue_index, now_rev, advance_error, system_volume) },
+        };
+    };
+    let s = match player.as_ref() {
         Some(p) => StatusDto {
             active: true,
             position: p.position_secs(),
@@ -681,40 +743,28 @@ fn status(state: State<'_, AppState>) -> StatusDto {
             advance_error,
             system_volume,
         },
-        None => StatusDto {
-            active: false,
-            position: 0.0,
-            duration: 0.0,
-            paused: false,
-            finished: false,
-            peak_db: None,
-            underruns: 0,
-            buffering: false,
-            buffered: 0.0,
-            error: None,
-            queue_index,
-            now_rev,
-            advance_error,
-            system_volume,
-        },
-    }
+        None => StatusDto::idle(queue_index, now_rev, advance_error, system_volume),
+    };
+    drop(player);
+    *state.last_status.lock().unwrap() = Some(s.clone());
+    s
 }
 
 /// Peak level per channel (dBFS, floored at −90) since the previous call.
 #[tauri::command]
 fn meter(state: State<'_, AppState>) -> [f64; 2] {
-    let peaks = state.player.lock().unwrap().as_ref().map_or([0.0; 2], |p| p.take_meter());
+    let peaks = player_now(&state).and_then(|g| g.as_ref().map(|p| p.take_meter())).unwrap_or([0.0; 2]);
     peaks.map(|v| (20.0 * (v as f64).max(1e-9).log10()).max(-90.0))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_paused(state: State<'_, AppState>, paused: bool) {
     if let Some(p) = state.player.lock().unwrap().as_ref() {
         p.set_paused(paused);
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn seek(state: State<'_, AppState>, seconds: f64) {
     if let Some(p) = state.player.lock().unwrap().as_ref() {
         p.seek(seconds);
@@ -905,10 +955,19 @@ pub fn run() {
             media::install(app.handle());
             let handle = app.handle().clone();
             std::thread::Builder::new().name("hifi-queue".into()).spawn(move || {
+                let mut ended: Option<std::time::Instant> = None;
                 loop {
                     std::thread::sleep(Duration::from_millis(40));
                     let state = handle.state::<AppState>();
-                    advance(&state);
+                    if advance(&state) {
+                        let since = *ended.get_or_insert_with(std::time::Instant::now);
+                        if since.elapsed() >= RELEASE_AFTER {
+                            release_if_still_finished(&state);
+                            ended = None;
+                        }
+                    } else {
+                        ended = None;
+                    }
                     #[cfg(mobile)]
                     {
                         let rev = state.now_rev.load(Ordering::Acquire);

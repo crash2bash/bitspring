@@ -261,6 +261,7 @@
   "pl.import": "Імпорт…",
   "pl.paste": "Вставити список",
   "pl.pasteHint": "По рядку на трек: «Виконавець — Назва», посилання на трек Qobuz або TIDAL чи шлях до файлу. Підійде й вміст файлу плейлиста або таблиці (Exportify, TuneMyMusic, експорт з Apple Music).",
+  "pl.pasteHintLocal": "По рядку на трек: «Виконавець — Назва» або шлях до файлу. Підійде й вміст файлу плейлиста або таблиці (Exportify, TuneMyMusic, експорт з Apple Music).",
   "pl.trackList": "Список треків",
   "pl.importButton": "Імпортувати",
   "pl.cancel": "Скасувати",

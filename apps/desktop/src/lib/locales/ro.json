@@ -256,6 +256,7 @@
   "pl.import": "Importă…",
   "pl.paste": "Lipește o listă",
   "pl.pasteHint": "O piesă pe fiecare rând: „Artist — Titlu”, un link către o piesă Qobuz sau TIDAL ori calea unui fișier. Merge și conținutul unui fișier de playlist sau al unui tabel (Exportify, TuneMyMusic, un export din Apple Music).",
+  "pl.pasteHintLocal": "O piesă pe fiecare rând: „Artist — Titlu” sau calea unui fișier. Merge și conținutul unui fișier de playlist sau al unui tabel (Exportify, TuneMyMusic, un export din Apple Music).",
   "pl.trackList": "Lista de piese",
   "pl.importButton": "Importă",
   "pl.cancel": "Anulează",

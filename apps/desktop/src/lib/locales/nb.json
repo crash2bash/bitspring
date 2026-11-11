@@ -256,6 +256,7 @@
   "pl.import": "Importer…",
   "pl.paste": "Lim inn en liste",
   "pl.pasteHint": "Ett spor per linje: «Artist — Tittel», en lenke til et spor på Qobuz eller TIDAL, eller en filbane. Innholdet i en spillelistefil eller en tabell (Exportify, TuneMyMusic, en eksport fra Apple Music) fungerer også.",
+  "pl.pasteHintLocal": "Ett spor per linje: «Artist — Tittel» eller en filbane. Innholdet i en spillelistefil eller en tabell (Exportify, TuneMyMusic, en eksport fra Apple Music) fungerer også.",
   "pl.trackList": "Sporliste",
   "pl.importButton": "Importer",
   "pl.cancel": "Avbryt",

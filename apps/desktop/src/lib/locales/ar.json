@@ -284,6 +284,7 @@
   "pl.import": "استيراد…",
   "pl.paste": "لصق قائمة",
   "pl.pasteHint": "مقطع واحد في كل سطر: «الفنان — العنوان»، أو رابط مقطع على Qobuz أو TIDAL، أو مسار ملف. ويصلح أيضًا محتوى ملف قائمة تشغيل أو جدول (Exportify أو TuneMyMusic أو ملف مُصدَّر من Apple Music).",
+  "pl.pasteHintLocal": "مقطع واحد في كل سطر: «الفنان — العنوان» أو مسار ملف. ويصلح أيضًا محتوى ملف قائمة تشغيل أو جدول (Exportify أو TuneMyMusic أو ملف مُصدَّر من Apple Music).",
   "pl.trackList": "قائمة المقاطع",
   "pl.importButton": "استيراد",
   "pl.cancel": "إلغاء",

@@ -261,6 +261,7 @@
   "pl.import": "Importovat…",
   "pl.paste": "Vložit seznam",
   "pl.pasteHint": "Jedna skladba na řádek: „Interpret — Název“, odkaz na skladbu v Qobuz nebo TIDAL, nebo cesta k souboru. Funguje i obsah souboru s playlistem nebo tabulka (Exportify, TuneMyMusic, export z Apple Music).",
+  "pl.pasteHintLocal": "Jedna skladba na řádek: „Interpret — Název“ nebo cesta k souboru. Funguje i obsah souboru s playlistem nebo tabulka (Exportify, TuneMyMusic, export z Apple Music).",
   "pl.trackList": "Seznam skladeb",
   "pl.importButton": "Importovat",
   "pl.cancel": "Zrušit",

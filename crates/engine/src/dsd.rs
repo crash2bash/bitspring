@@ -357,6 +357,7 @@ pub fn open_dsd(path: &Path, mode: DsdMode) -> Result<Arc<Track>> {
         DsdMode::Dop => None,
     };
     std::thread::Builder::new().name("hifi-dsd".into()).spawn(move || {
+        let _guard = crate::decode::FinishOnPanic(&mine);
         let ch = h.channels;
         let mut pending: Vec<Vec<u8>> = vec![Vec::new(); ch];
         let mut frame_buf: Vec<u8> = Vec::new();

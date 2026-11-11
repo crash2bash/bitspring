@@ -363,15 +363,17 @@ struct ChanPlan {
 }
 
 impl IirPlan {
-    /// `bands`: false when the bands run on the FIR stage instead (linear phase) — then only
-    /// preamp and balance are left for the callback.
+    /// `bands`: false when the bands run on the FIR stage instead (linear phase). Preamp and
+    /// balance then go there too, so a lower preamp and the boost it makes room for change at
+    /// the same moment (the FIR is heard ~0.7 s after the callback: a preamp raised here while
+    /// the old boost is still on its way would clip). The callback is left with the compare.
     pub fn new(eq: &EqPreset, fs: f64, channels: usize, bands: bool) -> Box<Self> {
         let chans: Vec<ChanPlan> = (0..channels)
             .map(|ch| {
                 let sections: Vec<Biquad> =
                     if bands { eq.bands_for(ch).flat_map(|b| sections(b, fs)).collect() } else { Vec::new() };
                 ChanPlan {
-                    gain: 10f64.powf(eq.channel_gain_db(ch, fs) / 20.0),
+                    gain: if bands { 10f64.powf(eq.channel_gain_db(ch, fs) / 20.0) } else { 1.0 },
                     state: vec![[0.0; 2]; sections.len()],
                     sections,
                 }

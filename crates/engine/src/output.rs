@@ -337,7 +337,8 @@ pub(crate) fn signal_path(
 // ---------------------------------------------------------------------------------------------
 
 const NO_SEEK: usize = usize::MAX;
-/// Largest callback buffer we serve, in frames (both CoreAudio's and WASAPI's are far below).
+/// Callback scratch, in frames (CoreAudio's and WASAPI's buffers are far below). A bigger
+/// request is served in pieces of this size.
 pub(crate) const MAX_CALLBACK_FRAMES: usize = 16_384;
 
 /// State shared with the realtime thread. Only atomics and immutable data: the callback
@@ -603,6 +604,8 @@ impl Drop for Playback {
 /// The render thread: pulls source audio from RAM, runs the processing chain, keeps the ring
 /// topped up. Not realtime — it may sleep, and only has to stay ahead of the DAC on average.
 fn render_loop(track: Arc<Track>, rs: Arc<RingState>, mut chain: Chain, start_frame: usize) {
+    // Our own thread: flush-to-zero for its whole life (the FIR's tails, see fpu.rs).
+    let _ftz = crate::fpu::FlushDenormals::on();
     const BLOCK: usize = 2048;
     let mut src = start_frame;
     let mut out: Vec<f32> = Vec::new();
@@ -667,6 +670,9 @@ impl Shared {
     /// Fill the device's buffers for one callback. Realtime-safe: no locks, no allocation.
     #[inline]
     pub(crate) fn render(&self, buffers: &mut [OutBuf<'_>]) {
+        // The EQ's filters decay into denormals on quiet passages, which run many times
+        // slower on the CPU and can make the callback miss its deadline.
+        let _ftz = crate::fpu::FlushDenormals::on();
         let st = self;
         let paused = st.paused.load(Ordering::Relaxed);
         let frames = buffers
@@ -688,7 +694,7 @@ impl Shared {
                 let peaks = if st.dop {
                     fill_dop(buffers, avail, &st.dop_phase, |f, dc| dop_sample(track, pos + f, dc))
                 } else {
-                    fill(buffers, avail, |f, dc| track_sample(track, pos + f, dc))
+                    fill(buffers, 0..frames, avail, |f, dc| track_sample(track, pos + f, dc))
                 };
                 st.meter(peaks);
                 if !paused {
@@ -716,20 +722,32 @@ impl Shared {
                     rs.refilling.store(true, Ordering::Relaxed);
                 }
                 let ch = rs.channels;
-                let want = (frames * ch).min(scratch.len());
-                let got = if paused { 0 } else { rs.ring.pop(&mut scratch[..want]) / ch };
-                let block = &mut scratch[..got * ch];
-                let peak = match &rs.eq {
-                    // SAFETY: this is the callback thread.
-                    Some(eq) => unsafe { eq.live() }.process(&eq.mailbox, block),
-                    None => block.iter_mut().fold(0f32, |m, s| {
-                        let p = m.max(s.abs());
-                        *s = s.clamp(-1.0, 1.0);
-                        p
-                    }),
-                };
-                rs.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
-                let peaks = fill(buffers, got, |f, dc| source_sample(scratch, ch, f, dc));
+                let piece = scratch.len() / ch;
+                let mut got = 0;
+                let mut peaks = [0f32; 2];
+                // In pieces of the scratch size; once the ring runs short, the rest is silence.
+                while got < frames {
+                    let want = (frames - got).min(piece);
+                    let n = if paused { 0 } else { rs.ring.pop(&mut scratch[..want * ch]) / ch };
+                    let block = &mut scratch[..n * ch];
+                    let peak = match &rs.eq {
+                        // SAFETY: this is the callback thread.
+                        Some(eq) => unsafe { eq.live() }.process(&eq.mailbox, block),
+                        None => block.iter_mut().fold(0f32, |m, s| {
+                            let p = m.max(s.abs());
+                            *s = s.clamp(-1.0, 1.0);
+                            p
+                        }),
+                    };
+                    rs.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
+                    let to = if n < want { frames } else { got + want };
+                    let p = fill(buffers, got..to, n, |f, dc| source_sample(scratch, ch, f, dc));
+                    peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
+                    got += n;
+                    if n < want {
+                        break;
+                    }
+                }
                 st.meter(peaks);
                 rs.played.fetch_add(got as u64, Ordering::Relaxed);
                 if got == frames {
@@ -756,10 +774,16 @@ impl Shared {
     }
 }
 
-/// Write `avail` frames from `sample(frame, device_channel)` into every buffer, then silence
-/// for the rest. Returns the peak |sample| written to device channels 0 and 1.
+/// Write the device frames in `frames`: the first `avail` of them from `sample(i,
+/// device_channel)` (i counted from the start of the range), silence after. Returns the peak
+/// |sample| written to device channels 0 and 1.
 #[inline(always)]
-fn fill(buffers: &mut [OutBuf<'_>], avail: usize, sample: impl Fn(usize, usize) -> f32) -> [f32; 2] {
+fn fill(
+    buffers: &mut [OutBuf<'_>],
+    frames: std::ops::Range<usize>,
+    avail: usize,
+    sample: impl Fn(usize, usize) -> f32,
+) -> [f32; 2] {
     let mut peaks = [0f32; 2];
     let mut first_channel = 0; // device channel index of this buffer's first channel
     for buf in buffers.iter_mut() {
@@ -767,7 +791,8 @@ fn fill(buffers: &mut [OutBuf<'_>], avail: usize, sample: impl Fn(usize, usize) 
         if nch == 0 {
             continue;
         }
-        for (f, frame) in buf.data.chunks_exact_mut(nch * fmt.bytes()).enumerate() {
+        let all = buf.data.chunks_exact_mut(nch * fmt.bytes());
+        for (f, frame) in all.skip(frames.start).take(frames.len()).enumerate() {
             for (c, out) in frame.chunks_exact_mut(fmt.bytes()).enumerate() {
                 let s = if f < avail { sample(f, first_channel + c) } else { 0.0 };
                 if let Some(p) = peaks.get_mut(first_channel + c) {
@@ -940,6 +965,44 @@ mod tests {
             // A different layout can't go live: phase change → the caller restarts.
             assert!(!p.update_eq(&peak_eq(-6.0, Phase::Minimum), false));
         }
+
+        /// Linear phase: the preamp travels with the bands through the FIR, so turning a boost
+        /// and the preamp that made room for it off together never plays the boost without
+        /// it (the preamp would otherwise jump ~0.7 s ahead of the bands).
+        #[test]
+        fn linear_phase_preamp_changes_with_the_bands() {
+            let mut eq = peak_eq(6.0, Phase::Linear);
+            eq.preamp = -6.0;
+            let p = start(eq);
+            let a = pull(&p, 48_000);
+            assert!(level_db(&a[24_000..]).abs() < 0.1, "{}", level_db(&a[24_000..]));
+            assert!(p.update_eq(&peak_eq(0.0, Phase::Linear), false));
+            let b = pull(&p, 96_000);
+            assert!(level_db(&b).abs() < 0.1, "{}", level_db(&b));
+        }
+    }
+
+    /// A device asking for more than the scratch holds gets all of it, not silence at the end.
+    #[test]
+    fn a_callback_bigger_than_the_scratch_is_served_whole() {
+        let fs = 48_000u32;
+        let samples: Vec<f32> = (0..fs as usize * 4).flat_map(|i| [((i % 100) as f32 + 1.0) / 1000.0; 2]).collect();
+        let track = Arc::new(Track::from_samples(fs, 2, Some(24), &samples, crate::decode::TrackMeta::default()));
+        let opts = PlayOptions { dsp: DspSettings { crossfeed: None, ..Default::default() }, ..Default::default() };
+        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false };
+        let p = Playback::new(track, &opts, &plan, fs as f64).unwrap();
+        let rs = p.shared().ring.as_ref().unwrap();
+        // Bigger than the scratch, smaller than the ring (which holds ~0.68 s here).
+        let frames = MAX_CALLBACK_FRAMES + 5_000;
+        assert!(frames * 2 < rs.ring.capacity());
+        while rs.ring.available() < frames * 2 {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let mut data = vec![0u8; frames * 2 * 4];
+        p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: OutFormat::F32 }]);
+        let left: Vec<f32> = data.chunks_exact(8).map(|f| f32::from_le_bytes(f[..4].try_into().unwrap())).collect();
+        assert!(left.iter().all(|&v| v > 0.0), "silence at {:?}", left.iter().position(|&v| v <= 0.0));
+        assert_eq!(rs.played.load(Ordering::Relaxed), frames as u64);
     }
 
     /// The bit-perfect claim, checked exhaustively: every 24-bit integer survives

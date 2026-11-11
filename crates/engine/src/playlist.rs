@@ -104,7 +104,13 @@ pub fn parse(bytes: &[u8], name: &str) -> Result<Vec<Parsed>> {
 pub fn parse_text(text: &str) -> Result<Vec<Parsed>> {
     let t = text.trim_start_matches('\u{FEFF}').trim_start();
     let first = t.lines().next().unwrap_or("");
-    let head = &t[..t.len().min(600)].to_ascii_lowercase();
+    // The first 600 bytes, cut back to a character boundary (pasted text is often Cyrillic,
+    // and slicing a &str inside a multi-byte character panics).
+    let mut cut = t.len().min(600);
+    while !t.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    let head = &t[..cut].to_ascii_lowercase();
     Ok(if t.starts_with("#EXTM3U") {
         vec![parse_m3u(t)]
     } else if first.trim().eq_ignore_ascii_case("[playlist]") {
@@ -1131,6 +1137,16 @@ mod tests {
         assert_eq!(found[1], Some(Found::Stream("qobuz:track:123456".into())));
         assert_eq!(found[2], Some(Found::Stream("tidal:track:77".into())));
         assert_eq!(found[3], Some(Found::Library(0)));
+    }
+
+    #[test]
+    fn long_cyrillic_text_does_not_split_a_character() {
+        // Every offset of the 600-byte cut, so one of them lands inside a two-byte letter.
+        for pad in 0..4 {
+            let text = format!("{}{}", "x".repeat(pad), "Кино — Группа крови\n".repeat(40));
+            let all = parse_text(&text).unwrap();
+            assert_eq!(all[0].entries.len(), 40);
+        }
     }
 
     #[test]

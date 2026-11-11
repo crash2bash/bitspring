@@ -182,7 +182,7 @@ pub struct Streaming {
 
 impl Streaming {
     pub fn load(path: PathBuf) -> Self {
-        let saved = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        let saved = hifi_engine::store::load_json(&path).unwrap_or_default();
         Self { path, saved: Mutex::new(saved), pending_tidal: Mutex::new(None), covers: Mutex::new(HashMap::new()) }
     }
 

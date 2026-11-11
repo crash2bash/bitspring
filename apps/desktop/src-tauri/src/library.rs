@@ -104,9 +104,7 @@ impl Library {
     /// Load the saved index, then refresh it in the background (new or changed files only).
     pub fn load(app: &AppHandle) -> Self {
         let lib = Library::default();
-        if let Some(p) = index_path(app).and_then(|p| std::fs::read(p).ok())
-            && let Ok(saved) = serde_json::from_slice::<Persisted>(&p)
-        {
+        if let Some(saved) = index_path(app).and_then(|p| hifi_engine::store::load_json::<Persisted>(&p)) {
             let mut g = lib.0.lock().unwrap();
             g.albums = Arc::new(group_albums(&saved.tracks));
             g.tracks = Arc::new(saved.tracks);
@@ -159,8 +157,8 @@ impl Library {
             );
             let saved = Persisted { folders: folders.iter().map(|p| p.to_string_lossy().into_owned()).collect(), tracks: result.tracks.clone() };
             if let Some(p) = index_path(&app) {
-                let _ = std::fs::create_dir_all(p.parent().unwrap());
-                let _ = std::fs::write(p, serde_json::to_vec(&saved).unwrap_or_default());
+                // Best effort: a failed write only means the next launch starts from an older index.
+                let _ = hifi_engine::store::save_json(&p, &saved);
             }
             let mut g = lib.0.lock().unwrap();
             g.albums = Arc::new(group_albums(&result.tracks));
@@ -218,7 +216,7 @@ pub fn library_status(lib: State<'_, Library>) -> LibraryStatus {
     lib.status()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn library_albums(app: AppHandle, lib: State<'_, Library>) -> Vec<AlbumDto> {
     let (albums, tracks) = {
         let g = lib.0.lock().unwrap();
@@ -240,7 +238,7 @@ pub fn library_albums(app: AppHandle, lib: State<'_, Library>) -> Vec<AlbumDto> 
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn library_tracks(lib: State<'_, Library>) -> Vec<TrackDto> {
     let (albums, tracks) = {
         let g = lib.0.lock().unwrap();
@@ -286,7 +284,7 @@ pub fn library_rescan(app: AppHandle, lib: State<'_, Library>) -> LibraryStatus 
 
 /// Copy files picked from the Files app into the library folder (the picker hands us
 /// temporary copies that iOS deletes later). Returns the kept copies, in the given order.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_files(app: AppHandle, lib: State<'_, Library>, paths: Vec<String>) -> Result<Vec<String>, UserError> {
     let dir = PathBuf::from(music_dir(&app).ok_or(UserError::NoAppFolder)?);
     let mut kept = Vec::new();

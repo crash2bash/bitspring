@@ -261,6 +261,7 @@
   "pl.import": "Importuj…",
   "pl.paste": "Wklej listę",
   "pl.pasteHint": "Jeden utwór w wierszu: „Wykonawca — Tytuł”, link do utworu w Qobuz lub TIDAL albo ścieżka do pliku. Zadziała też zawartość pliku playlisty lub tabela (Exportify, TuneMyMusic, eksport z Apple Music).",
+  "pl.pasteHintLocal": "Jeden utwór w wierszu: „Wykonawca — Tytuł” albo ścieżka do pliku. Zadziała też zawartość pliku playlisty lub tabela (Exportify, TuneMyMusic, eksport z Apple Music).",
   "pl.trackList": "Lista utworów",
   "pl.importButton": "Importuj",
   "pl.cancel": "Anuluj",

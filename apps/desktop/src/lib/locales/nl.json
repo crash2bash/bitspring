@@ -256,6 +256,7 @@
   "pl.import": "Importeren…",
   "pl.paste": "Lijst plakken",
   "pl.pasteHint": "Eén nummer per regel: “Artiest — Titel”, een link naar een nummer op Qobuz of TIDAL, of een bestandspad. De inhoud van een playlistbestand of een tabel (Exportify, TuneMyMusic, een export uit Apple Music) werkt ook.",
+  "pl.pasteHintLocal": "Eén nummer per regel: “Artiest — Titel” of een bestandspad. De inhoud van een playlistbestand of een tabel (Exportify, TuneMyMusic, een export uit Apple Music) werkt ook.",
   "pl.trackList": "Lijst met nummers",
   "pl.importButton": "Importeren",
   "pl.cancel": "Annuleren",

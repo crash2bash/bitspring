@@ -256,6 +256,7 @@
   "pl.import": "Importar…",
   "pl.paste": "Colar uma lista",
   "pl.pasteHint": "Uma faixa por linha: “Artista — Título”, um link para uma faixa do Qobuz ou do TIDAL, ou o caminho de um arquivo. O conteúdo de um arquivo de playlist ou de uma tabela (Exportify, TuneMyMusic, uma exportação do Apple Music) também funciona.",
+  "pl.pasteHintLocal": "Uma faixa por linha: “Artista — Título” ou o caminho de um arquivo. O conteúdo de um arquivo de playlist ou de uma tabela (Exportify, TuneMyMusic, uma exportação do Apple Music) também funciona.",
   "pl.trackList": "Lista de faixas",
   "pl.importButton": "Importar",
   "pl.cancel": "Cancelar",

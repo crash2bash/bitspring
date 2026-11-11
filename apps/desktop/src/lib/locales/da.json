@@ -256,6 +256,7 @@
   "pl.import": "Importér…",
   "pl.paste": "Indsæt en liste",
   "pl.pasteHint": "Ét nummer pr. linje: »Kunstner — Titel«, et link til et nummer på Qobuz eller TIDAL eller en filsti. Indholdet af en playlistefil eller en tabel (Exportify, TuneMyMusic, en eksport fra Apple Music) virker også.",
+  "pl.pasteHintLocal": "Ét nummer pr. linje: »Kunstner — Titel« eller en filsti. Indholdet af en playlistefil eller en tabel (Exportify, TuneMyMusic, en eksport fra Apple Music) virker også.",
   "pl.trackList": "Nummerliste",
   "pl.importButton": "Importér",
   "pl.cancel": "Annuller",

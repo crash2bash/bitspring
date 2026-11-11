@@ -65,24 +65,14 @@ fn new_id() -> String {
 impl EqStore {
     pub fn load(app: &AppHandle) -> Self {
         let path = app.path().app_data_dir().ok().map(|d| d.join("eq.json"));
-        let file = path
-            .as_ref()
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|b| serde_json::from_slice::<EqFile>(&b).ok())
-            .unwrap_or_default();
+        let file = path.as_deref().and_then(hifi_engine::store::load_json::<EqFile>).unwrap_or_default();
         Self { file, path, bypass: false }
     }
 
     /// Written to a temporary file first, so a crash mid-write never leaves half a file.
     fn save(&self) -> CmdResult<()> {
         let path = self.path.as_ref().ok_or(UserError::NoAppFolder)?;
-        let write = |e: std::io::Error| UserError::WriteFailed { detail: e.to_string() };
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(write)?;
-        }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(&self.file).unwrap_or_default()).map_err(write)?;
-        std::fs::rename(&tmp, path).map_err(write)
+        hifi_engine::store::save_json(path, &self.file).map_err(|e| UserError::WriteFailed { detail: e.to_string() })
     }
 
     fn get(&self, id: &str) -> Option<&StoredPreset> {

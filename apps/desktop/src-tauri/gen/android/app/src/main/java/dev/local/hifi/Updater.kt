@@ -14,9 +14,12 @@ import java.io.File
  * key as the installed app.
  */
 object Updater {
-  /** False when this app isn't allowed to install apps yet: the settings page for that opens. */
+  /**
+   * Whether this app may install apps. False opens Android's settings page for that, so the
+   * user can allow it before anything is downloaded.
+   */
   @JvmStatic
-  fun install(ctx: Context, path: String): Boolean {
+  fun allowed(ctx: Context): Boolean {
     if (Build.VERSION.SDK_INT >= 26 && !ctx.packageManager.canRequestPackageInstalls()) {
       ctx.startActivity(
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))
@@ -24,6 +27,13 @@ object Updater {
       )
       return false
     }
+    return true
+  }
+
+  /** False when this app isn't allowed to install apps (see [allowed]). */
+  @JvmStatic
+  fun install(ctx: Context, path: String): Boolean {
+    if (!allowed(ctx)) return false
     val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", File(path))
     ctx.startActivity(
       Intent(Intent.ACTION_VIEW)

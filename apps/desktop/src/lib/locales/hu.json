@@ -256,6 +256,7 @@
   "pl.import": "Importálás…",
   "pl.paste": "Lista beillesztése",
   "pl.pasteHint": "Soronként egy szám: „Előadó — Cím”, egy Qobuz- vagy TIDAL-szám linkje, vagy egy fájl elérési útja. Egy lejátszásilista-fájl vagy egy táblázat (Exportify, TuneMyMusic, Apple Music-export) tartalma is megfelel.",
+  "pl.pasteHintLocal": "Soronként egy szám: „Előadó — Cím” vagy egy fájl elérési útja. Egy lejátszásilista-fájl vagy egy táblázat (Exportify, TuneMyMusic, Apple Music-export) tartalma is megfelel.",
   "pl.trackList": "Számlista",
   "pl.importButton": "Importálás",
   "pl.cancel": "Mégse",

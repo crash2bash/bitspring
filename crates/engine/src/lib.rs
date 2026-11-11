@@ -6,11 +6,13 @@ pub mod decode;
 pub mod dsd;
 pub mod dsp;
 pub mod error;
+pub mod fpu;
 pub mod library;
 pub mod output;
 pub mod playlist;
 pub mod rate;
 pub mod ring;
+pub mod store;
 pub mod testsignal;
 
 #[cfg(target_os = "macos")]

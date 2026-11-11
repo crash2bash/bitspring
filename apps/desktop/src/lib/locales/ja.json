@@ -256,6 +256,7 @@
   "pl.import": "インポート…",
   "pl.paste": "リストを貼り付け",
   "pl.pasteHint": "1行に1曲ずつ：「アーティスト — タイトル」、QobuzやTIDALの曲へのリンク、またはファイルのパス。プレイリストファイルや表（Exportify、TuneMyMusic、Apple Musicから書き出したもの）の内容も使えます。",
+  "pl.pasteHintLocal": "1行に1曲ずつ：「アーティスト — タイトル」またはファイルのパス。プレイリストファイルや表（Exportify、TuneMyMusic、Apple Musicから書き出したもの）の内容も使えます。",
   "pl.trackList": "曲リスト",
   "pl.importButton": "インポート",
   "pl.cancel": "キャンセル",

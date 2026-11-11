@@ -100,10 +100,7 @@ impl Playlists {
     fn with<R>(&self, app: &AppHandle, f: impl FnOnce(&mut Vec<Playlist>) -> R) -> R {
         let mut g = self.0.lock().unwrap();
         let list = g.get_or_insert_with(|| {
-            store_path(app)
-                .and_then(|p| std::fs::read(p).ok())
-                .and_then(|b| serde_json::from_slice(&b).ok())
-                .unwrap_or_default()
+            store_path(app).and_then(|p| hifi_engine::store::load_json(&p)).unwrap_or_default()
         });
         f(list)
     }
@@ -114,10 +111,7 @@ impl Playlists {
         self.with(app, |list| {
             let r = f(list);
             let path = store_path(app).ok_or(UserError::NoAppFolder)?;
-            let _ = std::fs::create_dir_all(path.parent().unwrap());
-            let tmp = path.with_extension("json.tmp");
-            std::fs::write(&tmp, serde_json::to_vec(list).unwrap_or_default()).map_err(|e| UserError::WriteFailed { detail: e.to_string() })?;
-            std::fs::rename(&tmp, &path).map_err(|e| UserError::WriteFailed { detail: e.to_string() })?;
+            hifi_engine::store::save_json(&path, list).map_err(|e| UserError::WriteFailed { detail: e.to_string() })?;
             Ok(r)
         })
     }

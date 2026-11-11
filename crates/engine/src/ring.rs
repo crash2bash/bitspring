@@ -33,9 +33,14 @@ impl Ring {
         self.slots.len()
     }
 
-    /// Samples ready for the consumer.
+    /// Samples ready for the consumer. Safe to call from any thread: `read` is loaded first,
+    /// so a push and pop landing between the two loads can't make it exceed `written` (an
+    /// underflow, and in debug builds a panic under the player lock). For a third-thread
+    /// caller the answer is only a snapshot, clamped to what the ring can hold.
     pub fn available(&self) -> usize {
-        self.written.load(Ordering::Acquire) - self.read.load(Ordering::Acquire)
+        let r = self.read.load(Ordering::Acquire);
+        let w = self.written.load(Ordering::Acquire);
+        w.saturating_sub(r).min(self.capacity())
     }
 
     /// Room for the producer.

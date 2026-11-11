@@ -247,8 +247,14 @@
   <section class="main">
     {#if pasting}
       <form class="paste" onsubmit={(e) => (e.preventDefault(), importText())}>
-        <p class="hint">{t("pl.pasteHint")}</p>
-        <textarea bind:value={pasteText} rows="8" placeholder={"Miles Davis — So What\nhttps://open.qobuz.com/track/19512574"} aria-label={t("pl.trackList")}></textarea>
+        <!-- Links to Qobuz or TIDAL only where this build has streaming (never in App Store builds). -->
+        <p class="hint">{t(streaming?.available ? "pl.pasteHint" : "pl.pasteHintLocal")}</p>
+        <textarea
+          bind:value={pasteText}
+          rows="8"
+          placeholder={streaming?.available ? "Miles Davis — So What\nhttps://open.qobuz.com/track/19512574" : "Miles Davis — So What\nJohn Coltrane — Naima"}
+          aria-label={t("pl.trackList")}
+        ></textarea>
         <div class="paste-row">
           <input bind:value={pasteName} placeholder={t("pl.name")} aria-label={t("pl.name")} />
           <button class="primary" type="submit" disabled={busy || !pasteText.trim()}>{t("pl.importButton")}</button>

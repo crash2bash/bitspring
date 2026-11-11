@@ -115,14 +115,23 @@ mod platform {
         ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(15)))
             .timeout_recv_response(Some(Duration::from_secs(30)))
+            // A stalled download ends with an error instead of hanging forever (an APK takes
+            // well under this even on a slow connection).
+            .timeout_recv_body(Some(Duration::from_secs(15 * 60)))
             .user_agent(concat!("Hifi/", env!("CARGO_PKG_VERSION")))
             .build()
             .into()
     }
 
-    /// "0.10.2" → [0, 10, 2]; a pre-release suffix sorts with its numbers.
-    fn parse(v: &str) -> Vec<u64> {
-        v.trim_start_matches('v').split(['.', '-', '+']).map(|p| p.parse().unwrap_or(0)).collect()
+    /// "0.10.2" → ([0, 10, 2], true). The flag is "a release": "0.3.0-beta.1" sorts before
+    /// "0.3.0", as in semver. Build metadata ("+…") is ignored.
+    fn parse(v: &str) -> (Vec<u64>, bool) {
+        let v = v.trim_start_matches('v').split('+').next().unwrap_or("");
+        let (core, pre) = match v.split_once('-') {
+            Some((c, _)) => (c, true),
+            None => (v, false),
+        };
+        (core.split('.').map(|p| p.parse().unwrap_or(0)).collect(), !pre)
     }
 
     struct Latest {
@@ -163,16 +172,26 @@ mod platform {
             if !l.url.starts_with("https://github.com/crash2bash/hi-fi/releases/") {
                 return Err(failed("unexpected download address"));
             }
+            // Before downloading: the first time, Android must be told to let Hifi install apps.
+            if !crate::android_media::install_allowed() {
+                return Err(UserError::InstallNotAllowed);
+            }
             let dir = crate::android_media::cache_dir().ok_or_else(|| failed("no cache folder"))?.join("updates");
+            let path = dir.join(format!("Hifi-{}.apk", l.version));
+            // Downloaded already (the installer was cancelled last time): hand it over again.
+            // Only a finished download is ever named .apk; it arrives as .part.
+            if path.is_file() {
+                return if crate::android_media::install_apk(&path.to_string_lossy()) { Ok(()) } else { Err(UserError::InstallNotAllowed) };
+            }
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).map_err(failed)?;
-            let path = dir.join(format!("Hifi-{}.apk", l.version));
+            let part = path.with_extension("apk.part");
             let resp = agent().get(&l.url).call().map_err(failed)?;
             if let Some(n) = resp.headers().get("content-length").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()) {
                 TOTAL.store(n, Ordering::Relaxed);
             }
             let mut body = resp.into_body().into_with_config().limit(MAX_APK).reader();
-            let mut file = std::fs::File::create(&path).map_err(failed)?;
+            let mut file = std::fs::File::create(&part).map_err(failed)?;
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 let n = body.read(&mut buf).map_err(failed)?;
@@ -184,6 +203,8 @@ mod platform {
             }
             file.sync_all().map_err(failed)?;
             drop(file);
+            // A body shorter than its Content-Length is already a read error above (ureq checks).
+            std::fs::rename(&part, &path).map_err(failed)?;
             if crate::android_media::install_apk(&path.to_string_lossy()) { Ok(()) } else { Err(UserError::InstallNotAllowed) }
         })
         .await
@@ -197,6 +218,9 @@ mod platform {
             assert!(super::parse("0.10.0") > super::parse("0.9.3"));
             assert!(super::parse("v1.0.0") > super::parse("0.99.99"));
             assert!(super::parse("0.2.0") == super::parse("0.2.0"));
+            assert!(super::parse("0.3.0") > super::parse("0.3.0-beta.1"));
+            assert!(super::parse("0.3.0-beta.1") > super::parse("0.2.9"));
+            assert!(super::parse("0.3.0+build5") == super::parse("0.3.0"));
         }
     }
 }

@@ -74,17 +74,26 @@ pub fn cache_dir() -> Option<std::path::PathBuf> {
     })
 }
 
+/// Whether the app may install apps. False: it may not yet, and Android's settings page for
+/// that was opened instead.
+#[cfg(feature = "updater")]
+pub fn install_allowed() -> bool {
+    with_env(|env, ctx| {
+        let class = updater_class(env, ctx)?;
+        env.call_static_method(class, "allowed", "(Landroid/content/Context;)Z", &[JValue::Object(ctx)])?.z()
+    })
+    .unwrap_or(false)
+}
+
 /// Open Android's installer for the APK at `path`. False: the app may not install apps yet,
 /// and Android's settings page for that was opened instead.
 #[cfg(feature = "updater")]
 pub fn install_apk(path: &str) -> bool {
     with_env(|env, ctx| {
-        let loader = env.call_method(ctx, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
-        let name = env.new_string("dev.local.hifi.Updater")?;
-        let class = env.call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?.l()?;
+        let class = updater_class(env, ctx)?;
         let path = env.new_string(path)?;
         env.call_static_method(
-            JClass::from(class),
+            class,
             "install",
             "(Landroid/content/Context;Ljava/lang/String;)Z",
             &[JValue::Object(ctx), JValue::Object(&path)],
@@ -92,6 +101,16 @@ pub fn install_apk(path: &str) -> bool {
         .z()
     })
     .unwrap_or(false)
+}
+
+/// Our Kotlin `Updater`, through the app's class loader (a native thread's default one can't
+/// see app classes).
+#[cfg(feature = "updater")]
+fn updater_class<'a>(env: &mut jni::JNIEnv<'a>, ctx: &JObject) -> jni::errors::Result<JClass<'a>> {
+    let loader = env.call_method(ctx, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
+    let name = env.new_string("dev.local.hifi.Updater")?;
+    let class = env.call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?.l()?;
+    Ok(JClass::from(class))
 }
 
 /// The folders the library scans: the shared Music folder (needs the audio permission) and the

@@ -282,7 +282,9 @@ impl FirDesigner {
                     Some(e) if !bypass => {
                         let fs = self.fs;
                         if self.linear {
-                            linear_phase(n, fs, &|f| e.shape_db(f, fs, ch))
+                            // With the preamp and balance (see IirPlan::new).
+                            let gain = e.channel_gain_db(ch, fs);
+                            linear_phase(n, fs, &|f| e.shape_db(f, fs, ch) + gain)
                         } else {
                             minimum_phase(n, fs, &|f| e.curve_db(f))
                         }
@@ -304,7 +306,10 @@ impl FirDesigner {
         };
         // Channels differ only with per-channel bands or a stereo IR.
         let per_channel = self.ir.as_ref().is_some_and(|r| r.len() > 1)
-            || (self.linear && eq.is_some_and(|e| e.bands.iter().any(|b| b.enabled && b.channels != super::eq::Channels::Both)));
+            || (self.linear
+                && eq.is_some_and(|e| {
+                    e.balance != 0.0 || e.bands.iter().any(|b| b.enabled && b.channels != super::eq::Channels::Both)
+                }));
         let (fwd, _) = plan(2 * self.block);
         let partition = |taps: Vec<f64>| -> Arc<Vec<Vec<C>>> {
             Arc::new(

@@ -282,7 +282,8 @@ impl Track {
 
     pub(crate) fn finish(&self, error: Option<String>) {
         if let Some(e) = error {
-            *self.error.lock().unwrap() = Some(e);
+            // Never panics: this also runs while a decoding thread unwinds (FinishOnPanic).
+            *self.error.lock().unwrap_or_else(|p| p.into_inner()) = Some(e);
         }
         self.complete.store(true, Ordering::Release);
     }
@@ -306,7 +307,7 @@ impl Track {
 
     /// Why decoding stopped early, if it did.
     pub fn error(&self) -> Option<String> {
-        self.error.lock().unwrap().clone()
+        self.error.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// Total length in frames: exact once complete, the container's figure before that.
@@ -414,6 +415,19 @@ fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize
     Ok(Opened { format, decoder, track_id, track })
 }
 
+/// Ends `track` with an error if the decoding thread panics (a decoder bug on a malformed
+/// file). Without it the track never completes: playback reaches the last decoded frame and
+/// waits in "buffering" forever, and the queue never moves on.
+pub(crate) struct FinishOnPanic<'a>(pub(crate) &'a Track);
+
+impl Drop for FinishOnPanic<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.finish(Some("decode: the decoder crashed on this file".into()));
+        }
+    }
+}
+
 /// Decode packets into `track` until the end, an error, or `alive()` says stop.
 fn run(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: u32, track: &Track, alive: impl Fn() -> bool) {
     let mut scratch: Vec<f32> = Vec::new();
@@ -486,6 +500,7 @@ pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
         // Once ours is the only reference left, nobody will play this track: stop decoding
         // (and stop downloading, for a stream).
         let alive = || Arc::strong_count(&mine) > 1;
+        let _guard = FinishOnPanic(&mine);
         run(&mut *format, &mut *decoder, track_id, &mine, alive);
     })?;
     Ok(track)
@@ -536,6 +551,22 @@ mod tests {
         // A slice never crosses a chunk.
         assert_eq!(t.slice(CHUNK_FRAMES - 10, 100).len(), 10 * 2);
         assert_eq!(t.to_vec(), data);
+    }
+
+    #[test]
+    fn a_crashing_decoder_still_ends_the_track() {
+        let t = Arc::new(Track::new(48_000, 2, Some(24), false, TrackMeta::default(), 0));
+        let mine = t.clone();
+        let joined = std::thread::spawn(move || {
+            let _guard = FinishOnPanic(&mine);
+            mine.push(&[0.0; 64]);
+            panic!("decoder bug");
+        })
+        .join();
+        assert!(joined.is_err());
+        assert!(t.is_complete());
+        assert_eq!(t.frames(), 32);
+        assert!(t.error().is_some_and(|e| e.contains("crashed")));
     }
 
     #[test]

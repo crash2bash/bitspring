@@ -256,6 +256,7 @@
   "pl.import": "匯入…",
   "pl.paste": "貼上列表",
   "pl.pasteHint": "每行一首歌曲：「藝人 — 標題」、Qobuz 或 TIDAL 歌曲連結，或檔案路徑。也可以貼上播放列表檔案或表格（Exportify、TuneMyMusic、Apple Music 匯出的檔案）的內容。",
+  "pl.pasteHintLocal": "每行一首歌曲：「藝人 — 標題」或檔案路徑。也可以貼上播放列表檔案或表格（Exportify、TuneMyMusic、Apple Music 匯出的檔案）的內容。",
   "pl.trackList": "歌曲列表",
   "pl.importButton": "匯入",
   "pl.cancel": "取消",

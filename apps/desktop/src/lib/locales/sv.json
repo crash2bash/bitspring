@@ -256,6 +256,7 @@
   "pl.import": "Importera…",
   "pl.paste": "Klistra in en lista",
   "pl.pasteHint": "En låt per rad: ”Artist — Titel”, en länk till en låt på Qobuz eller TIDAL eller en sökväg till en fil. Innehållet i en spellistefil eller en tabell (Exportify, TuneMyMusic, en export från Apple Music) fungerar också.",
+  "pl.pasteHintLocal": "En låt per rad: ”Artist — Titel” eller en sökväg till en fil. Innehållet i en spellistefil eller en tabell (Exportify, TuneMyMusic, en export från Apple Music) fungerar också.",
   "pl.trackList": "Låtlista",
   "pl.importButton": "Importera",
   "pl.cancel": "Avbryt",

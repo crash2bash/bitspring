@@ -256,6 +256,7 @@
   "pl.import": "İçe aktar…",
   "pl.paste": "Liste yapıştır",
   "pl.pasteHint": "Her satıra bir parça: “Sanatçı — Ad”, bir Qobuz veya TIDAL parçasının bağlantısı ya da bir dosya yolu. Bir çalma listesi dosyasının veya bir tablonun (Exportify, TuneMyMusic, Apple Music dışa aktarımı) içeriği de olur.",
+  "pl.pasteHintLocal": "Her satıra bir parça: “Sanatçı — Ad” ya da bir dosya yolu. Bir çalma listesi dosyasının veya bir tablonun (Exportify, TuneMyMusic, Apple Music dışa aktarımı) içeriği de olur.",
   "pl.trackList": "Parça listesi",
   "pl.importButton": "İçe aktar",
   "pl.cancel": "Vazgeç",
