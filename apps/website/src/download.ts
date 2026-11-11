@@ -29,6 +29,9 @@ for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-link]")) {
   }
 }
 
+// What can be downloaded today comes first (and gets the primary style); "coming soon" goes last.
+for (const soon of document.querySelectorAll<HTMLElement>(".dl-option.is-soon")) soon.parentElement!.append(soon);
+
 // ---- which platform goes first ---------------------------------------------------------------
 // A link to a specific platform (/download/#windows, from the home page's list) wins over
 // detection, so "I'm on a Mac but want the Windows build" works.

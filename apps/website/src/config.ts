@@ -17,12 +17,12 @@ export const LINKS: {
   android: string | null;
 } = {
   macAppStore: null,
-  macFile: null,
+  macFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-mac.dmg",
   iosAppStore: null,
-  windowsFile: null,
-  android: null,
+  windowsFile: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-windows-setup.exe",
+  android: "https://github.com/crash2bash/hi-fi/releases/latest/download/Hifi-android.apk",
 };
 
 // Public origin of the site, e.g. "https://hifi.example". Used at build time for hreflang,
 // canonical and og:image URLs, which search engines and link previews want absolute.
-export const SITE_URL = "";
+export const SITE_URL = "https://hifi-player-nu.vercel.app";

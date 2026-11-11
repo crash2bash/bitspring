@@ -408,9 +408,13 @@ main,
   font-family: var(--font-display);
   font-size: var(--t-xl);
   font-weight: 500;
+  line-height: 1.15;
+  /* Number on its own row above the name: the wire then runs between the numbers only and
+     never through a name, whatever its length in the current language. */
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 /* The step number is real: the signal goes file → player → DAC in this order. */
@@ -486,6 +490,11 @@ main,
   font-weight: 300;
   line-height: 1;
   letter-spacing: -0.02em;
+}
+
+/* Room for the counter's final value up front, so the second figure doesn't drift as it grows. */
+.meter > div:first-child dd {
+  min-inline-size: 10.5ch;
 }
 
 .meter-zero {
@@ -848,6 +857,8 @@ main,
 
 /* One row per platform in the list: name on one side, its downloads on the other. */
 .dl-platform {
+  /* A link to #windows etc. lands below the site header, not under it. */
+  scroll-margin-top: 96px;
   display: grid;
   grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
   align-items: start;
@@ -904,6 +915,17 @@ a.dl-option[href]:active {
   font-size: var(--t-sm);
 }
 
+/* What to click when the OS warns about an app from outside its store. */
+.dl-option-hint {
+  color: var(--mist-dim);
+  font-size: var(--t-sm);
+  max-width: 52ch;
+}
+
+.dl-option.is-soon .dl-option-hint {
+  display: none;
+}
+
 .dl-option.is-soon {
   cursor: default;
   border-style: dashed;
@@ -916,6 +938,8 @@ a.dl-option[href]:active {
 
 /* The visitor's own platform: big, first, with the choice laid out side by side. */
 .dl-platform.is-featured {
+  /* Already on the first screen: a #windows link shouldn't scroll the title away. */
+  scroll-margin-top: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 20px;
@@ -957,6 +981,10 @@ a.dl-option[href]:active {
 
 .is-featured a.dl-option[href]:first-child .dl-option-note {
   color: rgba(18, 29, 35, 0.72);
+}
+
+.is-featured a.dl-option[href]:first-child .dl-option-hint {
+  color: rgba(18, 29, 35, 0.62);
 }
 
 .is-featured a.dl-option[href]:first-child:hover {
@@ -1073,7 +1101,18 @@ a.dl-option[href]:active {
     gap: 20px;
   }
 
-  /* Vertical chain: the wire runs down through the numbers instead. */
+  /* Vertical chain: number beside the name, text indented clear of the wire. */
+  .chain-name {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .chain-detail {
+    padding-inline-start: 42px;
+  }
+
+  /* The wire runs down through the numbers instead. */
   .wire {
     top: 15px;
     bottom: 15px;
