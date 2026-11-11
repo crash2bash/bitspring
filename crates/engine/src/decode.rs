@@ -454,8 +454,9 @@ fn mp4_edit(path: &Path) -> Option<Mp4Edit> {
     let mut f = File::open(path).ok()?;
     let len = f.metadata().ok()?.len();
     let mut pos = 0u64;
+    // Every read is checked: this runs on whatever file the user adds, damaged or forged.
     let moov = loop {
-        if pos + 8 > len {
+        if pos.checked_add(8)? > len {
             return None;
         }
         f.seek(SeekFrom::Start(pos)).ok()?;
@@ -472,7 +473,8 @@ fn mp4_edit(path: &Path) -> Option<Mp4Edit> {
         if size == 0 {
             size = len - pos;
         }
-        if size < head {
+        // An atom must at least hold its header and end inside the file, so each step moves on.
+        if size < head || pos.checked_add(size)? > len {
             return None;
         }
         if &h[4..8] == b"moov" {
@@ -486,7 +488,7 @@ fn mp4_edit(path: &Path) -> Option<Mp4Edit> {
         pos += size;
     };
     let mvhd = child(&moov, b"mvhd")?;
-    let movie_scale = be32(mvhd, if mvhd[0] == 1 { 20 } else { 12 })? as u64;
+    let movie_scale = be32(mvhd, if *mvhd.first()? == 1 { 20 } else { 12 })? as u64;
     for (kind, trak) in atoms(&moov) {
         if kind != b"trak" {
             continue;
@@ -496,10 +498,11 @@ fn mp4_edit(path: &Path) -> Option<Mp4Edit> {
             continue;
         }
         let mdhd = child(mdia, b"mdhd")?;
-        let media_scale = be32(mdhd, if mdhd[0] == 1 { 20 } else { 12 })? as u64;
+        let media_scale = be32(mdhd, if *mdhd.first()? == 1 { 20 } else { 12 })? as u64;
         let elst = child(child(trak, b"edts")?, b"elst")?;
-        let v1 = elst[0] == 1;
-        let n = be32(elst, 4)? as usize;
+        let v1 = *elst.first()? == 1;
+        // Real files have one or two edits; a forged count must not make us allocate.
+        let n = (be32(elst, 4)? as usize).min(elst.len() / 12);
         let step = if v1 { 20 } else { 12 };
         let edits: Vec<(u64, i64)> = (0..n)
             .map(|i| {
@@ -755,6 +758,20 @@ mod tests {
         let edit = file_edit(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         assert_eq!(edit.at(44_100), Some(Trim { skip: 1024, keep: Some(220_500) }));
+    }
+
+    /// Damaged or forged headers end the search instead of panicking or looping.
+    #[test]
+    fn hostile_mp4_headers_are_refused() {
+        let path = std::env::temp_dir().join(format!("hifi-bad-{}.m4a", std::process::id()));
+        let huge = [&1u32.to_be_bytes()[..], b"free", &u64::MAX.to_be_bytes()].concat();
+        let tiny = [&3u32.to_be_bytes()[..], b"free"].concat();
+        let empty_mvhd = [&16u32.to_be_bytes()[..], b"moov", &8u32.to_be_bytes(), b"mvhd"].concat();
+        for bytes in [huge, tiny, empty_mvhd, vec![0; 3]] {
+            std::fs::write(&path, &bytes).unwrap();
+            assert!(file_edit(&path).is_none());
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
