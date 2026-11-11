@@ -7,6 +7,11 @@
 	<!-- Required for the Mac App Store. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- WKWebView, which draws the whole interface, runs its content in helper processes that
+	     can't start in the sandbox without this: the window stays empty. The App Store build
+	     itself never connects anywhere (no streaming, no updates). -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 	<!-- Music folders picked in the open panel (read), and EQ presets and playlists saved
 	     through the save panel (write). -->
 	<key>com.apple.security.files.user-selected.read-write</key>
