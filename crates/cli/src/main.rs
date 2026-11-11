@@ -169,12 +169,13 @@ fn info(file: PathBuf) -> Result<()> {
     let t0 = Instant::now();
     let track = load_track(&file)?;
     println!(
-        "{}\n  {} Hz, {} bit, {} ch, {:.1} s\n  {:.0} MB in RAM, decoded in {:.2?}",
+        "{}\n  {} Hz, {} bit, {} ch, {:.1} s ({} frames)\n  {:.0} MB in RAM, decoded in {:.2?}",
         file.display(),
         track.sample_rate,
         track.bits_per_sample.map_or("?".into(), |b| b.to_string()),
         track.channels,
         track.duration_secs(),
+        track.frames(),
         (track.frames() * track.channels * 4) as f64 / 1e6,
         t0.elapsed(),
     );

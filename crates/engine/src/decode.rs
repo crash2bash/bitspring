@@ -379,14 +379,161 @@ struct Opened {
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
     track: Track,
+    trim: Trim,
 }
 
-fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize>) -> Result<Opened> {
+/// Encoder delay and padding to cut, so an album of AAC files plays gapless: an AAC encoder
+/// adds ~2112 frames of silence at the start ("priming") and pads the end to a whole frame.
+/// MP3 (LAME/Xing tag) and Vorbis/Opus are trimmed by symphonia itself.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct Trim {
+    /// Decoded frames to drop at the start.
+    pub skip: usize,
+    /// Frames to keep after those (None: all).
+    pub keep: Option<usize>,
+}
+
+impl Trim {
+    /// From iTunes' `iTunSMPB` tag (iTunes, Apple Music, XLD, qaac, dBpoweramp):
+    /// " 00000000 <delay> <padding> <original length> ..." in hex.
+    fn from_itunsmpb(v: &str) -> Option<Self> {
+        let f: Vec<u64> = v.split_whitespace().take(4).map(|x| u64::from_str_radix(x, 16)).collect::<Result<_, _>>().ok()?;
+        let (&delay, &length) = (f.get(1)?, f.get(3)?);
+        Some(Self { skip: delay as usize, keep: (length > 0).then_some(length as usize) })
+    }
+
+    /// Plausible for a track at `rate`: a delay under a second.
+    fn sane(self, rate: u32) -> Option<Self> {
+        (self.skip < rate as usize && self.keep != Some(0)).then_some(self)
+    }
+}
+
+/// An MP4 audio track's single edit (ffmpeg, Nero): where the music starts, in the track's
+/// time scale, and how long it lasts, in the movie's.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Mp4Edit {
+    start: u64,
+    media_scale: u64,
+    duration: u64,
+    movie_scale: u64,
+}
+
+impl Mp4Edit {
+    fn at(self, rate: u32) -> Option<Trim> {
+        let skip = (self.start as u128 * rate as u128 / self.media_scale as u128) as usize;
+        let keep = (self.duration as u128 * rate as u128 / self.movie_scale as u128) as usize;
+        Trim { skip, keep: Some(keep) }.sane(rate)
+    }
+}
+
+/// The edit list of an MP4 file's audio track, if it has exactly one edit into the media.
+fn mp4_edit(path: &Path) -> Option<Mp4Edit> {
+    use std::io::{Read, Seek, SeekFrom};
+    let be32 = |b: &[u8], i: usize| b.get(i..i + 4).map(|x| u32::from_be_bytes(x.try_into().unwrap()));
+    let be64 = |b: &[u8], i: usize| b.get(i..i + 8).map(|x| u64::from_be_bytes(x.try_into().unwrap()));
+    // Child atoms of `b`: (type, body).
+    fn atoms(b: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
+        let mut at = 0;
+        std::iter::from_fn(move || {
+            let size = u32::from_be_bytes(b.get(at..at + 4)?.try_into().ok()?) as usize;
+            let kind = b.get(at + 4..at + 8)?;
+            let (head, size) = match size {
+                1 => (16, u64::from_be_bytes(b.get(at + 8..at + 16)?.try_into().ok()?) as usize),
+                0 => (8, b.len() - at),
+                n => (8, n),
+            };
+            let body = b.get(at + head..at.checked_add(size)?)?;
+            at += size;
+            Some((kind, body))
+        })
+    }
+    fn child<'a>(b: &'a [u8], kind: &[u8]) -> Option<&'a [u8]> {
+        atoms(b).find(|(k, _)| *k == kind).map(|(_, v)| v)
+    }
+    // Find `moov` among the top-level atoms (it may sit after the audio data).
+    let mut f = File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let mut pos = 0u64;
+    let moov = loop {
+        if pos + 8 > len {
+            return None;
+        }
+        f.seek(SeekFrom::Start(pos)).ok()?;
+        let mut h = [0u8; 16];
+        f.read_exact(&mut h[..8]).ok()?;
+        let (mut size, head) = (u32::from_be_bytes(h[..4].try_into().unwrap()) as u64, 8u64);
+        let head = if size == 1 {
+            f.read_exact(&mut h[8..]).ok()?;
+            size = u64::from_be_bytes(h[8..].try_into().unwrap());
+            16
+        } else {
+            head
+        };
+        if size == 0 {
+            size = len - pos;
+        }
+        if size < head {
+            return None;
+        }
+        if &h[4..8] == b"moov" {
+            if size > 64 << 20 {
+                return None;
+            }
+            let mut b = vec![0u8; (size - head) as usize];
+            f.read_exact(&mut b).ok()?;
+            break b;
+        }
+        pos += size;
+    };
+    let mvhd = child(&moov, b"mvhd")?;
+    let movie_scale = be32(mvhd, if mvhd[0] == 1 { 20 } else { 12 })? as u64;
+    for (kind, trak) in atoms(&moov) {
+        if kind != b"trak" {
+            continue;
+        }
+        let mdia = child(trak, b"mdia")?;
+        if child(mdia, b"hdlr").and_then(|h| h.get(8..12)) != Some(b"soun") {
+            continue;
+        }
+        let mdhd = child(mdia, b"mdhd")?;
+        let media_scale = be32(mdhd, if mdhd[0] == 1 { 20 } else { 12 })? as u64;
+        let elst = child(child(trak, b"edts")?, b"elst")?;
+        let v1 = elst[0] == 1;
+        let n = be32(elst, 4)? as usize;
+        let step = if v1 { 20 } else { 12 };
+        let edits: Vec<(u64, i64)> = (0..n)
+            .map(|i| {
+                let at = 8 + i * step;
+                Some(if v1 {
+                    (be64(elst, at)?, be64(elst, at + 8)? as i64)
+                } else {
+                    (be32(elst, at)? as u64, be32(elst, at + 4)? as i32 as i64)
+                })
+            })
+            .collect::<Option<_>>()?;
+        // One edit into the media (empty edits, media time −1, would add silence: leave
+        // those files alone).
+        let [(duration, start)] = edits[..] else { return None };
+        if start < 0 || movie_scale == 0 || media_scale == 0 {
+            return None;
+        }
+        return Some(Mp4Edit { start: start as u64, media_scale, duration, movie_scale });
+    }
+    None
+}
+
+fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize>, edit: Option<Mp4Edit>) -> Result<Opened> {
     let mss = MediaSourceStream::new(source, Default::default());
     let mut format = symphonia::default::get_probe()
         .probe(hint, mss, FormatOptions::default(), MetadataOptions::default())
         .context("unsupported or unrecognised format")?;
 
+    let smpb = format.metadata().skip_to_latest().and_then(|rev| {
+        rev.media.tags.iter().find(|t| t.raw.key.ends_with("iTunSMPB")).and_then(|t| match &t.raw.value {
+            symphonia::core::meta::RawValue::String(s) => Trim::from_itunsmpb(s),
+            _ => None,
+        })
+    });
     let meta = read_meta(&mut *format);
     let t = format.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
     let track_id = t.id;
@@ -410,9 +557,20 @@ fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize
         bail!("implausible channel count {channels}");
     }
     let lossy = crate::library::codec_is_lossy(params.codec);
-    let expected = num_frames.or(expected_frames).unwrap_or(0);
+    // AAC carries its delay in a tag or the edit list; symphonia doesn't apply either.
+    let trim = if params.codec == symphonia::core::codecs::audio::well_known::CODEC_ID_AAC && t_delay_unknown(&*format, track_id) {
+        smpb.and_then(|t| t.sane(sample_rate)).or_else(|| edit.and_then(|e| e.at(sample_rate))).unwrap_or_default()
+    } else {
+        Trim::default()
+    };
+    let expected = trim.keep.or(num_frames).or(expected_frames).unwrap_or(0);
     let track = Track::new(sample_rate, channels, params.bits_per_sample, lossy, meta, expected);
-    Ok(Opened { format, decoder, track_id, track })
+    Ok(Opened { format, decoder, track_id, track, trim })
+}
+
+/// The demuxer stated no delay for this track (else the decoder trims it already).
+fn t_delay_unknown(format: &dyn FormatReader, track_id: u32) -> bool {
+    format.tracks().iter().find(|t| t.id == track_id).is_none_or(|t| t.delay.is_none() && t.padding.is_none())
 }
 
 /// Ends `track` with an error if the decoding thread panics (a decoder bug on a malformed
@@ -429,8 +587,10 @@ impl Drop for FinishOnPanic<'_> {
 }
 
 /// Decode packets into `track` until the end, an error, or `alive()` says stop.
-fn run(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: u32, track: &Track, alive: impl Fn() -> bool) {
+fn run(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: u32, track: &Track, trim: Trim, alive: impl Fn() -> bool) {
     let mut scratch: Vec<f32> = Vec::new();
+    let ch = track.channels;
+    let (mut skip, mut left) = (trim.skip, trim.keep.unwrap_or(usize::MAX));
     let error = loop {
         if !alive() {
             break None;
@@ -449,8 +609,17 @@ fn run(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: 
             Ok(buf) => {
                 scratch.resize(buf.samples_interleaved(), f32::MID);
                 buf.copy_to_slice_interleaved(&mut scratch);
-                if !track.push(&scratch) {
+                let mut data = &scratch[..];
+                let s = skip.min(data.len() / ch);
+                skip -= s;
+                data = &data[s * ch..];
+                let k = (data.len() / ch).min(left);
+                left -= k;
+                if !data.is_empty() && !track.push(&data[..k * ch]) {
                     break None;
+                }
+                if left == 0 {
+                    break None; // the rest is the encoder's padding
                 }
             }
             // A single corrupt frame: skip it, as every player does.
@@ -476,7 +645,11 @@ pub fn open_source(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
 /// [`open_source`] for a stream whose tags come from elsewhere (a streaming service's
 /// catalogue): fields set in `meta` win over what the stream itself carries.
 pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta) -> Result<Arc<Track>> {
-    let Opened { mut format, mut decoder, track_id, mut track } = open(source, &hint, None)?;
+    open_stream_trimmed(source, hint, expected_secs, meta, None)
+}
+
+fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta, edit: Option<Mp4Edit>) -> Result<Arc<Track>> {
+    let Opened { mut format, mut decoder, track_id, mut track, trim } = open(source, &hint, None, edit)?;
     let own = std::mem::take(&mut track.meta);
     track.meta = TrackMeta {
         title: meta.title.or(own.title),
@@ -501,7 +674,7 @@ pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
         // (and stop downloading, for a stream).
         let alive = || Arc::strong_count(&mine) > 1;
         let _guard = FinishOnPanic(&mine);
-        run(&mut *format, &mut *decoder, track_id, &mine, alive);
+        run(&mut *format, &mut *decoder, track_id, &mine, trim, alive);
     })?;
     Ok(track)
 }
@@ -509,7 +682,16 @@ pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
 /// Open a file and decode it progressively (see [`open_source`]).
 pub fn open_track(path: &Path) -> Result<Arc<Track>> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    open_source(Box::new(file), hint_for(path), None)
+    open_stream_trimmed(Box::new(file), hint_for(path), None, TrackMeta::default(), file_edit(path))
+}
+
+/// The edit list of a local MP4/M4A file (looked for only in those).
+fn file_edit(path: &Path) -> Option<Mp4Edit> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    if !["m4a", "mp4", "m4b"].contains(&ext.as_str()) {
+        return None;
+    }
+    mp4_edit(path)
 }
 
 fn hint_for(path: &Path) -> Hint {
@@ -523,8 +705,8 @@ fn hint_for(path: &Path) -> Hint {
 /// Decode a whole file before returning (CLI tools, tests).
 pub fn load_track(path: &Path) -> Result<Track> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let Opened { mut format, mut decoder, track_id, track } = open(Box::new(file), &hint_for(path), None)?;
-    run(&mut *format, &mut *decoder, track_id, &track, || true);
+    let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(path), None, file_edit(path))?;
+    run(&mut *format, &mut *decoder, track_id, &track, trim, || true);
     match track.error() {
         Some(e) if track.ready_frames() == 0 => Err(anyhow!(e)),
         _ => Ok(track),
@@ -534,6 +716,46 @@ pub fn load_track(path: &Path) -> Result<Track> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn itunes_gapless_tag_gives_delay_and_length() {
+        let t = Trim::from_itunsmpb(" 00000000 00000840 0000026C 0000000000035D54 00000000 00000000").unwrap();
+        assert_eq!(t, Trim { skip: 2112, keep: Some(220_500) });
+        assert_eq!(Trim::from_itunsmpb("garbage"), None);
+        // A length of 0 (unknown): only the start is cut.
+        assert_eq!(Trim::from_itunsmpb(" 0 840 0 0").unwrap().keep, None);
+    }
+
+    /// An MP4 file as ffmpeg writes it, reduced to the atoms the edit list lives in.
+    #[test]
+    fn mp4_edit_list_is_found_after_the_audio_data() {
+        fn atom(kind: &[u8], body: &[u8]) -> Vec<u8> {
+            let mut v = ((body.len() + 8) as u32).to_be_bytes().to_vec();
+            v.extend_from_slice(kind);
+            v.extend_from_slice(body);
+            v
+        }
+        let mut mvhd = vec![0u8; 100];
+        mvhd[12..16].copy_from_slice(&1000u32.to_be_bytes()); // movie: ms
+        let mut mdhd = vec![0u8; 24];
+        mdhd[12..16].copy_from_slice(&44_100u32.to_be_bytes());
+        let mut hdlr = vec![0u8; 24];
+        hdlr[8..12].copy_from_slice(b"soun");
+        let mut elst = vec![0u8, 0, 0, 0];
+        elst.extend_from_slice(&1u32.to_be_bytes());
+        elst.extend_from_slice(&5000u32.to_be_bytes()); // 5 s
+        elst.extend_from_slice(&1024i32.to_be_bytes()); // music starts at sample 1024
+        elst.extend_from_slice(&[0, 1, 0, 0]);
+        let mdia = atom(b"mdia", &[atom(b"mdhd", &mdhd), atom(b"hdlr", &hdlr)].concat());
+        let trak = atom(b"trak", &[atom(b"tkhd", &[0; 84]), atom(b"edts", &atom(b"elst", &elst)), mdia].concat());
+        let moov = atom(b"moov", &[atom(b"mvhd", &mvhd), trak].concat());
+        let file = [atom(b"ftyp", b"M4A \0\0\0\0"), atom(b"mdat", &[0; 5000]), moov].concat();
+        let path = std::env::temp_dir().join(format!("hifi-elst-{}.m4a", std::process::id()));
+        std::fs::write(&path, file).unwrap();
+        let edit = file_edit(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(edit.at(44_100), Some(Trim { skip: 1024, keep: Some(220_500) }));
+    }
 
     #[test]
     fn samples_survive_chunk_boundaries() {
@@ -589,3 +811,4 @@ mod tests {
         assert!(prog.to_vec() == full.to_vec(), "samples differ");
     }
 }
+

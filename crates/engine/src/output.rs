@@ -1402,7 +1402,6 @@ mod tests {
             assert!(p.queue_next(b));
             assert!(p.seek(0.1), "A still being rendered: an ordinary seek");
             // Play until the render thread is on B while A's end is still in the ring.
-            let rs = p.shared().ring.as_ref().unwrap();
             let slots = &p.shared().slots;
             let deadline = Instant::now() + Duration::from_secs(5);
             while slots.cur.load(Ordering::Acquire) == slots.heard.load(Ordering::Acquire) {
