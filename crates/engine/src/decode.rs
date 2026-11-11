@@ -38,9 +38,14 @@ pub(crate) const MAX_PCM_RATE: u32 = 1_536_000;
 /// by 2^23 (an exact power-of-two scale), so the float -> int conversion on the way to the DAC
 /// reproduces the original integers bit for bit.
 ///
-/// One writer (the decoder) appends; any number of readers read frames below
+/// One writer (the decoder) appends; readers read frames below
 /// [`ready_frames`](Self::ready_frames). The writer fills a region first and only then
 /// publishes it with a release store of `ready`, so readers never see a half-written sample.
+///
+/// A local file is held in a window (see [`Window`]): the decoder stays a few minutes ahead of
+/// the one reader that plays it, and frees what lies well behind. The reader announces where
+/// it reads with [`claim`](Self::claim) before every read; only frames at or after the
+/// announced position are ever touched, and the writer never frees a chunk at or after it.
 pub struct Track {
     pub sample_rate: u32,
     pub channels: usize,
@@ -49,7 +54,16 @@ pub struct Track {
     /// Lossy codec (MP3, AAC, Vorbis, Opus): decoded peaks may exceed full scale.
     pub lossy: bool,
     pub meta: TrackMeta,
-    chunks: Box<[AtomicPtr<f32>]>,
+    /// Storage, CHUNK_FRAMES frames each: f32 samples (PCM) or 2 bytes per channel (DoP).
+    /// Allocated as the decoder gets there, freed (null again) once behind the window.
+    chunks: Box<[AtomicPtr<u8>]>,
+    /// First frame held (frames below it are freed, or were never decoded: see `origin`).
+    base: AtomicUsize,
+    /// Where decoding started (0, or the position a file was opened at).
+    origin: usize,
+    /// Where the reader reads (see `claim`).
+    playhead: AtomicUsize,
+    window: Option<Window>,
     ready: AtomicUsize,
     /// Frames the container says the track has (0 = unknown); a guess until `complete`.
     expected: AtomicUsize,
@@ -60,11 +74,26 @@ pub struct Track {
     /// The source is DSD (see [`crate::dsd`]): its bit rate, and whether this track carries the
     /// raw bitstream for DoP or a PCM conversion of it.
     pub dsd: Option<DsdSource>,
-    /// DoP tracks only: raw DSD, 2 bytes per channel per frame, oldest bit in the MSB.
-    /// Allocated once at full size (pages are only touched as the reader fills them).
-    dop: AtomicPtr<u8>,
-    dop_len: usize,
+    /// Carries raw DSD for DoP: 2 bytes per channel per frame, oldest bit in the MSB.
+    dop: bool,
 }
+
+/// How much of a local file is kept decoded, in frames.
+#[derive(Debug, Clone, Copy)]
+struct Window {
+    /// The decoder pauses this far ahead of the reader.
+    ahead: usize,
+    /// What is kept behind the reader (an instant seek back).
+    behind: usize,
+}
+
+/// Memory for one track's window. Most CD-quality tracks fit whole (about 12 minutes); a
+/// 24/192 file keeps about 2 minutes ahead and 40 s behind; DSD256 as DoP about 70 s ahead.
+pub const WINDOW_BYTES: usize = 256 << 20;
+
+/// How far beyond what is decoded a seek may land and still be waited for (the decoder runs
+/// many times faster than real time); further, the file is opened anew there.
+const SEEK_AHEAD_SECS: usize = 10;
 
 /// Where a track's DSD came from and how it is carried.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,18 +118,9 @@ impl std::fmt::Debug for Track {
 
 impl Drop for Track {
     fn drop(&mut self) {
-        let len = CHUNK_FRAMES * self.channels;
         for c in self.chunks.iter() {
-            let p = c.load(Ordering::Relaxed);
-            if !p.is_null() {
-                // SAFETY: allocated in `push` as a boxed slice of exactly `len` floats.
-                drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, len)) });
-            }
-        }
-        let p = self.dop.load(Ordering::Relaxed);
-        if !p.is_null() {
-            // SAFETY: allocated in `new_dop` as a boxed slice of exactly `dop_len` bytes.
-            drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, self.dop_len)) });
+            // SAFETY: nobody else holds the track any more.
+            unsafe { self.free_chunk(c) };
         }
     }
 }
@@ -178,70 +198,131 @@ impl Track {
             lossy,
             meta,
             chunks: (0..n).map(|_| AtomicPtr::new(std::ptr::null_mut())).collect(),
+            base: AtomicUsize::new(0),
+            origin: 0,
+            playhead: AtomicUsize::new(0),
+            window: None,
             ready: AtomicUsize::new(0),
             expected: AtomicUsize::new(expected),
             complete: AtomicBool::new(false),
             error: Mutex::new(None),
             peak: AtomicU32::new(0),
             dsd: None,
-            dop: AtomicPtr::new(std::ptr::null_mut()),
-            dop_len: 0,
+            dop: false,
         }
     }
 
     /// A DoP track: `frames` DoP frames (16 DSD bits per channel each) at `dsd_rate / 16`.
     pub(crate) fn new_dop(dsd_rate: u32, channels: usize, meta: TrackMeta, frames: usize) -> Self {
         let channels = channels.max(1);
-        let dop_len = frames * channels * 2;
-        // Zeroed, so the pages are only committed as the reader fills them.
-        let buf = Box::into_raw(vec![0u8; dop_len].into_boxed_slice()) as *mut u8;
         Self {
             sample_rate: dsd_rate / 16,
             channels,
             bits_per_sample: Some(1),
             lossy: false,
             meta,
-            chunks: Box::new([]),
+            chunks: (0..frames.div_ceil(CHUNK_FRAMES) + 1).map(|_| AtomicPtr::new(std::ptr::null_mut())).collect(),
+            base: AtomicUsize::new(0),
+            origin: 0,
+            playhead: AtomicUsize::new(0),
+            window: None,
             ready: AtomicUsize::new(0),
             expected: AtomicUsize::new(frames),
             complete: AtomicBool::new(false),
             error: Mutex::new(None),
             peak: AtomicU32::new(0),
             dsd: Some(DsdSource { rate: dsd_rate, dop: true }),
-            dop: AtomicPtr::new(buf),
-            dop_len,
+            dop: true,
+        }
+    }
+
+    /// Decoding starts at `frame` (a file opened at a position): nothing below it is held.
+    pub(crate) fn starting_at(mut self, frame: usize) -> Self {
+        let frame = frame.min((self.chunks.len().saturating_sub(1)) * CHUNK_FRAMES);
+        self.origin = frame;
+        *self.base.get_mut() = frame;
+        *self.ready.get_mut() = frame;
+        *self.playhead.get_mut() = frame;
+        self
+    }
+
+    /// Keep only a window of about `bytes` decoded (local files; a stream can't be re-read).
+    pub(crate) fn windowed(mut self, bytes: usize) -> Self {
+        let frames = (bytes / self.frame_bytes()).max(4 * CHUNK_FRAMES);
+        self.window = Some(Window { ahead: frames / 4 * 3, behind: frames / 4 });
+        self
+    }
+
+    fn frame_bytes(&self) -> usize {
+        self.channels * if self.dop { 2 } else { 4 }
+    }
+
+    /// Allocate chunk `ci` if it isn't yet. Writer only.
+    fn chunk_for_writing(&self, ci: usize) -> Option<*mut u8> {
+        let slot = self.chunks.get(ci)?;
+        let mut p = slot.load(Ordering::Relaxed);
+        if p.is_null() {
+            p = if self.dop {
+                Box::into_raw(vec![0u8; CHUNK_FRAMES * self.channels * 2].into_boxed_slice()) as *mut u8
+            } else {
+                Box::into_raw(vec![0f32; CHUNK_FRAMES * self.channels].into_boxed_slice()) as *mut u8
+            };
+            slot.store(p, Ordering::Release);
+        }
+        Some(p)
+    }
+
+    /// # Safety
+    /// No reader may touch the chunk any more (it is behind the window, or the track is gone).
+    unsafe fn free_chunk(&self, slot: &AtomicPtr<u8>) {
+        let p = slot.swap(std::ptr::null_mut(), Ordering::AcqRel);
+        if p.is_null() {
+            return;
+        }
+        // SAFETY: allocated in `chunk_for_writing` with exactly this type and length.
+        unsafe {
+            if self.dop {
+                drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, CHUNK_FRAMES * self.channels * 2)));
+            } else {
+                drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(p as *mut f32, CHUNK_FRAMES * self.channels)));
+            }
         }
     }
 
     /// Carries the raw DSD bitstream (play only as DoP, never through processing).
     #[inline]
     pub fn is_dop(&self) -> bool {
-        self.dop_len > 0
+        self.dop
     }
 
     /// Append whole DoP frames (`channels * 2` bytes each). Only the reader thread may call this.
-    pub(crate) fn push_dop(&self, data: &[u8]) -> bool {
-        let frame_bytes = self.channels * 2;
-        let ready = self.ready.load(Ordering::Relaxed);
-        let start = ready * frame_bytes;
-        let n = (data.len() / frame_bytes).min((self.dop_len - start) / frame_bytes);
-        // SAFETY: bytes at and past `ready` belong to the writer until the release store.
-        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), self.dop.load(Ordering::Relaxed).add(start), n * frame_bytes) };
-        self.ready.store(ready + n, Ordering::Release);
-        n * frame_bytes == data.len() - data.len() % frame_bytes
+    pub(crate) fn push_dop(&self, mut data: &[u8]) -> bool {
+        let fb = self.channels * 2;
+        let mut frame = self.ready.load(Ordering::Relaxed);
+        while data.len() >= fb {
+            let (ci, off) = (frame / CHUNK_FRAMES, frame % CHUNK_FRAMES);
+            let Some(p) = self.chunk_for_writing(ci) else { return false };
+            let n = (CHUNK_FRAMES - off).min(data.len() / fb);
+            // SAFETY: frames >= `ready` belong to the writer until the release store.
+            unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), p.add(off * fb), n * fb) };
+            data = &data[n * fb..];
+            frame += n;
+            self.ready.store(frame, Ordering::Release);
+        }
+        true
     }
 
     /// The 16 DSD bits of one channel in one DoP frame, oldest bit in the MSB.
-    /// `frame` must be below `ready_frames()`. Realtime-safe.
+    /// `frame` must be claimed and below `ready_frames()`. Realtime-safe.
     #[inline(always)]
     pub fn dop_payload(&self, frame: usize, channel: usize) -> u16 {
-        let i = (frame * self.channels + channel) * 2;
-        debug_assert!(i + 1 < self.dop_len);
-        // SAFETY: below `ready` (acquired by the caller), so written and published.
-        unsafe {
-            let p = self.dop.load(Ordering::Relaxed).add(i);
-            u16::from_be_bytes([*p, *p.add(1)])
+        let p = self.chunks[frame / CHUNK_FRAMES].load(Ordering::Acquire);
+        if p.is_null() {
+            return crate::dsd::DOP_IDLE;
         }
+        let i = ((frame % CHUNK_FRAMES) * self.channels + channel) * 2;
+        // SAFETY: a claimed frame below `ready` is written, published and not freed.
+        unsafe { u16::from_be_bytes([*p.add(i), *p.add(i + 1)]) }
     }
 
     /// A finished track from samples already in memory (test signals, tests).
@@ -260,15 +341,11 @@ impl Track {
         let mut frame = self.ready.load(Ordering::Relaxed);
         while data.len() >= ch {
             let (ci, off) = (frame / CHUNK_FRAMES, frame % CHUNK_FRAMES);
-            let Some(slot) = self.chunks.get(ci) else {
+            let Some(p) = self.chunk_for_writing(ci) else {
                 log::warn!("track longer than its sample table, truncating");
                 return false;
             };
-            let mut p = slot.load(Ordering::Relaxed);
-            if p.is_null() {
-                p = Box::into_raw(vec![0f32; CHUNK_FRAMES * ch].into_boxed_slice()) as *mut f32;
-                slot.store(p, Ordering::Relaxed);
-            }
+            let p = p as *mut f32;
             let n = (CHUNK_FRAMES - off).min(data.len() / ch);
             // SAFETY: frames >= `ready` are owned by the writer; readers never touch them
             // until the release store below publishes them.
@@ -320,12 +397,16 @@ impl Track {
         self.frames() as f64 / self.sample_rate as f64
     }
 
-    /// One sample. `frame` must be below `ready_frames()`. Realtime-safe: two loads, no locks.
+    /// One sample. `frame` must be claimed and below `ready_frames()`. Realtime-safe: two
+    /// loads, no locks.
     #[inline(always)]
     pub fn sample(&self, frame: usize, channel: usize) -> f32 {
-        let p = self.chunks[frame / CHUNK_FRAMES].load(Ordering::Relaxed);
+        let p = self.chunks[frame / CHUNK_FRAMES].load(Ordering::Acquire) as *const f32;
+        if p.is_null() {
+            return 0.0; // never for a claimed frame; a slip costs silence, not memory safety
+        }
         // SAFETY: the chunk was published (pointer stored) before `ready` moved past `frame`,
-        // and the caller read `ready` with acquire ordering.
+        // and it isn't freed while the frame is claimed.
         unsafe { *p.add((frame % CHUNK_FRAMES) * self.channels + channel) }
     }
 
@@ -338,7 +419,10 @@ impl Track {
         }
         let off = start % CHUNK_FRAMES;
         let n = (CHUNK_FRAMES - off).min(ready - start).min(max);
-        let p = self.chunks[start / CHUNK_FRAMES].load(Ordering::Relaxed);
+        let p = self.chunks[start / CHUNK_FRAMES].load(Ordering::Acquire) as *const f32;
+        if p.is_null() {
+            return &[];
+        }
         // SAFETY: as in `sample`; the run stays inside one chunk and below `ready`.
         unsafe { std::slice::from_raw_parts(p.add(off * self.channels), n * self.channels) }
     }
@@ -346,7 +430,7 @@ impl Track {
     /// Copy every decoded sample out (tests and tools — playback never needs this).
     pub fn to_vec(&self) -> Vec<f32> {
         let mut out = Vec::with_capacity(self.ready_frames() * self.channels);
-        let mut f = 0;
+        let mut f = self.base.load(Ordering::Acquire);
         loop {
             let s = self.slice(f, usize::MAX);
             if s.is_empty() {
@@ -357,11 +441,99 @@ impl Track {
         }
     }
 
+    /// The reader is about to read from `frame` on (and only from there on). Returns the frame
+    /// it may read from: `frame`, or the start of what is held if `frame` was already freed
+    /// (a seek that raced the window moving on). Realtime-safe.
+    ///
+    /// The reader stores its position and then looks at `base`; the writer raises `base` and
+    /// then looks at the position (both SeqCst), so one of them always sees the other: the
+    /// writer never frees what the reader is about to read.
+    #[inline]
+    pub fn claim(&self, frame: usize) -> usize {
+        if self.window.is_none() {
+            return frame;
+        }
+        self.playhead.store(frame, Ordering::SeqCst);
+        let base = self.base.load(Ordering::SeqCst);
+        if frame < base {
+            self.playhead.store(base, Ordering::SeqCst);
+            return base;
+        }
+        frame
+    }
+
+    /// First frame still held in memory.
+    pub fn held_from(&self) -> usize {
+        self.base.load(Ordering::Acquire)
+    }
+
+    /// Whether playback can move to `frame` in this track as it is (else the file has to be
+    /// opened anew there): it is held, or decoding will get there in a moment.
+    pub fn can_seek_to(&self, frame: usize) -> bool {
+        if self.window.is_none() {
+            return true;
+        }
+        let base = self.base.load(Ordering::Acquire);
+        // Just above `base` the window may move past it any moment: keep a chunk's margin.
+        let held = frame >= base && (base == self.origin || frame >= base + CHUNK_FRAMES);
+        let ready = self.ready_frames();
+        held && (frame <= ready + SEEK_AHEAD_SECS * self.sample_rate as usize || self.is_complete() && frame <= ready)
+    }
+
+    /// The decoder has decoded as far ahead of the reader as the window allows.
+    fn window_full(&self) -> bool {
+        self.window.is_some_and(|w| self.ready_frames() >= self.playhead.load(Ordering::Relaxed) + w.ahead)
+    }
+
+    /// Writer side, before decoding more: free what is well behind the reader, then wait while
+    /// the window ahead is full. False when `alive` says to stop.
+    pub(crate) fn make_room(&self, alive: impl Fn() -> bool) -> bool {
+        let Some(w) = self.window else { return alive() };
+        loop {
+            self.free_behind(w);
+            if !self.window_full() {
+                return alive();
+            }
+            if !alive() {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn free_behind(&self, w: Window) {
+        let base = self.base.load(Ordering::Relaxed);
+        let want = self.playhead.load(Ordering::SeqCst).saturating_sub(w.behind) / CHUNK_FRAMES * CHUNK_FRAMES;
+        if want <= base {
+            return;
+        }
+        self.base.store(want, Ordering::SeqCst);
+        // The reader may have moved back before seeing the new base: never free from there on.
+        let reader = self.playhead.load(Ordering::SeqCst) / CHUNK_FRAMES * CHUNK_FRAMES;
+        let upto = if reader < want {
+            let upto = reader.max(base);
+            self.base.store(upto, Ordering::SeqCst);
+            upto
+        } else {
+            want
+        };
+        for slot in &self.chunks[base / CHUNK_FRAMES..upto / CHUNK_FRAMES] {
+            // SAFETY: below `base`, which the reader has seen or will see before reading (claim).
+            unsafe { self.free_chunk(slot) };
+        }
+    }
+
+    /// Bytes of decoded audio held now (tests, diagnostics).
+    pub fn held_bytes(&self) -> usize {
+        let per_chunk = CHUNK_FRAMES * self.frame_bytes();
+        self.chunks.iter().filter(|c| !c.load(Ordering::Relaxed).is_null()).count() * per_chunk
+    }
+
     /// Block until `frames` are decoded (or decoding ends, or `timeout` passes).
     pub fn wait_for(&self, frames: usize, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         loop {
-            if self.ready_frames() >= frames || self.is_complete() {
+            if self.ready_frames() >= frames || self.is_complete() || self.window_full() {
                 return true;
             }
             if Instant::now() >= deadline {
@@ -589,13 +761,53 @@ impl Drop for FinishOnPanic<'_> {
     }
 }
 
+/// Move the demuxer to `secs` (in the trimmed timeline). Returns the frame decoding resumes
+/// at and the trim that now applies (the frames before it to drop, and what is left to keep).
+/// None when the format can't seek: then decoding starts from the beginning.
+///
+/// A lossy decoder needs the frame before to get its first output right (MDCT overlap), so it
+/// starts a little earlier and that pre-roll is dropped.
+fn seek_decoder(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: u32, rate: u32, lossy: bool, trim: Trim, secs: f64) -> Option<(usize, Trim)> {
+    use symphonia::core::formats::{SeekMode, SeekTo};
+    use symphonia::core::units::Time;
+    const PRE_ROLL: usize = 4096;
+    let start = (secs * rate as f64) as usize;
+    // Track timestamps count the encoder delay too (when we trim it ourselves).
+    let wanted = start + trim.skip;
+    let from = wanted.saturating_sub(if lossy { PRE_ROLL } else { 0 });
+    let time = Time::try_from_secs_f64(from as f64 / rate as f64)?;
+    let tb = format.tracks().iter().find(|t| t.id == track_id).and_then(|t| t.time_base);
+    let to_frames = |ts: i64| -> i64 {
+        match tb {
+            Some(tb) => (ts as i128 * tb.numer.get() as i128 * rate as i128 / tb.denom.get() as i128) as i64,
+            None => ts,
+        }
+    };
+    let seeked = match format.seek(SeekMode::Accurate, SeekTo::Time { time, track_id: Some(track_id) }) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("can't seek this file, decoding from the start: {e}");
+            return None;
+        }
+    };
+    decoder.reset();
+    let actual = to_frames(seeked.actual_ts.get()).max(0) as usize;
+    if actual > wanted {
+        // Landed past the point (shouldn't): start where it landed.
+        let start = actual.saturating_sub(trim.skip);
+        return Some((start, Trim { skip: 0, keep: trim.keep.map(|k| k.saturating_sub(start)) }));
+    }
+    Some((start, Trim { skip: wanted - actual, keep: trim.keep.map(|k| k.saturating_sub(start)) }))
+}
+
 /// Decode packets into `track` until the end, an error, or `alive()` says stop.
 fn run(format: &mut dyn FormatReader, decoder: &mut dyn AudioDecoder, track_id: u32, track: &Track, trim: Trim, alive: impl Fn() -> bool) {
     let mut scratch: Vec<f32> = Vec::new();
     let ch = track.channels;
     let (mut skip, mut left) = (trim.skip, trim.keep.unwrap_or(usize::MAX));
     let error = loop {
-        if !alive() {
+        // Local files: wait while the window ahead is full (and free what's well behind).
+        if !track.make_room(&alive) {
             break None;
         }
         let packet = match format.next_packet() {
@@ -648,11 +860,31 @@ pub fn open_source(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
 /// [`open_source`] for a stream whose tags come from elsewhere (a streaming service's
 /// catalogue): fields set in `meta` win over what the stream itself carries.
 pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta) -> Result<Arc<Track>> {
-    open_stream_trimmed(source, hint, expected_secs, meta, None)
+    open_stream_trimmed(source, hint, expected_secs, meta, Local::No)
 }
 
-fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta, edit: Option<Mp4Edit>) -> Result<Arc<Track>> {
-    let Opened { mut format, mut decoder, track_id, mut track, trim } = open(source, &hint, None, edit)?;
+/// How a source is read: a stream once and whole; a local file in a window, from any point.
+#[derive(Clone, Copy)]
+enum Local {
+    No,
+    File { edit: Option<Mp4Edit>, start_secs: f64 },
+}
+
+fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta, local: Local) -> Result<Arc<Track>> {
+    let edit = match local {
+        Local::File { edit, .. } => edit,
+        Local::No => None,
+    };
+    let Opened { mut format, mut decoder, track_id, mut track, mut trim } = open(source, &hint, None, edit)?;
+    if let Local::File { start_secs, .. } = local {
+        if start_secs > 0.0
+            && let Some((start, rest)) = seek_decoder(&mut *format, &mut *decoder, track_id, track.sample_rate, track.lossy, trim, start_secs)
+        {
+            trim = rest;
+            track = track.starting_at(start);
+        }
+        track = track.windowed(WINDOW_BYTES);
+    }
     let own = std::mem::take(&mut track.meta);
     track.meta = TrackMeta {
         title: meta.title.or(own.title),
@@ -684,8 +916,13 @@ fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: 
 
 /// Open a file and decode it progressively (see [`open_source`]).
 pub fn open_track(path: &Path) -> Result<Arc<Track>> {
+    open_track_at(path, 0.0)
+}
+
+/// [`open_track`], decoding from `start_secs` on (a seek far from what is held).
+pub fn open_track_at(path: &Path, start_secs: f64) -> Result<Arc<Track>> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    open_stream_trimmed(Box::new(file), hint_for(path), None, TrackMeta::default(), file_edit(path))
+    open_stream_trimmed(Box::new(file), hint_for(path), None, TrackMeta::default(), Local::File { edit: file_edit(path), start_secs })
 }
 
 /// The edit list of a local MP4/M4A file (looked for only in those).
@@ -716,9 +953,103 @@ pub fn load_track(path: &Path) -> Result<Track> {
     }
 }
 
+/// A local file decoded in a window of `bytes` (tests elsewhere in the crate).
 #[cfg(test)]
-mod tests {
+pub(crate) fn open_windowed(path: &Path, bytes: usize) -> Arc<Track> {
+    let file = File::open(path).unwrap();
+    let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(path), None, None).unwrap();
+    let t = Arc::new(track.windowed(bytes));
+    let mine = t.clone();
+    std::thread::spawn(move || run(&mut *format, &mut *decoder, track_id, &mine, trim, || Arc::strong_count(&mine) > 1));
+    t
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
     use super::*;
+
+    /// A 16-bit stereo WAV whose every frame is distinct: left = frame % 30000, right = −left.
+    pub(crate) fn ramp_wav(path: &Path, rate: u32, frames: usize) {
+        let data: Vec<u8> = (0..frames).flat_map(|i| {
+            let v = (i % 30_000) as i16;
+            [v.to_le_bytes(), (-v).to_le_bytes()].concat()
+        }).collect();
+        let mut w = Vec::new();
+        w.extend_from_slice(b"RIFF");
+        w.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+        w.extend_from_slice(b"WAVEfmt ");
+        w.extend_from_slice(&16u32.to_le_bytes());
+        w.extend_from_slice(&1u16.to_le_bytes());
+        w.extend_from_slice(&2u16.to_le_bytes());
+        w.extend_from_slice(&rate.to_le_bytes());
+        w.extend_from_slice(&(rate * 4).to_le_bytes());
+        w.extend_from_slice(&4u16.to_le_bytes());
+        w.extend_from_slice(&16u16.to_le_bytes());
+        w.extend_from_slice(b"data");
+        w.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        w.extend_from_slice(&data);
+        std::fs::write(path, w).unwrap();
+    }
+
+    fn value(frame: usize) -> f32 {
+        (frame % 30_000) as f32 / 32_768.0
+    }
+
+    #[test]
+    fn a_file_opened_in_the_middle_starts_exactly_there() {
+        let path = std::env::temp_dir().join(format!("hifi-mid-{}.wav", std::process::id()));
+        ramp_wav(&path, 44_100, 44_100 * 3);
+        let t = open_track_at(&path, 1.5).unwrap();
+        assert!(t.wait_for(usize::MAX, Duration::from_secs(10)));
+        let at = 66_150;
+        assert_eq!(t.held_from(), at);
+        assert_eq!(t.frames(), 44_100 * 3);
+        for f in [at, at + 1, at + 12_345, t.frames() - 1] {
+            assert_eq!(t.sample(f, 0), value(f), "frame {f}");
+            assert_eq!(t.sample(f, 1), -value(f));
+        }
+        // Before the start nothing is held: a seek there needs the file opened anew.
+        assert!(!t.can_seek_to(at - 10_000));
+        assert!(t.can_seek_to(at + 1_000));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The decoder stays a window ahead of the reader and frees what is well behind it, so a
+    /// long file never sits whole in memory — and every frame the reader reads is right.
+    #[test]
+    fn a_long_file_is_held_in_a_window() {
+        let path = std::env::temp_dir().join(format!("hifi-window-{}.wav", std::process::id()));
+        let rate = 48_000;
+        ramp_wav(&path, rate, rate as usize * 120); // 2 minutes = 46 MB as f32
+        let file = File::open(&path).unwrap();
+        // A small window for the test: 8 MB (≈ 22 s of 48 kHz stereo).
+        let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(&path), None, None).unwrap();
+        let t = Arc::new(track.windowed(8 << 20));
+        let mine = t.clone();
+        let decoding = std::thread::spawn(move || run(&mut *format, &mut *decoder, track_id, &mine, trim, || true));
+        let mut most = 0;
+        let mut frame = 0;
+        let step = 4_800; // 0.1 s
+        while frame + step < rate as usize * 120 {
+            let at = t.claim(frame);
+            assert_eq!(at, frame);
+            while t.ready_frames() < frame + step {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            for f in [frame, frame + step - 1] {
+                assert_eq!(t.sample(f, 0), value(f), "frame {f}");
+            }
+            most = most.max(t.held_bytes());
+            frame += step * 5; // play faster than real time
+        }
+        decoding.join().unwrap();
+        assert!(most <= (8 << 20) + 3 * CHUNK_FRAMES * 8, "held {} MB", most >> 20);
+        assert!(t.held_from() > 0, "old audio freed");
+        // Far behind: gone, so a seek there reopens the file; near the reader: fine.
+        assert!(!t.can_seek_to(0));
+        assert!(t.can_seek_to(frame - 1_000));
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn itunes_gapless_tag_gives_delay_and_length() {
@@ -828,4 +1159,3 @@ mod tests {
         assert!(prog.to_vec() == full.to_vec(), "samples differ");
     }
 }
-

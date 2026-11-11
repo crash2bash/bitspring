@@ -694,9 +694,11 @@ impl Playback {
         self.shared.paused.store(paused, Ordering::Relaxed);
     }
 
-    /// Jump within the track being heard. False when this playback can't: the processing
-    /// has already moved on to the next track (the last ~half second of this one is still in
-    /// the buffer) — then start this track anew at that point instead.
+    /// Jump within the track being heard. False when this playback can't — then open the
+    /// track anew at that point and start it there:
+    /// - the point is far from the part of a long file held in memory;
+    /// - the processing has already moved on to the next track (the last ~half second of
+    ///   this one is still in the buffer).
     pub fn seek(&self, secs: f64) -> bool {
         let (tracks, [heard, cur, _]) = self.tidy();
         if self.shared.ring.is_some() && cur != heard {
@@ -705,6 +707,9 @@ impl Playback {
         // SAFETY: owned by `tracks`, held locked.
         let t = unsafe { &*heard };
         let frame = ((secs.max(0.0) * t.sample_rate as f64) as usize).min(t.frames());
+        if !t.can_seek_to(frame) {
+            return false;
+        }
         let s = &self.shared.slots;
         s.seek_track.store(heard, Ordering::Release);
         s.seek_req.store(frame, Ordering::Release);
@@ -824,6 +829,8 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
             continue;
         }
 
+        // Tell a windowed track where we read, before reading (see Track::claim).
+        src = track.claim(src);
         // Read `complete` before the slice: if it was already complete, the slice is final.
         let complete = track.is_complete();
         let input = track.slice(src, BLOCK);
@@ -909,10 +916,11 @@ impl Shared {
                 loop {
                     // SAFETY: `cur` is in a slot, so the Playback owns it.
                     let track = unsafe { &*cur };
+                    // Tell a windowed track where we read, before reading (see Track::claim).
+                    let pos = track.claim(st.pos.load(Ordering::Relaxed));
                     // `complete` first: if decoding had finished, `ready` read after it is final.
                     let complete = track.is_complete();
                     let ready = track.ready_frames();
-                    let pos = st.pos.load(Ordering::Relaxed);
                     // Past `ready` on a track still decoding = buffering: play silence, keep position.
                     let avail = if paused { 0 } else { ready.saturating_sub(pos).min(frames - done) };
                     let ended = !paused && complete && pos + avail >= ready;
@@ -1410,6 +1418,60 @@ mod tests {
                 std::thread::sleep(Duration::from_micros(200));
             }
             assert!(!p.seek(0.1));
+        }
+
+        /// Far from what a long file holds in memory, seek says no (the app then opens the file
+        /// anew there); close by, it jumps as usual.
+        #[test]
+        fn a_seek_far_from_the_window_asks_for_a_restart() {
+            let path = std::env::temp_dir().join(format!("hifi-seekwin-{}.wav", std::process::id()));
+            crate::decode::tests::ramp_wav(&path, 48_000, 48_000 * 60);
+            let t = crate::decode::open_windowed(&path, 4 << 20); // ≈ 11 s of the minute
+            let p = playback(t.clone(), false);
+            // Play 40 s, as fast as the decoder keeps up.
+            let mut played = 0;
+            while played < 48_000 * 40 {
+                if t.ready_frames() > played + 4_096 || t.is_complete() {
+                    callback(&p, 4_096);
+                    played += 4_096;
+                } else {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+            assert!(t.held_from() > 0);
+            assert!(!p.seek(1.0), "the start is long gone");
+            assert!(!p.seek(59.0), "the end isn't decoded yet");
+            assert!(p.seek(39.0), "just behind: still held");
+            let out = callback(&p, 16);
+            let want = ((39 * 48_000) % 30_000) as f32 / 32_768.0;
+            assert_eq!(out[0], want);
+            drop(p);
+            let _ = std::fs::remove_file(&path);
+        }
+
+        /// The render thread reads a windowed track right through, every sample as decoded.
+        #[test]
+        fn processing_plays_a_windowed_track_whole() {
+            let path = std::env::temp_dir().join(format!("hifi-procwin-{}.wav", std::process::id()));
+            crate::decode::tests::ramp_wav(&path, 48_000, 48_000 * 30);
+            let t = crate::decode::open_windowed(&path, 2 << 20); // ≈ 5 s of the 30
+            let p = playback(t.clone(), true);
+            let rs = p.shared().ring.as_ref().unwrap();
+            let mut out = Vec::new();
+            while !p.is_finished() {
+                if rs.ring.available() >= 1_024 * 2 || rs.render_done.load(Ordering::Acquire) {
+                    out.extend(callback(&p, 1_024));
+                } else {
+                    std::thread::sleep(Duration::from_micros(200));
+                }
+            }
+            assert!(out.len() >= 48_000 * 30);
+            for (f, &v) in out[..48_000 * 30].iter().enumerate() {
+                assert_eq!(v, ((f % 30_000) as f32) / 32_768.0, "frame {f}");
+            }
+            assert!(t.held_bytes() <= (2 << 20) + 3 * (1 << 16) * 8);
+            drop(p);
+            let _ = std::fs::remove_file(&path);
         }
 
         #[test]

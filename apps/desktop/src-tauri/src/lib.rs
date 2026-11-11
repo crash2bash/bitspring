@@ -36,7 +36,7 @@ use hifi_engine::dsp::fir::ImpulseResponse;
 use hifi_engine::dsp::lossy::LossySettings;
 use hifi_engine::dsp::{Convolution, DspSettings, Upsample};
 use hifi_engine::dsd::{self, DsdMode};
-use hifi_engine::{Track, UserError, open_file, testsignal};
+use hifi_engine::{Track, UserError, open_file_at, testsignal};
 use serde::Serialize;
 use tauri::State;
 
@@ -367,9 +367,14 @@ fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: b
 
 /// Open a library file — or a Qobuz/TIDAL track, whose "path" is its id (`qobuz:track:…`).
 fn open_for(path: &std::path::Path, mode: DsdMode) -> CmdResult<Arc<Track>> {
+    open_for_at(path, mode, 0.0)
+}
+
+/// [`open_for`], decoding from `start_secs` on (a stream always starts at its beginning).
+fn open_for_at(path: &std::path::Path, mode: DsdMode, start_secs: f64) -> CmdResult<Arc<Track>> {
     match path.to_str().filter(|p| stream::is_uri(p)) {
         Some(uri) => stream::open(uri).map_err(|e| UserError::of(&e)),
-        None => open_file(path, mode).map_err(err),
+        None => open_file_at(path, mode, start_secs).map_err(err),
     }
 }
 
@@ -594,7 +599,9 @@ async fn play_file(
     // while playback starts. Still off the UI/IPC threads: opening may touch a slow disk.
     let track = {
         let file = file.clone();
-        tauri::async_runtime::spawn_blocking(move || open_for(&file, mode)).await.map_err(err)??
+        // Resuming in the middle (another output): decode from there, not from the start.
+        let at = start_at.unwrap_or(0.0);
+        tauri::async_runtime::spawn_blocking(move || open_for_at(&file, mode, at)).await.map_err(err)??
     };
     let _one = state.play_lock.lock().unwrap();
     let now = begin(&state, &device, file, track, exclusive, start_at.unwrap_or(0.0), paused.unwrap_or(false), dop, dsd_note)?;
@@ -1039,12 +1046,19 @@ fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalD
     let device = find_device(&cur.device_uid)?;
     let settings = dsp_for(state, &cur.device_uid);
     // A DSD file may have to switch between DoP and PCM (the EQ and friends need PCM).
+    let mut mode = DsdMode::Pcm;
     if dsd::is_dsd_path(&cur.path) {
-        let (mode, note) = dsd_mode(&cur.path, &device, cur.exclusive, cur.dop, &settings);
+        let (m, note) = dsd_mode(&cur.path, &device, cur.exclusive, cur.dop, &settings);
+        mode = m;
         if (mode == DsdMode::Dop) != cur.track.is_dop() {
-            cur.track = open_for(&cur.path, mode)?;
+            cur.track = open_for_at(&cur.path, mode, pos)?;
         }
         cur.dsd_note = note;
+    }
+    // A long file holds only part of itself in memory: far from it, open it anew there.
+    let frame = (pos.max(0.0) * cur.track.sample_rate as f64) as usize;
+    if !cur.track.can_seek_to(frame) {
+        cur.track = open_for_at(&cur.path, mode, pos)?;
     }
     let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused };
     let mut signal = start(state, &device, cur.track.clone(), opts)?;

@@ -271,14 +271,26 @@ fn diin_meta(f: &mut File, start: u64, end: u64) -> Result<TrackMeta> {
     Ok(m)
 }
 
-/// Read the sound data and hand it on as per-channel byte runs (MSB = oldest bit), in order.
-/// `sink` returns false to stop early.
-fn read_bitstream(path: &Path, h: &DsdHeader, mut sink: impl FnMut(&[Vec<u8>]) -> bool) -> Result<()> {
+/// Bytes per channel `read_bitstream` can start at: whole DSF blocks (4096 bytes per channel
+/// in every file seen); the same step for DFF.
+fn start_step(h: &DsdHeader) -> u64 {
+    match h.layout {
+        Layout::Dsf { block, .. } => block as u64,
+        Layout::Dff => 4096,
+    }
+}
+
+/// Read the sound data and hand it on as per-channel byte runs (MSB = oldest bit), in order,
+/// from byte `from` of each channel (a multiple of `start_step`). `sink` returns false to stop
+/// early.
+fn read_bitstream(path: &Path, h: &DsdHeader, from: u64, mut sink: impl FnMut(&[Vec<u8>]) -> bool) -> Result<()> {
     let mut f = File::open(path)?;
-    f.seek(SeekFrom::Start(h.data_start))?;
     let ch = h.channels;
     let per_channel = h.samples.div_ceil(8);
-    let mut done = 0u64; // bytes per channel delivered
+    let from = from.min(per_channel);
+    // DSF: blocks of every channel in turn; DFF: bytes of every channel in turn.
+    f.seek(SeekFrom::Start(h.data_start + from * ch as u64))?;
+    let mut done = from; // bytes per channel delivered
     let mut out: Vec<Vec<u8>> = vec![Vec::new(); ch];
     match h.layout {
         Layout::Dsf { block, lsb_first } => {
@@ -305,7 +317,7 @@ fn read_bitstream(path: &Path, h: &DsdHeader, mut sink: impl FnMut(&[Vec<u8>]) -
         }
         Layout::Dff => {
             let mut buf = vec![0u8; 16 * 1024 * ch];
-            let mut left = h.data_len - h.data_len % ch as u64;
+            let mut left = (h.data_len - h.data_len % ch as u64).saturating_sub(from * ch as u64);
             while left > 0 {
                 let want = (buf.len() as u64).min(left) as usize;
                 let n = read_full(&mut f, &mut buf[..want])?;
@@ -340,8 +352,13 @@ fn read_full(f: &mut File, buf: &mut [u8]) -> Result<usize> {
 
 /// Open a DSD file and start reading it in the background (like [`crate::open_track`]).
 pub fn open_dsd(path: &Path, mode: DsdMode) -> Result<Arc<Track>> {
+    open_dsd_at(path, mode, 0.0)
+}
+
+/// [`open_dsd`], from `start_secs` on.
+pub fn open_dsd_at(path: &Path, mode: DsdMode, start_secs: f64) -> Result<Arc<Track>> {
     let h = probe(path)?;
-    let track = Arc::new(match mode {
+    let track = match mode {
         DsdMode::Dop => Track::new_dop(h.rate, h.channels, h.meta.clone(), (h.samples / 16) as usize),
         DsdMode::Pcm => {
             let rate = pcm_rate(h.rate);
@@ -349,7 +366,17 @@ pub fn open_dsd(path: &Path, mode: DsdMode) -> Result<Arc<Track>> {
             t.dsd = Some(DsdSource { rate: h.rate, dop: false });
             t
         }
-    });
+    };
+    // Bytes per channel per output frame: 2 for DoP (16 bits), the decimation for PCM.
+    let per_frame = (h.rate / 8 / track.sample_rate) as u64;
+    let target = (start_secs.max(0.0) * track.sample_rate as f64) as u64;
+    // Start a block early: the converter's filters settle on it, and its output is dropped.
+    let step = start_step(&h);
+    let warm = if mode == DsdMode::Pcm { step } else { 0 };
+    let from = (target * per_frame).saturating_sub(warm) / step * step;
+    let first = from / per_frame; // the frame the bytes at `from` become
+    let mut skip = (target - first.min(target)) as usize;
+    let track = Arc::new(track.starting_at(target as usize).windowed(crate::decode::WINDOW_BYTES));
     let mine = track.clone();
     let path = path.to_path_buf();
     let mut converter = match mode {
@@ -362,9 +389,10 @@ pub fn open_dsd(path: &Path, mode: DsdMode) -> Result<Arc<Track>> {
         let mut pending: Vec<Vec<u8>> = vec![Vec::new(); ch];
         let mut frame_buf: Vec<u8> = Vec::new();
         let mut pcm: Vec<f32> = Vec::new();
-        let result = read_bitstream(&path, &h, |runs| {
-            if Arc::strong_count(&mine) == 1 {
-                return false; // nobody will play it any more
+        let result = read_bitstream(&path, &h, from, |runs| {
+            // Wait while the window ahead is full; stop once nobody will play it any more.
+            if !mine.make_room(|| Arc::strong_count(&mine) > 1) {
+                return false;
             }
             match &mut converter {
                 None => {
@@ -382,11 +410,16 @@ pub fn open_dsd(path: &Path, mode: DsdMode) -> Result<Arc<Track>> {
                     for p in &mut pending {
                         p.drain(..frames * 2);
                     }
-                    mine.push_dop(&frame_buf)
+                    let fb = ch * 2;
+                    let s = skip.min(frame_buf.len() / fb);
+                    skip -= s;
+                    mine.push_dop(&frame_buf[s * fb..])
                 }
                 Some(conv) => {
                     conv.process(runs, &mut pcm);
-                    mine.push(&pcm)
+                    let s = skip.min(pcm.len() / ch);
+                    skip -= s;
+                    mine.push(&pcm[s * ch..])
                 }
             }
         });
@@ -683,6 +716,40 @@ mod tests {
                 assert!((amp - want).abs() < 0.01, "{name} ch{c}: amplitude {amp}, want {want}");
                 let snr = 20.0 * (amp / resid).log10();
                 assert!(snr > 70.0, "{name} ch{c}: SNR {snr:.1} dB");
+            }
+            std::fs::remove_file(&p).ok();
+        }
+    }
+
+    #[test]
+    fn opened_in_the_middle_it_plays_what_the_whole_file_has_there() {
+        let rate = DSD64;
+        let bits = modulate(rate, 2, 1.0, tone);
+        for (name, write) in [("mid.dsf", write_dsf as fn(&std::path::Path, u32, &[Vec<u8>]) -> std::io::Result<()>), ("mid.dff", write_dff)] {
+            let p = tmp(name);
+            write(&p, rate, &bits).unwrap();
+            // DoP: the very same bits from the frame asked for.
+            let whole = open_dsd(&p, DsdMode::Dop).unwrap();
+            let part = open_dsd_at(&p, DsdMode::Dop, 0.4).unwrap();
+            assert!(whole.wait_for(usize::MAX, Duration::from_secs(10)) && part.wait_for(usize::MAX, Duration::from_secs(10)));
+            let at = (0.4 * part.sample_rate as f64) as usize;
+            assert_eq!(part.held_from(), at);
+            assert_eq!(part.frames(), whole.frames());
+            for f in [at, at + 1, at + 5_000, whole.frames() - 1] {
+                for c in 0..2 {
+                    assert_eq!(part.dop_payload(f, c), whole.dop_payload(f, c), "{name} DoP frame {f}");
+                }
+            }
+            // PCM: once the filters have settled on the block before, sample for sample.
+            let whole = open_dsd(&p, DsdMode::Pcm).unwrap();
+            let part = open_dsd_at(&p, DsdMode::Pcm, 0.4).unwrap();
+            assert!(whole.wait_for(usize::MAX, Duration::from_secs(10)) && part.wait_for(usize::MAX, Duration::from_secs(10)));
+            let at = (0.4 * part.sample_rate as f64) as usize;
+            assert_eq!(part.held_from(), at);
+            for f in (at..whole.frames()).step_by(997) {
+                for c in 0..2 {
+                    assert_eq!(part.sample(f, c), whole.sample(f, c), "{name} PCM frame {f}");
+                }
             }
             std::fs::remove_file(&p).ok();
         }
