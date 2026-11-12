@@ -27,10 +27,10 @@ user's own files only. Don't mention streaming anywhere in the listing.
 
 App Privacy: **Data Not Collected**.
 
-Keywords (94 of 100 characters; words already in the name and subtitle are indexed anyway):
+Keywords (93 of 100 characters; words already in the name and subtitle are indexed anyway):
 
 ```
-hifi,audiophile,flac,dac,lossless,alac,usb,exclusive,crossfeed,upsampling,wav,aiff,dop,offline
+hifi,audiophile,flac,dac,lossless,alac,usb,exclusive,crossfeed,upsampling,cue,wav,dop,offline
 ```
 
 ## Promotional text (170 max, can change without review)
@@ -55,6 +55,7 @@ EVERY FORMAT YOU OWN
 • FLAC, ALAC, WAV, AIFF, CAF, MKA, MP3, AAC and Ogg Vorbis.
 • DSD (DSF and DFF): native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags and a library that finds new files by itself.
+• Albums ripped to one file with a CUE sheet play track by track.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM
 • Parametric EQ with presets for your headphones; imports AutoEQ, Equalizer APO and EasyEffects presets.
@@ -88,6 +89,7 @@ EVERY FORMAT YOU OWN
 • FLAC, ALAC, WAV, AIFF, CAF, MKA, MP3, AAC and Ogg Vorbis.
 • DSD (DSF and DFF) up to DSD1024: native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags, and a library that watches your music folders.
+• Albums ripped to one file with a CUE sheet play track by track.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM
 • Parametric EQ with presets for your headphones, in linear or minimum phase; imports AutoEQ, Equalizer APO and EasyEffects presets.

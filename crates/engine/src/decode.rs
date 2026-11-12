@@ -21,6 +21,8 @@ use symphonia::core::formats::{FormatOptions, FormatReader, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::{MetadataOptions, MetadataRevision, StandardTag, StandardVisualKey};
 
+use crate::cue::Range;
+
 /// Frames per storage chunk. Chunks never move once allocated, so a reader holding a frame
 /// index below `ready` can always find its sample — the buffer grows without reallocating.
 const CHUNK_FRAMES: usize = 1 << 16;
@@ -697,7 +699,7 @@ fn mp4_edit(path: &Path) -> Option<Mp4Edit> {
     None
 }
 
-fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize>, edit: Option<Mp4Edit>) -> Result<Opened> {
+fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize>, edit: Option<Mp4Edit>, range: Option<Range>) -> Result<Opened> {
     let mss = MediaSourceStream::new(source, Default::default());
     let mut format = symphonia::default::get_probe()
         .probe(hint, mss, FormatOptions::default(), MetadataOptions::default())
@@ -738,9 +740,20 @@ fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize
     } else {
         Trim::default()
     };
+    let trim = match range {
+        Some(r) => ranged(trim, r, sample_rate, num_frames),
+        None => trim,
+    };
     let expected = trim.keep.or(num_frames).or(expected_frames).unwrap_or(0);
     let track = Track::new(sample_rate, channels, params.bits_per_sample, lossy, meta, expected);
     Ok(Opened { format, decoder, track_id, track, trim })
+}
+
+/// One CUE track of an image file: its part of the file, on top of what the codec trims.
+fn ranged(trim: Trim, range: Range, rate: u32, total: Option<usize>) -> Trim {
+    let start = range.start_at(rate);
+    let keep = range.len_at(rate).or_else(|| trim.keep.or(total.map(|t| t.saturating_sub(trim.skip))).map(|k| k.saturating_sub(start)));
+    Trim { skip: trim.skip + start, keep }
 }
 
 /// The demuxer stated no delay for this track (else the decoder trims it already).
@@ -867,17 +880,18 @@ pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
 #[derive(Clone, Copy)]
 enum Local {
     No,
-    File { edit: Option<Mp4Edit>, start_secs: f64 },
+    File { edit: Option<Mp4Edit>, start_secs: f64, range: Option<Range> },
 }
 
 fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta, local: Local) -> Result<Arc<Track>> {
-    let edit = match local {
-        Local::File { edit, .. } => edit,
-        Local::No => None,
+    let (edit, range) = match local {
+        Local::File { edit, range, .. } => (edit, range),
+        Local::No => (None, None),
     };
-    let Opened { mut format, mut decoder, track_id, mut track, mut trim } = open(source, &hint, None, edit)?;
+    let Opened { mut format, mut decoder, track_id, mut track, mut trim } = open(source, &hint, None, edit, range)?;
     if let Local::File { start_secs, .. } = local {
-        if start_secs > 0.0
+        // Seek to the start: one asked for, or a CUE track's place in its image.
+        if (start_secs > 0.0 || trim.skip >= track.sample_rate as usize)
             && let Some((start, rest)) = seek_decoder(&mut *format, &mut *decoder, track_id, track.sample_rate, track.lossy, trim, start_secs)
         {
             trim = rest;
@@ -921,8 +935,15 @@ pub fn open_track(path: &Path) -> Result<Arc<Track>> {
 
 /// [`open_track`], decoding from `start_secs` on (a seek far from what is held).
 pub fn open_track_at(path: &Path, start_secs: f64) -> Result<Arc<Track>> {
+    open_range_at(path, None, start_secs, TrackMeta::default())
+}
+
+/// [`open_track_at`] for part of a file (a CUE track of an image): `start_secs` counts from
+/// the start of that part, and decoding stops at its end. Tags set in `meta` (the sheet's)
+/// win over the file's own.
+pub fn open_range_at(path: &Path, range: Option<Range>, start_secs: f64, meta: TrackMeta) -> Result<Arc<Track>> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    open_stream_trimmed(Box::new(file), hint_for(path), None, TrackMeta::default(), Local::File { edit: file_edit(path), start_secs })
+    open_stream_trimmed(Box::new(file), hint_for(path), None, meta, Local::File { edit: file_edit(path), start_secs, range })
 }
 
 /// The edit list of a local MP4/M4A file (looked for only in those).
@@ -945,7 +966,7 @@ fn hint_for(path: &Path) -> Hint {
 /// Decode a whole file before returning (CLI tools, tests).
 pub fn load_track(path: &Path) -> Result<Track> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(path), None, file_edit(path))?;
+    let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(path), None, file_edit(path), None)?;
     run(&mut *format, &mut *decoder, track_id, &track, trim, || true);
     match track.error() {
         Some(e) if track.ready_frames() == 0 => Err(anyhow!(e)),
@@ -957,7 +978,7 @@ pub fn load_track(path: &Path) -> Result<Track> {
 #[cfg(test)]
 pub(crate) fn open_windowed(path: &Path, bytes: usize) -> Arc<Track> {
     let file = File::open(path).unwrap();
-    let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(path), None, None).unwrap();
+    let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(path), None, None, None).unwrap();
     let t = Arc::new(track.windowed(bytes));
     let mine = t.clone();
     std::thread::spawn(move || run(&mut *format, &mut *decoder, track_id, &mine, trim, || Arc::strong_count(&mine) > 1));
@@ -1014,6 +1035,33 @@ pub(crate) mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    #[test]
+    fn a_cue_track_is_exactly_its_part_of_the_image() {
+        let path = std::env::temp_dir().join(format!("hifi-cue-{}.wav", std::process::id()));
+        let rate = 44_100;
+        ramp_wav(&path, rate, rate as usize * 5);
+        // Seconds 2 to 3.
+        let r = Range { start: 150, end: Some(225) };
+        let t = open_range_at(&path, Some(r), 0.0, TrackMeta::default()).unwrap();
+        assert!(t.wait_for(usize::MAX, Duration::from_secs(10)));
+        assert_eq!(t.frames(), 44_100);
+        assert!(t.is_complete());
+        for f in [0, 1, 20_000, 44_099] {
+            assert_eq!(t.sample(f, 0), value(2 * 44_100 + f), "frame {f}");
+        }
+        // Started half a second in (a resume, or a seek far ahead).
+        let t = open_range_at(&path, Some(r), 0.5, TrackMeta::default()).unwrap();
+        assert!(t.wait_for(usize::MAX, Duration::from_secs(10)));
+        assert_eq!((t.held_from(), t.frames()), (22_050, 44_100));
+        assert_eq!(t.sample(22_050, 0), value(2 * 44_100 + 22_050));
+        // The last track: from its start to the end of the file.
+        let t = open_range_at(&path, Some(Range { start: 300, end: None }), 0.0, TrackMeta::default()).unwrap();
+        assert!(t.wait_for(usize::MAX, Duration::from_secs(10)));
+        assert_eq!(t.frames(), 44_100);
+        assert_eq!(t.sample(0, 0), value(4 * 44_100));
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// The decoder stays a window ahead of the reader and frees what is well behind it, so a
     /// long file never sits whole in memory — and every frame the reader reads is right.
     #[test]
@@ -1023,7 +1071,7 @@ pub(crate) mod tests {
         ramp_wav(&path, rate, rate as usize * 120); // 2 minutes = 46 MB as f32
         let file = File::open(&path).unwrap();
         // A small window for the test: 8 MB (≈ 22 s of 48 kHz stereo).
-        let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(&path), None, None).unwrap();
+        let Opened { mut format, mut decoder, track_id, track, trim } = open(Box::new(file), &hint_for(&path), None, None, None).unwrap();
         let t = Arc::new(track.windowed(8 << 20));
         let mine = t.clone();
         let decoding = std::thread::spawn(move || run(&mut *format, &mut *decoder, track_id, &mine, trim, || true));

@@ -422,7 +422,7 @@ export const api = {
   updateCheck: () => call<{ enabled: boolean; current: string; update: { version: string; notes: string | null; date: string | null } | null }>("update_check"),
   updateInstall: () => call<void>("update_install"),
   updateProgress: () => call<[number, number]>("update_progress"),
-  expandPaths: (paths: string[]) => call<string[]>("expand_paths", { paths }),
+  expandPaths: (paths: string[]) => call<{ path: string; title: string | null; artist: string | null }[]>("expand_paths", { paths }),
   playFile: (path: string, deviceUid: string, exclusive: boolean, startAt = 0, dop = false, index: number | null = null, paused = false) =>
     call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop, index, paused }),
   setQueue: (paths: string[], index: number | null, rev: number) => call<void>("set_queue", { paths, index, rev }),
@@ -490,8 +490,14 @@ export function clock(secs: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** The file a path reads: a CUE track's path ("…/Image.flac#cue:17266-39553") names its
+ *  album's image file and its part of it. */
+export function filePath(p: string): string {
+  return p.replace(/#cue:\d+-\d*$/, "");
+}
+
 export function fileName(p: string): string {
-  return p.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? p;
+  return filePath(p).split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? p;
 }
 
 /** File name without a leading track number ("01 So What" → "So What"). */

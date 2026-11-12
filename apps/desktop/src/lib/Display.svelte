@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, clock, deviceLabel, dsdName, dsdNoteText, khz, osMixer, transportLabel, type NowPlaying, type Status } from "./api";
+  import { api, clock, deviceLabel, dsdName, dsdNoteText, filePath, khz, osMixer, transportLabel, type NowPlaying, type Status } from "./api";
   import { list, num, sentences, t } from "./i18n.svelte";
 
   let {
@@ -23,7 +23,7 @@
   } = $props();
 
   let signal = $derived(now?.signal ?? null);
-  let format = $derived(now && !testing ? (now.path.split(".").pop()?.toUpperCase() ?? null) : null);
+  let format = $derived(now && !testing ? (filePath(now.path).split(".").pop()?.toUpperCase() ?? null) : null);
 
   // ---- signal path ---------------------------------------------------------------------------
   let processing = $derived.by(() => {

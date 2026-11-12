@@ -3,6 +3,7 @@
   import { api, artistLabel, coverUrl, entryFromTrack, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type LibraryGoto, type LibraryStatus, type StreamingStatus } from "./api";
   import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
+  import { remember } from "./labels.svelte";
   import AddToPlaylist from "./AddToPlaylist.svelte";
   import Playlists from "./Playlists.svelte";
   import TrackTable, { type SortKey } from "./TrackTable.svelte";
@@ -126,6 +127,8 @@
     if (status.revision !== revision) {
       revision = status.revision;
       [albums, tracks] = await Promise.all([api.libraryAlbums(), api.libraryTracks()]);
+      // The queue names tracks by their files; a CUE track's file is its whole album.
+      remember(tracks.filter((t) => t.path.includes("#cue:")));
       if (openAlbum) openAlbum = albums.find((a) => a.id === openAlbum!.id) ?? null;
     }
   }

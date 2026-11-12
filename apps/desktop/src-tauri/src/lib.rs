@@ -469,7 +469,7 @@ const AUDIO_EXTENSIONS: [&str; 12] = ["flac", "wav", "aif", "aiff", "m4a", "alac
 /// Turn dropped files and folders into a flat, ordered list of audio files.
 /// Folders are walked recursively and sorted by path, so an album lands in track order.
 #[tauri::command(async)]
-fn expand_paths(paths: Vec<String>) -> Vec<String> {
+fn expand_paths(paths: Vec<String>) -> Vec<ExpandedDto> {
     fn is_audio(p: &std::path::Path) -> bool {
         p.extension()
             .and_then(|e| e.to_str())
@@ -499,7 +499,23 @@ fn expand_paths(paths: Vec<String>) -> Vec<String> {
             out.push(p);
         }
     }
-    out.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+    // An album ripped to one file with a CUE sheet goes in as its tracks.
+    hifi_engine::cue::expand(out)
+        .into_iter()
+        .map(|(path, meta)| {
+            let meta = meta.unwrap_or_default();
+            ExpandedDto { path, title: meta.title, artist: meta.artist }
+        })
+        .collect()
+}
+
+/// A file to queue, with the title and artist a CUE sheet gives it (the UI shows the file name
+/// of anything else until it plays).
+#[derive(Serialize)]
+struct ExpandedDto {
+    path: String,
+    title: Option<String>,
+    artist: Option<String>,
 }
 
 #[tauri::command(async)]

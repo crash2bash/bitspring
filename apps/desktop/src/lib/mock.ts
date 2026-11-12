@@ -178,7 +178,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "library_tracks":
       return libTracks as T;
     case "expand_paths":
-      return args.paths as T;
+      return (args.paths as string[]).map((path) => ({ path, title: null, artist: null })) as T;
     case "play_file": {
       const dev = devices.find((d) => d.uid === args.deviceUid) ?? devices[0];
       lastDevice = dev;

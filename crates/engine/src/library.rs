@@ -181,26 +181,65 @@ fn alac_bit_depth(cookie: &[u8]) -> Option<u32> {
 
 /// All audio files under `folders`, recursively, skipping hidden entries.
 pub fn find_audio_files(folders: &[PathBuf]) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+    find_files(folders).0
+}
+
+/// All audio files and CUE sheets under `folders`, recursively, skipping hidden entries.
+fn find_files(folders: &[PathBuf]) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    fn walk(dir: &Path, audio: &mut Vec<PathBuf>, sheets: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else { return };
         for p in entries.filter_map(|e| e.ok().map(|e| e.path())) {
             if p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.')) {
                 continue;
             }
             if p.is_dir() {
-                walk(&p, out);
+                walk(&p, audio, sheets);
             } else if is_audio(&p) {
-                out.push(p);
+                audio.push(p);
+            } else if crate::cue::is_sheet(&p) {
+                sheets.push(p);
             }
         }
     }
-    let mut out = Vec::new();
+    let (mut audio, mut sheets) = (Vec::new(), Vec::new());
     for f in folders {
-        walk(f, &mut out);
+        walk(f, &mut audio, &mut sheets);
     }
-    out.sort();
-    out.dedup();
-    out
+    for v in [&mut audio, &mut sheets] {
+        v.sort();
+        v.dedup();
+    }
+    (audio, sheets)
+}
+
+/// The tracks a CUE sheet makes of one image file: the image's stream parameters and tags,
+/// with the sheet's titles, numbers and lengths.
+fn image_tracks(image: &crate::cue::Image, file: &TrackInfo) -> Vec<TrackInfo> {
+    let sheet = &image.sheet;
+    let total = (file.duration * crate::cue::FRAMES_PER_SEC as f64).round() as u64;
+    sheet
+        .ranges()
+        .into_iter()
+        .enumerate()
+        .filter(|(_, r)| r.start < total || total == 0)
+        .map(|(i, r)| {
+            let m = sheet.meta(i);
+            let end = r.end.unwrap_or(total).max(r.start);
+            TrackInfo {
+                path: crate::cue::track_path(&file.path, r),
+                title: m.title.unwrap_or_else(|| format!("{} {:02}", file.title, sheet.tracks[i].number)),
+                artist: m.artist.or_else(|| file.artist.clone()),
+                album_artist: m.album_artist.or_else(|| file.album_artist.clone()),
+                album: m.album.or_else(|| file.album.clone()),
+                genre: m.genre.or_else(|| file.genre.clone()),
+                year: m.year.or_else(|| file.year.clone()),
+                track_number: m.track_number,
+                disc_number: m.disc_number.or(file.disc_number),
+                duration: (end - r.start) as f64 / crate::cue::FRAMES_PER_SEC as f64,
+                ..file.clone()
+            }
+        })
+        .collect()
 }
 
 pub struct ScanResult {
@@ -218,12 +257,21 @@ pub fn scan(
     on_progress: impl Fn(usize, usize) + Sync,
     on_cover: impl Fn(&TrackInfo, Cover) + Sync,
 ) -> ScanResult {
-    let files = find_audio_files(folders);
+    let (files, sheets) = find_files(folders);
+    // Albums ripped to one file with a CUE sheet: the file gives way to the sheet's tracks.
+    let images = crate::cue::images(&files, &sheets);
+    let files: Vec<PathBuf> = files.into_iter().filter(|f| !images.iter().any(|i| &i.file == f)).collect();
     let known: HashMap<&str, &TrackInfo> = previous.iter().map(|t| (t.path.as_str(), t)).collect();
-    let total = files.len();
+    // An image scanned before (same size and time) needs no new look for its cover.
+    let known_images: std::collections::HashSet<(&str, u64, u64)> =
+        previous.iter().filter_map(|t| match crate::cue::split(&t.path) {
+            (file, Some(_)) => Some((file, t.size, t.mtime)),
+            _ => None,
+        }).collect();
+    let total = files.len() + images.len();
     let next = AtomicUsize::new(0);
     let done = AtomicUsize::new(0);
-    let results: Mutex<Vec<Option<TrackInfo>>> = Mutex::new(vec![None; total]);
+    let results: Mutex<Vec<Vec<TrackInfo>>> = Mutex::new(vec![Vec::new(); total]);
     let failed = Mutex::new(Vec::new());
     let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(8);
 
@@ -231,7 +279,32 @@ pub fn scan(
         for _ in 0..workers {
             s.spawn(|| loop {
                 let i = next.fetch_add(1, Ordering::Relaxed);
-                let Some(path) = files.get(i) else { break };
+                if i >= total {
+                    break;
+                }
+                let Some(path) = files.get(i) else {
+                    // An image: its header (milliseconds), then the sheet's tracks.
+                    let image = &images[i - files.len()];
+                    let key = image.file.to_string_lossy();
+                    let entry = match scan_file(&image.file) {
+                        Ok((t, cover)) => {
+                            let tracks = image_tracks(image, &t);
+                            if let (Some(c), Some(first)) = (cover, tracks.first())
+                                && !known_images.contains(&(key.as_ref(), t.size, t.mtime))
+                            {
+                                on_cover(first, c);
+                            }
+                            tracks
+                        }
+                        Err(e) => {
+                            failed.lock().unwrap().push((key.into_owned(), format!("{e:#}")));
+                            Vec::new()
+                        }
+                    };
+                    results.lock().unwrap()[i] = entry;
+                    on_progress(done.fetch_add(1, Ordering::Relaxed) + 1, total);
+                    continue;
+                };
                 let key = path.to_string_lossy();
                 let reused = known
                     .get(key.as_ref())
@@ -252,7 +325,7 @@ pub fn scan(
                         }
                     },
                 };
-                results.lock().unwrap()[i] = entry;
+                results.lock().unwrap()[i] = entry.into_iter().collect();
                 on_progress(done.fetch_add(1, Ordering::Relaxed) + 1, total);
             });
         }
@@ -445,6 +518,35 @@ mod tests {
         wrapped.extend_from_slice(&[0, 0, 16, 0, 0, 16, 40, 10, 14, 2]);
         assert_eq!(alac_bit_depth(&wrapped), Some(16));
         assert_eq!(alac_bit_depth(&[1, 2]), None);
+    }
+
+    #[test]
+    fn an_image_with_a_sheet_becomes_its_tracks() {
+        let dir = std::env::temp_dir().join(format!("bitspring-image-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::decode::tests::ramp_wav(&dir.join("Image_CD.wav"), 44_100, 44_100 * 10);
+        std::fs::write(dir.join("loose.txt"), "").unwrap();
+        let sheet = "PERFORMER \"Band\"\nTITLE \"Record\"\nREM DATE 2001\nFILE \"Image_CD.wav\" WAVE\n TRACK 01 AUDIO\n  TITLE \"One\"\n  INDEX 01 00:00:00\n TRACK 02 AUDIO\n  TITLE \"Two\"\n  PERFORMER \"Guest\"\n  INDEX 00 00:03:00\n  INDEX 01 00:04:00\n";
+        std::fs::write(dir.join("Cue.cue"), sheet).unwrap();
+        std::fs::write(dir.join("Cue_RepG.cue"), sheet).unwrap();
+        let r = scan(std::slice::from_ref(&dir), &[], |_, _| {}, |_, _| {});
+        assert!(r.failed.is_empty(), "{:?}", r.failed);
+        let ts = &r.tracks;
+        assert_eq!(ts.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["One", "Two"]);
+        assert_eq!((ts[0].duration, ts[1].duration), (4.0, 6.0));
+        assert_eq!(ts[1].artist.as_deref(), Some("Guest"));
+        assert_eq!(ts[1].album_artist.as_deref(), Some("Band"));
+        assert_eq!((ts[1].album.as_deref(), ts[1].year.as_deref(), ts[1].track_number), (Some("Record"), Some("2001"), Some(2)));
+        assert_eq!((ts[0].sample_rate, ts[0].format.as_str()), (44_100, "WAV"));
+        let albums = group_albums(ts);
+        assert_eq!(albums.len(), 1);
+        assert_eq!((albums[0].title.as_str(), albums[0].artist.as_str(), albums[0].duration), ("Record", "Band", 10.0));
+        // A track plays as its part of the image.
+        let t = crate::open_file(Path::new(&ts[1].path), crate::dsd::DsdMode::Pcm).unwrap();
+        assert!(t.wait_for(usize::MAX, std::time::Duration::from_secs(10)));
+        assert_eq!(t.frames(), 6 * 44_100);
+        assert_eq!(t.meta.title.as_deref(), Some("Two"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
