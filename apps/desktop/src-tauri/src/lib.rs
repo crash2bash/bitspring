@@ -32,7 +32,8 @@ use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::Duration;
 
 use base64::Engine as _;
-use hifi_engine::output::{self, DeviceInfo, PlayOptions, Player, SignalPath};
+use hifi_engine::output::{self, PlayOptions, SignalPath};
+use hifi_engine::player::{self as outputs, Output, Player};
 use hifi_engine::dsp::crossfeed::CrossfeedLevel;
 use hifi_engine::dsp::fir::ImpulseResponse;
 use hifi_engine::dsp::lossy::LossySettings;
@@ -169,24 +170,39 @@ struct DeviceDto {
     bit_perfect_capable: bool,
     /// Highest DSD rate (64, 128, 256, 512) the device's clock and formats could carry as DoP.
     max_dop: Option<u32>,
+    /// A network player (UPnP/DLNA): no exclusive mode or DoP to set, maybe a volume.
+    network: bool,
+    /// A network player's maker and model ("WiiM Pro"), to tell it apart.
+    model: Option<String>,
 }
 
-impl From<&DeviceInfo> for DeviceDto {
-    fn from(d: &DeviceInfo) -> Self {
+impl From<&Output> for DeviceDto {
+    fn from(d: &Output) -> Self {
+        let transport = d.transport();
         Self {
-            uid: d.uid.clone(),
-            name: d.name.trim().to_string(),
-            transport: format!("{:?}", d.transport),
-            channels: d.output_channels,
-            rates: hifi_engine::rate::candidate_rates(&d.rates),
-            nominal_rate: d.nominal_rate,
-            is_default: d.is_default,
-            bit_perfect_capable: d.transport.can_be_bit_perfect(),
-            max_dop: d
-                .transport
-                .can_be_bit_perfect()
-                .then(|| [8u32, 4, 2, 1].into_iter().find(|m| d.device.supports_dop(dsd::DSD64 * m)).map(|m| 64 * m))
+            uid: d.uid().to_string(),
+            name: d.name().trim().to_string(),
+            transport: format!("{transport:?}"),
+            channels: d.output_channels(),
+            rates: hifi_engine::rate::candidate_rates(&d.rates()),
+            nominal_rate: d.nominal_rate(),
+            is_default: d.is_default(),
+            bit_perfect_capable: transport.can_be_bit_perfect(),
+            max_dop: (transport.can_be_bit_perfect() && !d.is_network())
+                .then(|| [8u32, 4, 2, 1].into_iter().find(|m| d.supports_dop(dsd::DSD64 * m)).map(|m| 64 * m))
                 .flatten(),
+            network: d.is_network(),
+            model: match d {
+                Output::Renderer(r) => {
+                    let m = if r.model.to_lowercase().starts_with(&r.manufacturer.to_lowercase()) || r.manufacturer.is_empty() {
+                        r.model.clone()
+                    } else {
+                        format!("{} {}", r.manufacturer.trim_end_matches(", Inc.").trim_end_matches(" Inc."), r.model)
+                    };
+                    Some(m.trim().to_string()).filter(|m| !m.is_empty())
+                }
+                Output::Device(_) => None,
+            },
         }
     }
 }
@@ -319,20 +335,16 @@ struct DspResult {
 // Commands
 // ---------------------------------------------------------------------------------------------
 
-fn find_device(uid: &str) -> CmdResult<DeviceInfo> {
-    output::output_devices()
-        .map_err(err)?
-        .into_iter()
-        .find(|d| d.uid == uid)
-        .ok_or(UserError::DeviceNotFound)
+fn find_device(uid: &str) -> CmdResult<Output> {
+    outputs::find(uid).map_err(err)?.ok_or(UserError::DeviceNotFound)
 }
 
 /// Stop whatever plays and start `track` on `device`. The old player is dropped *first*, so
 /// its hog mode is released and the device restored before we claim it again.
-fn start(state: &AppState, device: &DeviceInfo, track: Arc<Track>, opts: PlayOptions) -> CmdResult<SignalDto> {
+fn start(state: &AppState, device: &Output, track: Arc<Track>, opts: PlayOptions) -> CmdResult<SignalDto> {
     let mut slot = state.player.lock().unwrap();
     drop(slot.take());
-    let player = Player::start(device.device.clone(), track, &opts).map_err(err)?;
+    let player = Player::start(device, track, &opts).map_err(err)?;
     let signal = SignalDto::from(&player.path);
     *slot = Some(player);
     Ok(signal)
@@ -341,7 +353,7 @@ fn start(state: &AppState, device: &DeviceInfo, track: Arc<Track>, opts: PlayOpt
 /// How to carry a DSD file to this device. DoP only when the user switched it on for the
 /// device, the device can take it, we have exclusive access, and no EQ/crossfeed has to run
 /// (those need PCM). Returns the mode and, for a PCM fallback, the reason.
-fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: bool, dsp: &DspSettings) -> (DsdMode, Option<DsdNote>) {
+fn dsd_mode(path: &std::path::Path, device: &Output, exclusive: bool, dop: bool, dsp: &DspSettings) -> (DsdMode, Option<DsdNote>) {
     if !dop || !dsd::is_dsd_path(path) {
         return (DsdMode::Pcm, None);
     }
@@ -355,9 +367,9 @@ fn dsd_mode(path: &std::path::Path, device: &DeviceInfo, exclusive: bool, dop: b
         Some(DsdNote::Volume)
     } else if dsp.eq.is_some() || dsp.convolution.is_some() || dsp.crossfeed.is_some() {
         Some(DsdNote::Dsp)
-    } else if !device.device.supports_dop(rate) {
+    } else if !device.supports_dop(rate) {
         Some(DsdNote::Rate {
-            device: device.name.trim().to_string(),
+            device: device.name().trim().to_string(),
             khz: rate as f64 / 16_000.0,
             dsd: dsd::dsd_name(rate),
         })
@@ -520,8 +532,29 @@ struct ExpandedDto {
 }
 
 #[tauri::command(async)]
-fn list_devices() -> CmdResult<Vec<DeviceDto>> {
-    Ok(output::output_devices().map_err(err)?.iter().map(DeviceDto::from).collect())
+fn list_devices(search: Option<bool>) -> CmdResult<Vec<DeviceDto>> {
+    // Someone is looking at the list (or a network player is the chosen output): look for
+    // network players (again, at most every so often).
+    if search.unwrap_or(false) {
+        outputs::refresh();
+    }
+    Ok(outputs::outputs().map_err(err)?.iter().map(DeviceDto::from).collect())
+}
+
+/// A network player's own volume, 0…100 (None for other outputs and players without one).
+#[tauri::command(async)]
+fn output_volume(uid: String) -> Option<u32> {
+    match outputs::find(&uid).ok()?? {
+        Output::Renderer(r) if r.has_volume => r.volume().ok(),
+        _ => None,
+    }
+}
+
+#[tauri::command(async)]
+fn set_output_volume(uid: String, volume: u32) {
+    if let Ok(Some(Output::Renderer(r))) = outputs::find(&uid) {
+        let _ = r.set_volume(volume);
+    }
 }
 
 /// The processing for a playback on `device_uid`: the shared settings plus that output's EQ.
@@ -536,7 +569,7 @@ fn dsp_for(state: &AppState, device_uid: &str) -> DspSettings {
 /// Start `file` (already opened as `track`) and record it as what plays now.
 fn begin(
     state: &AppState,
-    device: &DeviceInfo,
+    device: &Output,
     file: PathBuf,
     track: Arc<Track>,
     exclusive: bool,
@@ -545,12 +578,12 @@ fn begin(
     dop: bool,
     dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
-    let dsp = dsp_for(state, &device.uid);
+    let dsp = dsp_for(state, device.uid());
     let opts = PlayOptions { exclusive, dsp, start_at, start_paused };
     let mut signal = start(state, device, track.clone(), opts)?;
     signal.dsd_note = dsd_note.clone();
-    let current = Current { track, path: file, device_uid: device.uid.clone(), exclusive, dop, dsd_note };
-    Ok(record_now(state, current, device.name.trim().to_string(), signal))
+    let current = Current { track, path: file, device_uid: device.uid().to_string(), exclusive, dop, dsd_note };
+    Ok(record_now(state, current, device.name().trim().to_string(), signal))
 }
 
 /// Make `current` what plays now: for the UI (a new `now_rev`) and the lock screen.
@@ -611,7 +644,7 @@ async fn play_file(
     let device = find_device(&device_uid)?;
     let file = PathBuf::from(&path);
     let dop = dop.unwrap_or(false);
-    let dsp = dsp_for(&state, &device.uid);
+    let dsp = dsp_for(&state, device.uid());
     let (mode, dsd_note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
     // Only the headers are parsed here; the decoder keeps filling RAM in the background
     // while playback starts. Still off the UI/IPC threads: opening may touch a slow disk.
@@ -660,7 +693,7 @@ fn play_queue_at(state: &AppState, i: usize) {
     let file = PathBuf::from(&path);
     let ahead = take_lined_up(state, i, &path);
     let result = find_device(&device_uid).and_then(|device| {
-        let dsp = dsp_for(state, &device.uid);
+        let dsp = dsp_for(state, device.uid());
         let (mode, note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
         // Opened ahead (and decoding already) — unless the settings changed how DSD goes out.
         let track = match ahead.filter(|t| t.is_dop() == (mode == DsdMode::Dop)) {
@@ -733,7 +766,7 @@ fn follow_queue(state: &AppState) {
             // Opening may take a moment (a stream): no locks held meanwhile.
             let file = PathBuf::from(&want.path);
             let Ok(device) = find_device(&want.device_uid) else { return };
-            let dsp = dsp_for(state, &device.uid);
+            let dsp = dsp_for(state, device.uid());
             let (mode, dsd_note) = dsd_mode(&file, &device, want.exclusive, want.dop, &dsp);
             let track = match open_for(&file, mode) {
                 Ok(t) => t,
@@ -888,7 +921,11 @@ pub(crate) fn jump(state: &AppState, delta: i64) {
 fn channel_test(state: State<'_, AppState>, device_uid: String) -> CmdResult<SignalDto> {
     let device = find_device(&device_uid)?;
     // Play at a rate the device already runs at, so the test itself switches nothing.
-    let rate = device.nominal_rate.round() as u32;
+    // (A network player has no rate of its own: 48 kHz, which every one plays.)
+    let rate = match device.nominal_rate().round() as u32 {
+        0 => 48_000,
+        r => r,
+    };
     // The test bypasses processing: crossfeed would blur exactly what it checks.
     let _one = state.play_lock.lock().unwrap();
     *state.current.lock().unwrap() = None;
@@ -1251,6 +1288,8 @@ pub fn run() {
             library::library_remove_folder,
             library::library_rescan,
             library::import_files,
+            output_volume,
+            set_output_volume,
             quality::quality_cached,
             quality::quality_check,
             playlists::playlists_list,

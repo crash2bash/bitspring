@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { deviceLabel, isAndroid, isIOS, khz, transportLabel, type Device } from "./api";
+  import { api, deviceLabel, isAndroid, isIOS, khz, transportLabel, type Device } from "./api";
   import { list, t } from "./i18n.svelte";
 
   let {
@@ -22,9 +22,36 @@
   let root: HTMLElement;
   let current = $derived(devices.find((d) => d.uid === selected));
 
+  let local = $derived(devices.filter((d) => !d.network));
+  let network = $derived(devices.filter((d) => d.network));
+
   function toggle() {
     open = !open;
     if (open) onrefresh();
+  }
+
+  // Network players answer a few seconds after a search: keep the list current while open.
+  $effect(() => {
+    if (!open || isIOS) return;
+    const timer = setInterval(onrefresh, 3000);
+    return () => clearInterval(timer);
+  });
+
+  // A network player's own volume, when it has one.
+  let volume = $state<number | null>(null);
+  $effect(() => {
+    if (!open || !current?.network) {
+      volume = null;
+      return;
+    }
+    api.outputVolume(current.uid).then((v) => (volume = v)).catch(() => (volume = null));
+  });
+  let volumeTimer: ReturnType<typeof setTimeout> | undefined;
+  function setVolume(v: number) {
+    volume = v;
+    const uid = current?.uid;
+    clearTimeout(volumeTimer);
+    if (uid) volumeTimer = setTimeout(() => api.setOutputVolume(uid, v), 120);
   }
 
   function choose(uid: string) {
@@ -57,30 +84,52 @@
   <button class="trigger" onclick={toggle} aria-expanded={open} aria-haspopup="dialog">
     <span class="dot" class:warn={current && !current.bitPerfectCapable}></span>
     <span class="name">{current ? deviceLabel(current.name) : t("dev.choose")}</span>
-    {#if current}<span class="rate num">{khz(current.nominalRate)} {t("unit.khz")}</span>{/if}
+    {#if current && current.nominalRate > 0}<span class="rate num">{khz(current.nominalRate)} {t("unit.khz")}</span>{/if}
     <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
   </button>
 
   {#if open}
     <div class="panel" role="dialog" aria-label={t("dev.dialog")}>
+      {#snippet item(d: Device)}
+        <li>
+          <button
+            class="device"
+            class:on={d.uid === selected}
+            role="option"
+            aria-selected={d.uid === selected}
+            onclick={() => choose(d.uid)}
+          >
+            <span class="d-name">{d.isDefault ? t("dev.default", { name: deviceLabel(d.name) }) : deviceLabel(d.name)}</span>
+            <span class="d-meta">{list([d.network ? d.model : transportLabel(d.transport), maxRate(d)])}{#if !d.bitPerfectCapable}<em>{t("list.sep")}{t("dev.noBitPerfect")}</em>{/if}</span>
+          </button>
+        </li>
+      {/snippet}
       <ul class="list" role="listbox" aria-label={t("dev.list")}>
-        {#each devices as d (d.uid)}
-          <li>
-            <button
-              class="device"
-              class:on={d.uid === selected}
-              role="option"
-              aria-selected={d.uid === selected}
-              onclick={() => choose(d.uid)}
-            >
-              <span class="d-name">{d.isDefault ? t("dev.default", { name: deviceLabel(d.name) }) : deviceLabel(d.name)}</span>
-              <span class="d-meta">{list([transportLabel(d.transport), maxRate(d)])}{#if !d.bitPerfectCapable}<em>{t("list.sep")}{t("dev.noBitPerfect")}</em>{/if}</span>
-            </button>
-          </li>
-        {/each}
+        {#each local as d (d.uid)}{@render item(d)}{/each}
       </ul>
+      {#if !isIOS}
+        <p class="group">{t("dev.network")}</p>
+        {#if network.length}
+          <ul class="list" role="listbox" aria-label={t("dev.network")}>
+            {#each network as d (d.uid)}{@render item(d)}{/each}
+          </ul>
+        {:else}
+          <p class="searching">{t("dev.networkSearching")}</p>
+        {/if}
+      {/if}
 
-      {#if isIOS}
+      {#if current?.network}
+        {#if volume !== null}
+          <label class="option volume">
+            <span>
+              <strong>{t("dev.volume")}</strong>
+              <input type="range" min="0" max="100" step="1" value={volume} oninput={(e) => setVolume(Number(e.currentTarget.value))} aria-label={t("dev.volume")} />
+            </span>
+            <span class="num">{volume}</span>
+          </label>
+        {/if}
+        <p class="note">{t("dev.networkHelp")}</p>
+      {:else if isIOS}
         <p class="note">{t("dev.iosNote")}</p>
       {:else}
       <label class="option">
@@ -205,6 +254,39 @@
     color: var(--violet);
   }
 
+  .group {
+    margin: 8px 0 0;
+    padding: 10px 14px 4px;
+    border-top: 1px solid var(--slate-600);
+    color: var(--mist);
+    font-size: var(--t-xs);
+    font-weight: 600;
+  }
+  .searching {
+    margin: 0;
+    padding: 4px 14px 10px;
+    color: var(--mist-dim);
+    font-size: var(--t-xs);
+    line-height: 1.4;
+  }
+  .volume {
+    align-items: center;
+    cursor: default;
+  }
+  .volume > span:first-child {
+    flex: 1;
+  }
+  .volume input[type="range"] {
+    width: 100%;
+    accent-color: var(--brass);
+    margin: 6px 0 0;
+  }
+  .volume .num {
+    min-width: 2.5ch;
+    text-align: end;
+    color: var(--mist);
+    font-variant-numeric: tabular-nums;
+  }
   .note {
     margin: 4px 0 0;
     padding: 10px 14px;

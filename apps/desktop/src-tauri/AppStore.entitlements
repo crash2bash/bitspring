@@ -8,9 +8,13 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<!-- WKWebView, which draws the whole interface, runs its content in helper processes that
-	     can't start in the sandbox without this: the window stays empty. The App Store build
-	     itself never connects anywhere (no streaming, no updates). -->
+	     can't start in the sandbox without this: the window stays empty. The app itself talks
+	     only to network players on the local network (UPnP: finding them, telling them what
+	     to play); no streaming services, no updates. -->
 	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Network players fetch the music from a small HTTP server in the app (net/http.rs). -->
+	<key>com.apple.security.network.server</key>
 	<true/>
 	<!-- Music folders picked in the open panel (read), and EQ presets and playlists saved
 	     through the save panel (write). -->

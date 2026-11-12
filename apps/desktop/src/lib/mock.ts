@@ -46,10 +46,13 @@ const mockChecks: Record<string, unknown> = {};
 
 let libFolders = ["/Users/me/Music"];
 
+let mockVolume = 35;
 const devices: Device[] = [
-  { uid: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256 },
-  { uid: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null },
-  { uid: "air", name: "Bluetooth Headphones", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null },
+  { uid: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, network: false, model: null },
+  { uid: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, network: false, model: null },
+  { uid: "air", name: "Bluetooth Headphones", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, network: false, model: null },
+  { uid: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "WiiM Pro Plus" },
+  { uid: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "Sonos Era 100" },
 ];
 
 let dsp: DspSettings = { upsampleKhz: null, crossfeed: null, convolution: null, headroom: true, restoreHighs: false };
@@ -164,6 +167,11 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
   switch (cmd) {
     case "list_devices":
       return devices as T;
+    case "output_volume":
+      return (mockVolume as unknown) as T;
+    case "set_output_volume":
+      mockVolume = Number(args.volume);
+      return undefined as T;
     case "system_locales":
       return [...navigator.languages] as T;
     case "library_status":

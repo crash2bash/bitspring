@@ -72,7 +72,7 @@
     // iOS may scale the samples by the system volume (unless the DAC takes the volume itself).
     if (signal.bitPerfect && status.systemVolume !== null && status.systemVolume < 0.999)
       return t("verdict.iosVolume");
-    if (signal.bitPerfect) return t("verdict.bitPerfect");
+    if (signal.bitPerfect) return t(signal.transport === "Network" ? "verdict.network" : "verdict.bitPerfect");
     const reasons = list([links.decode, links.toDac, links.out]);
     if (!reasons && signal.sourceLossy) return t("verdict.lossy");
     return sentences([

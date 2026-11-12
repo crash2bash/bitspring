@@ -15,6 +15,10 @@ export interface Device {
   bitPerfectCapable: boolean;
   /** Highest DSD the device could take as DoP (64, 128, 256…), if any. */
   maxDop: number | null;
+  /** A network player (UPnP/DLNA): streamed to over the network. */
+  network: boolean;
+  /** A network player's maker and model. */
+  model: string | null;
 }
 
 export interface Signal {
@@ -85,6 +89,8 @@ export type EngineError =
   | { code: "openFailed"; device: string; detail: string }
   | { code: "otherFormat"; device: string; khz: number }
   | { code: "copyFailed"; name: string; detail: string }
+  | { code: "rendererUnreachable" | "rendererSilent"; device: string }
+  | { code: "rendererRefused"; device: string; detail: string }
   /** No code: the failing part's own words (a corrupt file, an OS error). */
   | { code: "other"; message: string };
 
@@ -435,7 +441,11 @@ export interface QualityReport {
 }
 
 export const api = {
-  listDevices: () => call<Device[]>("list_devices"),
+  /** `search`: also look for network players (asks macOS for local network access once). */
+  listDevices: (search = false) => call<Device[]>("list_devices", { search }),
+  /** The network player's own volume (0…100), or null. */
+  outputVolume: (uid: string) => call<number | null>("output_volume", { uid }),
+  setOutputVolume: (uid: string, volume: number) => call<void>("set_output_volume", { uid, volume }),
   systemLocales: () => call<string[]>("system_locales"),
   setMenuLabels: (labels: Record<string, string>) => call<void>("set_menu_labels", { labels }),
   updateCheck: () => call<{ enabled: boolean; current: string; update: { version: string; notes: string | null; date: string | null } | null }>("update_check"),
@@ -583,7 +593,7 @@ const TRANSPORT_NAMES: Record<string, string> = {
   Thunderbolt: "Thunderbolt",
   AirPlay: "AirPlay",
 };
-const TRANSPORT_KEYS = new Set(["BuiltIn", "Aggregate", "Virtual"]);
+const TRANSPORT_KEYS = new Set(["BuiltIn", "Aggregate", "Virtual", "Network"]);
 
 /** "USB", "Built-in" … for a device's transport. */
 export function transportLabel(transport: string): string {
@@ -622,6 +632,11 @@ export function errorText(e: unknown): string {
         return t("error.openFailed", { device: deviceLabel(err.device), detail: err.detail });
       case "copyFailed":
         return t("error.copyFailed", { name: err.name, detail: err.detail });
+      case "rendererUnreachable":
+      case "rendererSilent":
+        return t(`error.${err.code}`, { device: err.device });
+      case "rendererRefused":
+        return t("error.rendererRefused", { device: err.device, detail: err.detail });
       case "audioSetup":
       case "outputFailed":
       case "profileUnreadable":

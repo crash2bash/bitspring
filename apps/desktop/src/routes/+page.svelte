@@ -103,10 +103,11 @@
 
   let deviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? "DAC");
 
-  async function refreshDevices() {
+  async function refreshDevices(search = selected.startsWith("upnp:")) {
     try {
-      devices = await api.listDevices();
-      if (!devices.some((d) => d.uid === selected)) {
+      devices = await api.listDevices(search);
+      // A network player answers a few seconds after start-up: don't give up on it.
+      if (!devices.some((d) => d.uid === selected) && !selected.startsWith("upnp:")) {
         selected = (devices.find((d) => d.isDefault) ?? devices[0])?.uid ?? "";
       }
     } catch (e) {
@@ -402,7 +403,7 @@
     </nav>
     <div class="controls">
       <Enhancers settings={dsp} {eqName} {ir} onchange={applyDsp} onopeneq={() => (screen = "eq")} />
-      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={refreshDevices} onchanneltest={channelTest} />
+      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} />
       <Settings />
     </div>
   </header>
