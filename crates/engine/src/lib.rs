@@ -15,6 +15,7 @@ pub mod player;
 pub mod playlist;
 pub mod quality;
 pub mod rate;
+pub mod smart;
 pub mod ring;
 pub mod store;
 pub mod tags;
