@@ -5,7 +5,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -195,47 +195,134 @@ pub fn server() -> Result<&'static Server> {
         .get_or_init(|| {
             let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).map_err(|e| e.to_string())?;
             let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-            std::thread::Builder::new()
-                .name("hifi-http".into())
-                .spawn(move || {
-                    // A player opens one or two connections at a time; anything far beyond
-                    // that isn't a player.
-                    // Open connections per peer address.
-                    static OPEN: Mutex<Option<HashMap<IpAddr, u64>>> = Mutex::new(None);
-                    let release = |ip: IpAddr| {
-                        let mut open = OPEN.lock().unwrap();
-                        if let Some(n) = open.get_or_insert_default().get_mut(&ip) {
-                            *n -= 1;
-                        }
-                    };
-                    for conn in listener.incoming().flatten() {
-                        let Ok(peer) = conn.peer_addr() else { continue };
-                        let ip = peer.ip();
-                        {
-                            let mut open = OPEN.lock().unwrap();
-                            let open = open.get_or_insert_default();
-                            open.retain(|_, n| *n > 0);
-                            if open.values().sum::<u64>() >= MAX_CONNECTIONS || open.get(&ip).copied().unwrap_or(0) >= MAX_PER_PEER {
-                                continue; // dropped: closes it
-                            }
-                            *open.entry(ip).or_insert(0) += 1;
-                        }
-                        let spawned = std::thread::Builder::new().name("hifi-http-conn".into()).spawn(move || {
-                            if let Ok(server) = server() {
-                                let _ = server.handle(conn);
-                            }
-                            release(ip);
-                        });
-                        if spawned.is_err() {
-                            release(ip);
-                        }
-                    }
-                })
-                .map_err(|e| e.to_string())?;
+            let stop = Arc::new(AtomicBool::new(false));
+            accept_loop(listener, "hifi-http", stop, |conn| {
+                if let Ok(server) = server() {
+                    let _ = server.handle(conn);
+                }
+            })
+            .map_err(|e| e.to_string())?;
             Ok(Server { port, resources: Mutex::new(HashMap::new()), next: AtomicU64::new(1) })
         })
         .as_ref()
         .map_err(|e| anyhow!("couldn't start the stream server: {e}"))
+}
+
+/// Accept connections on `listener` in a thread of its own, each handled by `handle` in a
+/// thread of its own, within the caps above (all connections, and per peer address). Ends
+/// when `stop` is set and a connection comes in (the caller connects once to wake it).
+pub fn accept_loop(listener: TcpListener, name: &str, stop: Arc<AtomicBool>, handle: impl Fn(TcpStream) + Send + Sync + 'static) -> std::io::Result<()> {
+    let handle = Arc::new(handle);
+    std::thread::Builder::new().name(name.into()).spawn(move || {
+        let open: Arc<Mutex<HashMap<IpAddr, u64>>> = Arc::default();
+        for conn in listener.incoming().flatten() {
+            if stop.load(Ordering::Acquire) {
+                break;
+            }
+            let Ok(peer) = conn.peer_addr() else { continue };
+            let ip = peer.ip();
+            {
+                let mut open = open.lock().unwrap();
+                open.retain(|_, n| *n > 0);
+                if open.values().sum::<u64>() >= MAX_CONNECTIONS || open.get(&ip).copied().unwrap_or(0) >= MAX_PER_PEER {
+                    continue; // dropped: closes it
+                }
+                *open.entry(ip).or_insert(0) += 1;
+            }
+            let (open2, handle) = (open.clone(), handle.clone());
+            let release = move || {
+                if let Some(n) = open2.lock().unwrap().get_mut(&ip) {
+                    *n -= 1;
+                }
+            };
+            let release2 = release.clone();
+            let spawned = std::thread::Builder::new().name("hifi-http-conn".into()).spawn(move || {
+                handle(conn);
+                release();
+            });
+            if spawned.is_err() {
+                release2();
+            }
+        }
+    })?;
+    Ok(())
+}
+
+/// One request, read within the head deadline: method, path (without query), query
+/// parameters, headers (lower-cased names) and a body of at most `max_body` bytes.
+pub struct Request {
+    pub method: String,
+    pub path: String,
+    pub query: HashMap<String, String>,
+    pub headers: HashMap<String, String>,
+    pub body: Vec<u8>,
+}
+
+pub fn read_request(conn: &TcpStream, max_body: usize) -> Result<Request> {
+    let until = Instant::now() + HEAD_TIME;
+    let mut reader = BufReader::new(Deadline { conn: conn.try_clone()?, until });
+    let (method, target, headers) = read_head(&mut reader)?;
+    let (path, q) = target.split_once('?').unwrap_or((&target, ""));
+    let query = q
+        .split('&')
+        .filter_map(|kv| kv.split_once('=').or(Some((kv, ""))))
+        .filter(|(k, _)| !k.is_empty())
+        .map(|(k, v)| (k.to_string(), percent_decode(v)))
+        .collect();
+    let len = headers.get("content-length").and_then(|n| n.parse::<usize>().ok()).unwrap_or(0);
+    if len > max_body {
+        bail!("request body too large");
+    }
+    let mut body = vec![0; len];
+    reader.read_exact(&mut body)?;
+    Ok(Request { method, path: path.to_string(), query, headers, body })
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = (b[i] == b'%' && i + 3 <= b.len())
+            .then(|| std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()))
+            .flatten();
+        match (hex, b[i]) {
+            (Some(v), _) => {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+            (None, b'+') => out.push(b' '),
+            (None, c) => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Write a whole response.
+pub fn respond(conn: &mut TcpStream, status: &str, content_type: &str, extra_headers: &[(&str, &str)], body: &[u8]) -> std::io::Result<()> {
+    let mut head = format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n", body.len());
+    for (k, v) in extra_headers {
+        head += &format!("{k}: {v}\r\n");
+    }
+    head += "\r\n";
+    conn.write_all(head.as_bytes())?;
+    conn.write_all(body)?;
+    conn.flush()
+}
+
+/// 128 random bits as hex, from the OS's random keys for hash maps.
+pub fn random_hex() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let n = N.fetch_add(1, Ordering::Relaxed);
+    let random = || {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(n);
+        h.finish()
+    };
+    format!("{:016x}{:016x}", random(), random())
 }
 
 impl Server {
@@ -244,16 +331,10 @@ impl Server {
     }
 
     fn name(&self, ext: &str) -> String {
-        // Whoever has the address can listen in: 128 random bits (from the OS's random keys
-        // for hash maps), so nobody else on the network can guess it.
-        use std::hash::{BuildHasher, Hasher};
-        let n = self.next.fetch_add(1, Ordering::Relaxed);
-        let random = || {
-            let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-            h.write_u64(n);
-            h.finish()
-        };
-        format!("/{:016x}{:016x}.{ext}", random(), random())
+        // Whoever has the address can listen in: 128 random bits, so nobody else on the
+        // network can guess it.
+        self.next.fetch_add(1, Ordering::Relaxed);
+        format!("/{}.{ext}", random_hex())
     }
 
     /// Serve `stream` under a new path (returned, e.g. "/7-1a2b3c4d.flac").
@@ -519,6 +600,11 @@ pub fn local_ip_for(peer: IpAddr) -> Result<IpAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_values_are_decoded() {
+        assert_eq!(percent_decode("a%20b+c%2F%zz"), "a b c/%zz");
+    }
 
     #[test]
     fn urls_resolve_like_a_browser() {
