@@ -156,10 +156,12 @@
     width: 380px;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
+    /* where a scroll bar takes room, take the same on the other side, so the content stays centred */
+    scrollbar-gutter: stable both-edges;
     z-index: 20;
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     padding: 6px 18px 14px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
   }
@@ -188,7 +190,7 @@
   }
   .seg button {
     padding: 6px 4px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     color: var(--mist);
     white-space: nowrap;
@@ -264,7 +266,7 @@
     position: relative;
     width: 30px;
     height: 18px;
-    border-radius: 9px;
+    border-radius: 999px;
     background: var(--slate-800);
     border: 1px solid var(--slate-500);
     transition: background 120ms ease, border-color 120ms ease;

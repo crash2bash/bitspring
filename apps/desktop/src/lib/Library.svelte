@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { api, artistLabel, errorText, coverUrl, entryFromTrack, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type QualityReport, type QualityVerdict, type LibraryGoto, type LibraryStatus, type StreamingStatus } from "./api";
   import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
@@ -206,6 +206,20 @@
   const same = (a: string | null | undefined, b: string | null | undefined) =>
     !!a && !!b && a.localeCompare(b, i18n.locale.tag, { sensitivity: "base" }) === 0;
 
+  /** Where the album grid was scrolled when an album opened: "Back" returns there. */
+  let gridScroll = 0;
+  async function enterAlbum(a: Album) {
+    gridScroll = body?.scrollTop ?? 0;
+    openAlbum = a;
+    await tick();
+    body?.scrollTo({ top: 0 });
+  }
+  async function leaveAlbum() {
+    openAlbum = null;
+    await tick();
+    body?.scrollTo({ top: gridScroll });
+  }
+
   function show(g: LibraryGoto) {
     query = "";
     // The playing file's own library entry knows its album; a file played from outside the
@@ -376,7 +390,7 @@
       </div>
     {:else if openAlbum}
       <div class="album">
-        <button class="back" onclick={() => (openAlbum = null)}>
+        <button class="back" onclick={leaveAlbum}>
           <svg width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M7 1L2 6l5 5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
           {t("lib.back")}
         </button>
@@ -491,7 +505,7 @@
         {#if shelf.length}
           <div class="grid">
             {#each shelf as a (a.id)}
-              <AlbumTile album={a} playing={a.id === currentAlbumId} onopen={(x) => (openAlbum = x)} />
+              <AlbumTile album={a} playing={a.id === currentAlbumId} onopen={enterAlbum} />
             {/each}
           </div>
         {:else}
@@ -526,7 +540,7 @@
   }
   .seg button {
     padding: 6px 12px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     color: var(--mist);
   }
@@ -553,7 +567,7 @@
     -webkit-user-select: text;
   }
   .search:focus {
-    outline: 2px solid var(--brass);
+    outline: 2px solid var(--porcelain);
     outline-offset: 0;
     border-color: transparent;
   }
@@ -571,11 +585,11 @@
     color: var(--porcelain);
     background: var(--slate-900);
     border: 1px solid var(--slate-600);
-    border-radius: 6px;
+    border-radius: var(--r-md);
     padding: 4px 6px;
   }
   .hires input {
-    accent-color: var(--brass);
+    accent-color: var(--porcelain);
   }
 
   .folders {
@@ -603,7 +617,7 @@
     z-index: 20;
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     padding: 14px 16px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
   }
@@ -735,7 +749,7 @@
   }
   .album-art {
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     overflow: hidden;
     display: grid;
     place-items: center;
@@ -768,7 +782,9 @@
     margin-top: 4px;
   }
   .artist-link:hover {
-    color: var(--brass);
+    color: var(--porcelain);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .facts {
     margin: 6px 0 0;
@@ -776,7 +792,7 @@
     font-size: var(--t-sm);
   }
   .facts.fmt.hi {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .album-actions {
     display: flex;
@@ -801,7 +817,7 @@
   }
   .q-badge.ok {
     padding: 2px 5px;
-    color: var(--brass);
+    color: var(--porcelain);
     border-color: transparent;
   }
   .q-badge.suspect {
@@ -817,8 +833,8 @@
   .primary {
     padding: 8px 16px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
   }
   .primary:hover {

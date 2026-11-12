@@ -107,9 +107,13 @@
         for (const c of [0, 1]) {
           // Instant attack, ~20 dB/s release — the usual peak-meter ballistics.
           level[c] = Math.max(peaks[c], level[c] - 0.8, FLOOR);
-          if (level[c] >= hold[c] || t - holdAt[c] > 1500) {
+          // The peak mark holds for 1.5 s, then sinks at ~10 dB/s until the level meets it:
+          // snapping straight down to the level made it jump about.
+          if (level[c] >= hold[c]) {
             hold[c] = level[c];
             holdAt[c] = t;
+          } else if (t - holdAt[c] > 1500) {
+            hold[c] = Math.max(level[c], hold[c] - 0.4);
           }
         }
       }
@@ -119,9 +123,18 @@
     return () => (alive = false);
   });
 
+  /** The one segment the held peak falls in (segment i spans (segDb(i) − step, segDb(i)]), or −1. */
+  function holdSegment(c: number) {
+    if (hold[c] <= FLOOR + 1) return -1;
+    return Math.min(SEGMENTS - 1, Math.max(0, Math.ceil(((hold[c] - FLOOR) * SEGMENTS) / -FLOOR) - 1));
+  }
+  let holdSeg = $derived([holdSegment(0), holdSegment(1)]);
+
   function segClass(i: number, c: number) {
     const db = segDb(i);
-    const lit = level[c] >= db - 0.01 || (Math.abs(hold[c] - db) < -FLOOR / SEGMENTS && hold[c] > FLOOR + 1);
+    // Within 2 dB of the hold used to light two neighbours whenever the peak sat between
+    // edges, so the mark flickered between one segment and two.
+    const lit = level[c] >= db - 0.01 || i === holdSeg[c];
     const zone = db > -1 ? "hot" : db > -12 ? "warm" : "cool";
     return `${zone}${lit ? " lit" : ""}`;
   }
@@ -227,7 +240,7 @@
     background:
       linear-gradient(180deg, rgba(232, 237, 234, 0.035), transparent 38%),
       var(--glass);
-    border-radius: 10px;
+    border-radius: var(--r-lg);
     padding: 18px 22px 16px;
     /* recessed into the faceplate */
     box-shadow:

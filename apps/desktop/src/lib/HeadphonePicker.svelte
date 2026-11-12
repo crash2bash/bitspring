@@ -304,7 +304,7 @@
     flex-direction: column;
     gap: 10px;
     padding: 18px 20px 14px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
     outline: none;
@@ -327,15 +327,15 @@
     color: var(--porcelain);
     background: var(--slate-900);
     border: 1px solid var(--slate-600);
-    border-radius: 8px;
+    border-radius: var(--r-md);
     padding: 10px 12px;
     user-select: text;
     -webkit-user-select: text;
   }
   .search:focus {
     outline: none;
-    border-color: var(--brass);
-    box-shadow: 0 0 0 3px var(--brass-glow);
+    border-color: var(--mist);
+    box-shadow: 0 0 0 3px rgba(232, 237, 234, 0.12);
   }
   .status {
     display: flex;
@@ -374,14 +374,14 @@
   }
   .list li.active button {
     background: var(--slate-600);
-    box-shadow: inset 2px 0 0 var(--brass);
+    box-shadow: inset 2px 0 0 var(--porcelain);
   }
   .name {
     min-width: 0;
   }
   mark {
     background: none;
-    color: var(--brass);
+    color: var(--porcelain);
     font-weight: 600;
   }
   .meta {
@@ -392,9 +392,9 @@
   .best {
     margin-left: 8px;
     padding: 1px 6px;
-    border-radius: 4px;
-    border: 1px solid var(--brass);
-    color: var(--brass);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--mist);
+    color: var(--porcelain);
     font-size: var(--t-xs);
   }
   .chosen {
@@ -412,7 +412,7 @@
     place-items: center;
     width: 30px;
     height: 30px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     border: 1px solid var(--slate-500);
     background: var(--slate-800);
     color: var(--porcelain);
@@ -435,7 +435,9 @@
     border: 0;
     padding: 0;
     background: none;
-    color: var(--brass);
+    color: var(--porcelain);
+    text-decoration: underline;
+    text-underline-offset: 3px;
     font: inherit;
     text-decoration: underline;
     cursor: pointer;
@@ -451,14 +453,14 @@
     font: inherit;
     font-size: var(--t-sm);
     padding: 6px 14px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     border: 1px solid var(--slate-500);
     background: none;
     color: var(--porcelain);
     cursor: pointer;
   }
   button:focus-visible {
-    outline: 2px solid var(--brass);
+    outline: 2px solid var(--porcelain);
     outline-offset: 2px;
   }
 </style>

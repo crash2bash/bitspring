@@ -142,7 +142,7 @@
     height: 26px;
     display: inline-grid;
     place-items: center;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     color: var(--mist);
   }
   .plus:hover {
@@ -155,10 +155,10 @@
     top: calc(100% + 4px);
     white-space: nowrap;
     font-size: var(--t-xs);
-    color: var(--brass);
+    color: var(--porcelain);
     background: var(--slate-900);
     padding: 3px 8px;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     z-index: 30;
   }
   .panel {
@@ -169,7 +169,7 @@
     z-index: 50;
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
-    border-radius: 10px;
+    border-radius: var(--r-lg);
     padding: 6px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
     font-size: var(--t-sm);
@@ -187,7 +187,7 @@
     justify-content: space-between;
     gap: 10px;
     padding: 7px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     text-align: start;
   }
   .panel li button:hover,
@@ -200,7 +200,7 @@
     white-space: nowrap;
   }
   .new {
-    color: var(--brass);
+    color: var(--porcelain);
     font-weight: 600;
   }
   .n {
@@ -212,7 +212,7 @@
   input {
     width: 100%;
     padding: 7px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     border: 1px solid var(--slate-500);
     background: var(--slate-900);
     color: var(--porcelain);
@@ -233,8 +233,8 @@
   .primary {
     padding: 6px 14px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
   }
   .err {

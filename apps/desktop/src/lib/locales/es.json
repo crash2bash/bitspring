@@ -12,6 +12,7 @@
 
   "nav.screens": "Pantallas",
   "nav.player": "Reproduciendo",
+  "tab.player": "Reproduciendo",
   "nav.library": "Biblioteca",
   "nav.queue": "Cola",
 
@@ -250,6 +251,9 @@
   "settings.label": "Ajustes",
   "settings.language": "Idioma",
   "settings.system": "Sistema ({name})",
+  "settings.look": "Aspecto",
+  "settings.lookClassic": "Clásico",
+  "settings.lookGlass": "Cristal",
   "remote.setting": "Mando en el móvil",
   "remote.help": "Explora la biblioteca y controla la reproducción desde un móvil o una tableta en la misma red: escanea el código con la cámara o abre la dirección en su navegador. Cualquiera con la dirección puede controlar la reproducción.",
   "remote.newAddress": "Nueva dirección",

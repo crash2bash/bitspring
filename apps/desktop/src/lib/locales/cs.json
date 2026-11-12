@@ -12,6 +12,7 @@
 
   "nav.screens": "Obrazovky",
   "nav.player": "Právě hraje",
+  "tab.player": "Právě hraje",
   "nav.library": "Knihovna",
   "nav.queue": "Fronta",
 
@@ -255,6 +256,9 @@
   "settings.label": "Nastavení",
   "settings.language": "Jazyk",
   "settings.system": "Podle systému ({name})",
+  "settings.look": "Vzhled",
+  "settings.lookClassic": "Klasický",
+  "settings.lookGlass": "Sklo",
   "remote.setting": "Ovladač v telefonu",
   "remote.help": "Procházejte knihovnu a ovládejte přehrávání z telefonu nebo tabletu ve stejné síti: naskenujte kód fotoaparátem nebo otevřete adresu v jeho prohlížeči. Kdokoli s touto adresou může ovládat přehrávání.",
   "remote.newAddress": "Nová adresa",

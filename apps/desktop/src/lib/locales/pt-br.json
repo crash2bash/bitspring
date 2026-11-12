@@ -12,6 +12,7 @@
 
   "nav.screens": "Telas",
   "nav.player": "Tocando agora",
+  "tab.player": "Tocando agora",
   "nav.library": "Biblioteca",
   "nav.queue": "Fila",
 
@@ -250,6 +251,9 @@
   "settings.label": "Configurações",
   "settings.language": "Idioma",
   "settings.system": "Sistema ({name})",
+  "settings.look": "Aparência",
+  "settings.lookClassic": "Clássica",
+  "settings.lookGlass": "Vidro",
   "remote.setting": "Controle pelo celular",
   "remote.help": "Navegue pela biblioteca e controle a reprodução de um celular ou tablet na mesma rede: aponte a câmera para o código ou abra o endereço no navegador dele. Qualquer pessoa com o endereço pode controlar a reprodução.",
   "remote.newAddress": "Novo endereço",

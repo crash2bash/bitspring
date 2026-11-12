@@ -12,6 +12,7 @@
 
   "nav.screens": "Écrans",
   "nav.player": "À l’écoute",
+  "tab.player": "À l’écoute",
   "nav.library": "Bibliothèque",
   "nav.queue": "File d’attente",
 
@@ -250,6 +251,9 @@
   "settings.label": "Réglages",
   "settings.language": "Langue",
   "settings.system": "Système ({name})",
+  "settings.look": "Apparence",
+  "settings.lookClassic": "Classique",
+  "settings.lookGlass": "Verre",
   "remote.setting": "Télécommande sur téléphone",
   "remote.help": "Parcourez la bibliothèque et pilotez la lecture depuis un téléphone ou une tablette sur le même réseau : scannez le code avec l’appareil photo ou ouvrez l’adresse dans son navigateur. Toute personne ayant l’adresse peut piloter la lecture.",
   "remote.newAddress": "Nouvelle adresse",

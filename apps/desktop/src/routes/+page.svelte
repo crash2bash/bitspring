@@ -14,6 +14,8 @@
   import Equalizer from "$lib/Equalizer.svelte";
   import UpdateNotice from "$lib/UpdateNotice.svelte";
   import { startUpdateChecks } from "$lib/updates.svelte";
+  import { look } from "$lib/look.svelte";
+  import { fade } from "svelte/transition";
 
   // --- persisted preferences (per machine) ---
   function load<T>(key: string, fallback: T): T {
@@ -100,6 +102,45 @@
     phone?.addEventListener("change", fit);
     return () => phone?.removeEventListener("change", fit);
   });
+
+  /** The glass backdrop glows with the signal's colour: brass untouched, violet processed. */
+  let signalState = $derived(!now || testing ? null : now.signal.bitPerfect ? "bp" : "dsp");
+  /** How much the glass backdrop darkens the cover: more over a bright one, so text keeps its contrast. */
+  let coverVeil = $state(0.3);
+  $effect(() => {
+    const src = look.value === "glass" && !testing ? now?.cover : null;
+    if (!src) return;
+    let alive = true;
+    coverLuminance(src).then((l) => {
+      if (alive && l !== null) coverVeil = Math.min(0.62, 0.22 + l * 0.6);
+    });
+    return () => {
+      alive = false;
+    };
+  });
+  /** Mean relative luminance (0–1) of an image, from a 16×16 thumbnail; null if it can't be read. */
+  function coverLuminance(src: string): Promise<number | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement("canvas");
+          c.width = c.height = 16;
+          const g = c.getContext("2d", { willReadFrequently: true })!;
+          g.drawImage(img, 0, 0, 16, 16);
+          const px = g.getImageData(0, 0, 16, 16).data;
+          const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          let sum = 0;
+          for (let i = 0; i < px.length; i += 4) sum += 0.2126 * lin(px[i]) + 0.7152 * lin(px[i + 1]) + 0.0722 * lin(px[i + 2]);
+          resolve(sum / (px.length / 4));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
 
   let deviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? "DAC");
 
@@ -404,7 +445,16 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="app" class:drag-over={dragOver}>
+{#if look.value === "glass"}
+  <!-- The glass look's backdrop: the playing album's cover, blurred down to its colours. -->
+  <div class="ambient" class:bp={signalState === "bp"} class:dsp={signalState === "dsp"} style={`--veil: ${coverVeil}`} aria-hidden="true">
+    {#if now?.cover && !testing}
+      {#key now.cover}<img src={now.cover} alt="" transition:fade={{ duration: 900 }} />{/key}
+    {/if}
+  </div>
+{/if}
+
+<div class="app" class:drag-over={dragOver} class:sig-bp={signalState === "bp"} class:sig-dsp={signalState === "dsp"}>
   <header data-tauri-drag-region class:mac={isMac} class:chrome-right={isMac && i18n.system.dir === "rtl"}>
     <span class="wordmark" data-tauri-drag-region>BitSpring</span>
     <nav class="tabs" aria-label={t("nav.screens")}>
@@ -562,25 +612,25 @@
   <nav class="tabbar" aria-label={t("nav.screens")}>
     <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6" /><circle cx="11" cy="11" r="2.2" fill="currentColor" /></svg>
-      {t("nav.player")}
+      <span class="tl">{t("tab.player")}</span>
     </button>
     <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="3" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><rect x="12" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
-      {t("nav.library")}
+      <span class="tl">{t("nav.library")}</span>
     </button>
     {#if streaming?.available}
       <button class:sel={screen === "streaming"} aria-current={screen === "streaming" ? "page" : undefined} onclick={() => (screen = "streaming")}>
         <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 13a8 8 0 0 1 16 0M6.5 13a4.5 4.5 0 0 1 9 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><circle cx="11" cy="14.5" r="1.8" fill="currentColor" /></svg>
-        {t("nav.streaming")}
+        <span class="tl">{t("nav.streaming")}</span>
       </button>
     {/if}
     <button class:sel={screen === "eq"} aria-current={screen === "eq" ? "page" : undefined} onclick={() => (screen = "eq")}>
-      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M5 3v16M11 3v16M17 3v16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><rect x="2.5" y="12" width="5" height="3" rx="1.5" fill="var(--slate-900)" stroke="currentColor" stroke-width="1.6" /><rect x="8.5" y="6" width="5" height="3" rx="1.5" fill="var(--slate-900)" stroke="currentColor" stroke-width="1.6" /><rect x="14.5" y="10" width="5" height="3" rx="1.5" fill="var(--slate-900)" stroke="currentColor" stroke-width="1.6" /></svg>
-      {t("nav.eq")}
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M5 3v16M11 3v16M17 3v16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><rect x="2.5" y="12" width="5" height="3" rx="1.5" fill="var(--ink)" stroke="currentColor" stroke-width="1.6" /><rect x="8.5" y="6" width="5" height="3" rx="1.5" fill="var(--ink)" stroke="currentColor" stroke-width="1.6" /><rect x="14.5" y="10" width="5" height="3" rx="1.5" fill="var(--ink)" stroke="currentColor" stroke-width="1.6" /></svg>
+      <span class="tl">{t("nav.eq")}</span>
     </button>
     <button class:sel={screen === "queue"} aria-current={screen === "queue" ? "page" : undefined} onclick={() => (screen = "queue")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 5h16M3 11h16M3 17h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-      {t("nav.queue")}{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
+      <span class="tl">{t("nav.queue")}</span>{#if queue.length}<span class="badge num">{queue.length}</span>{/if}
     </button>
   </nav>
 
@@ -639,7 +689,7 @@
   }
   .tabs button {
     padding: 6px 12px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     color: var(--mist);
   }
@@ -693,7 +743,7 @@
   .mini-art {
     width: 40px;
     height: 40px;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     overflow: hidden;
     flex: none;
     background:
@@ -728,10 +778,12 @@
     color: var(--mist);
   }
   .mini-text button:hover {
-    color: var(--brass);
+    color: var(--porcelain);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .mini-art:hover {
-    outline: 1px solid var(--brass);
+    outline: 1px solid var(--mist);
     outline-offset: 1px;
   }
   .mini-sig {
@@ -768,8 +820,8 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    border: 1.5px solid var(--brass);
-    color: var(--brass) !important;
+    border: 1.5px solid var(--live);
+    color: var(--live) !important;
   }
 
   .controls {
@@ -845,7 +897,7 @@
     flex: none;
   }
   .current .q-n {
-    color: var(--brass);
+    color: var(--live);
   }
   .q-name {
     white-space: nowrap;
@@ -924,7 +976,7 @@
   }
   .cover {
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     overflow: hidden;
     background:
       repeating-linear-gradient(90deg, rgba(232, 237, 234, 0.05) 0 2px, transparent 2px 8px),
@@ -939,7 +991,7 @@
     cursor: pointer;
   }
   button.cover:hover {
-    outline: 1px solid var(--brass);
+    outline: 1px solid var(--mist);
     outline-offset: 2px;
   }
   .cover img {
@@ -954,7 +1006,7 @@
     color: var(--slate-500);
   }
   .cover.test .cover-initial {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .np-info {
     min-width: 0;
@@ -983,7 +1035,9 @@
     color: inherit;
   }
   .link:hover {
-    color: var(--brass);
+    color: var(--porcelain);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .album {
     margin: 2px 0 0;
@@ -994,8 +1048,8 @@
     margin-top: 14px;
     padding: 9px 16px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
   }
   .primary:hover {
@@ -1012,7 +1066,7 @@
   .key {
     width: 52px;
     height: 38px;
-    border-radius: 8px;
+    border-radius: var(--r-md);
     display: grid;
     place-items: center;
     color: var(--porcelain);
@@ -1038,8 +1092,8 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    color: var(--brass);
-    border: 2px solid var(--brass);
+    color: var(--live);
+    border: 2px solid var(--live);
     background: radial-gradient(circle at 50% 35%, #22343b, var(--slate-800));
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
   }
@@ -1055,8 +1109,8 @@
   .drop-hint {
     position: fixed;
     inset: 8px;
-    border: 2px dashed var(--brass);
-    border-radius: 14px;
+    border: 2px dashed var(--porcelain);
+    border-radius: var(--r-lg);
     background: rgba(18, 29, 35, 0.82);
     display: grid;
     place-items: center;
@@ -1067,7 +1121,7 @@
     font-family: var(--font-display);
     font-size: var(--t-xl);
     font-weight: 600;
-    color: var(--brass);
+    color: var(--porcelain);
   }
 
   /* touch screens have no hover to reveal controls */
@@ -1150,7 +1204,11 @@
     }
     .tabbar button {
       position: relative;
-      flex: 1;
+      /* widths follow the labels ("Now Playing" needs more than "Queue"); a label that still
+         doesn't fit (long translations on the narrowest phones) ends in an ellipsis */
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-inline: 3px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1160,7 +1218,13 @@
       color: var(--mist);
     }
     .tabbar button.sel {
-      color: var(--brass);
+      color: var(--porcelain);
+    }
+    .tl {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .badge {
       position: absolute;
@@ -1168,7 +1232,7 @@
       inset-inline-start: calc(50% + 8px);
       min-width: 18px;
       padding: 0 5px;
-      border-radius: 9px;
+      border-radius: 999px;
       background: var(--slate-600);
       color: var(--porcelain);
       font-size: 11px;

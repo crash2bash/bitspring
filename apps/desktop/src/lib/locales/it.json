@@ -12,6 +12,7 @@
 
   "nav.screens": "Schermate",
   "nav.player": "In riproduzione",
+  "tab.player": "In riproduzione",
   "nav.library": "Libreria",
   "nav.queue": "Coda",
 
@@ -250,6 +251,9 @@
   "settings.label": "Impostazioni",
   "settings.language": "Lingua",
   "settings.system": "Sistema ({name})",
+  "settings.look": "Aspetto",
+  "settings.lookClassic": "Classico",
+  "settings.lookGlass": "Vetro",
   "remote.setting": "Telecomando sul telefono",
   "remote.help": "Sfoglia la libreria e controlla la riproduzione da un telefono o tablet sulla stessa rete: inquadra il codice con la fotocamera o apri l'indirizzo nel suo browser. Chiunque abbia l'indirizzo può controllare la riproduzione.",
   "remote.newAddress": "Nuovo indirizzo",
