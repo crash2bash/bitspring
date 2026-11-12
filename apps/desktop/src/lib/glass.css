@@ -180,7 +180,8 @@ html[data-look="glass"] .app > .queue {
   border-radius: var(--r-glass);
   background: rgba(14, 20, 26, 0.24);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  overflow: hidden;
+  /* no overflow clipping: the lists scroll inside their own boxes, and the menus that open
+     from these panels (New preset, Import) must be free to reach past the panel's edge */
 }
 html[data-look="glass"][dir="rtl"] .app > .queue {
   margin: 0 10px 10px 0;
@@ -205,7 +206,8 @@ html[data-look="glass"] .equalizer > .presets {
   border-radius: var(--r-glass);
   background: rgba(14, 20, 26, 0.24);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  overflow: hidden;
+  /* no overflow clipping: the lists scroll inside their own boxes, and the menus that open
+     from these panels (New preset, Import) must be free to reach past the panel's edge */
 }
 html[data-look="glass"][dir="rtl"] .equalizer > .presets {
   margin: 0 10px 10px 0;
