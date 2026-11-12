@@ -12,6 +12,7 @@
 
   "nav.screens": "화면",
   "nav.player": "지금 재생 중",
+  "tab.player": "지금 재생 중",
   "nav.library": "보관함",
   "nav.queue": "재생 대기열",
 
@@ -250,6 +251,9 @@
   "settings.label": "설정",
   "settings.language": "언어",
   "settings.system": "시스템 설정({name})",
+  "settings.look": "모양",
+  "settings.lookClassic": "클래식",
+  "settings.lookGlass": "유리",
   "remote.setting": "휴대폰 리모컨",
   "remote.help": "같은 네트워크의 휴대폰이나 태블릿에서 라이브러리를 보고 재생을 제어하세요. 카메라로 코드를 스캔하거나 브라우저에서 주소를 여세요. 주소를 아는 사람은 누구나 재생을 제어할 수 있습니다.",
   "remote.newAddress": "새 주소",

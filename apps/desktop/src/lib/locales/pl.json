@@ -12,6 +12,7 @@
 
   "nav.screens": "Ekrany",
   "nav.player": "Teraz odtwarzane",
+  "tab.player": "Teraz odtwarzane",
   "nav.library": "Biblioteka",
   "nav.queue": "Kolejka",
 
@@ -255,6 +256,9 @@
   "settings.label": "Ustawienia",
   "settings.language": "Język",
   "settings.system": "Systemowy ({name})",
+  "settings.look": "Wygląd",
+  "settings.lookClassic": "Klasyczny",
+  "settings.lookGlass": "Szkło",
   "remote.setting": "Pilot w telefonie",
   "remote.help": "Przeglądaj bibliotekę i steruj odtwarzaniem z telefonu lub tabletu w tej samej sieci: zeskanuj kod aparatem albo otwórz adres w jego przeglądarce. Każdy, kto ma ten adres, może sterować odtwarzaniem.",
   "remote.newAddress": "Nowy adres",

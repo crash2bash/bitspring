@@ -12,6 +12,7 @@
 
   "nav.screens": "Näkymät",
   "nav.player": "Nyt soi",
+  "tab.player": "Nyt soi",
   "nav.library": "Kirjasto",
   "nav.queue": "Jono",
 
@@ -250,6 +251,9 @@
   "settings.label": "Asetukset",
   "settings.language": "Kieli",
   "settings.system": "Järjestelmä ({name})",
+  "settings.look": "Ulkoasu",
+  "settings.lookClassic": "Klassinen",
+  "settings.lookGlass": "Lasi",
   "remote.setting": "Puhelin kaukosäätimenä",
   "remote.help": "Selaa kirjastoa ja ohjaa toistoa samassa verkossa olevalla puhelimella tai tabletilla: skannaa koodi kameralla tai avaa osoite sen selaimessa. Kuka tahansa, jolla on osoite, voi ohjata toistoa.",
   "remote.newAddress": "Uusi osoite",

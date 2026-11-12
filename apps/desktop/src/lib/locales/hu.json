@@ -12,6 +12,7 @@
 
   "nav.screens": "Képernyők",
   "nav.player": "Most szól",
+  "tab.player": "Most szól",
   "nav.library": "Könyvtár",
   "nav.queue": "Lejátszási sor",
 
@@ -250,6 +251,9 @@
   "settings.label": "Beállítások",
   "settings.language": "Nyelv",
   "settings.system": "Rendszer szerint ({name})",
+  "settings.look": "Megjelenés",
+  "settings.lookClassic": "Klasszikus",
+  "settings.lookGlass": "Üveg",
   "remote.setting": "Távirányító a telefonon",
   "remote.help": "Böngészd a könyvtárat és irányítsd a lejátszást egy ugyanazon a hálózaton lévő telefonról vagy táblagépről: olvasd be a kódot a kamerával, vagy nyisd meg a címet a böngészőjében. Bárki, akinél megvan a cím, irányíthatja a lejátszást.",
   "remote.newAddress": "Új cím",

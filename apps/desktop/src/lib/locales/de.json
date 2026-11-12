@@ -12,6 +12,7 @@
 
   "nav.screens": "Ansichten",
   "nav.player": "Jetzt läuft",
+  "tab.player": "Jetzt läuft",
   "nav.library": "Mediathek",
   "nav.queue": "Warteschlange",
 
@@ -250,6 +251,9 @@
   "settings.label": "Einstellungen",
   "settings.language": "Sprache",
   "settings.system": "System ({name})",
+  "settings.look": "Erscheinungsbild",
+  "settings.lookClassic": "Klassisch",
+  "settings.lookGlass": "Glas",
   "remote.setting": "Fernbedienung per Handy",
   "remote.help": "Durchsuche die Mediathek und steuere die Wiedergabe von einem Handy oder Tablet im selben Netzwerk: Scanne den Code mit der Kamera oder öffne die Adresse im Browser. Wer die Adresse hat, kann die Wiedergabe steuern.",
   "remote.newAddress": "Neue Adresse",

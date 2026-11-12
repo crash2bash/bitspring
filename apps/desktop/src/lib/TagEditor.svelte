@@ -135,7 +135,7 @@
     flex-direction: column;
     gap: 14px;
     padding: 18px 20px 16px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: var(--slate-800);
     border: 1px solid var(--slate-500);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
@@ -177,7 +177,7 @@
     min-width: 0;
   }
   input:focus {
-    border-color: var(--brass);
+    border-color: var(--mist);
     outline: none;
   }
   input::placeholder {
@@ -233,8 +233,8 @@
     border: 1px solid var(--slate-500);
   }
   .primary {
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
   }
   button:disabled {
     opacity: 0.5;

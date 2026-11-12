@@ -54,7 +54,7 @@
     z-index: 40;
     width: 340px;
     padding: 14px 16px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
@@ -73,8 +73,8 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--brass);
-    box-shadow: 0 0 8px var(--brass-glow);
+    background: var(--porcelain);
+    box-shadow: 0 0 8px rgba(232, 237, 234, 0.35);
     flex: none;
   }
   .sub {
@@ -123,8 +123,8 @@
   .primary {
     padding: 7px 14px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
   }
   .ghost {
@@ -145,7 +145,7 @@
   .bar i {
     display: block;
     height: 100%;
-    background: var(--brass);
+    background: var(--porcelain);
     transition: width 200ms linear;
   }
   .bar i.unknown {

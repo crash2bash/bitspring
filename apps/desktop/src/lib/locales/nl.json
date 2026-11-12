@@ -12,6 +12,7 @@
 
   "nav.screens": "Schermen",
   "nav.player": "Speelt nu",
+  "tab.player": "Speelt nu",
   "nav.library": "Bibliotheek",
   "nav.queue": "Wachtrij",
 
@@ -250,6 +251,9 @@
   "settings.label": "Instellingen",
   "settings.language": "Taal",
   "settings.system": "Systeem ({name})",
+  "settings.look": "Weergave",
+  "settings.lookClassic": "Klassiek",
+  "settings.lookGlass": "Glas",
   "remote.setting": "Afstandsbediening op telefoon",
   "remote.help": "Blader door de bibliotheek en bedien het afspelen vanaf een telefoon of tablet op hetzelfde netwerk: scan de code met de camera of open het adres in de browser. Iedereen met het adres kan het afspelen bedienen.",
   "remote.newAddress": "Nieuw adres",

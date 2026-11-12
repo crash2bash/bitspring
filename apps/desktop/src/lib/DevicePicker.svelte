@@ -215,7 +215,7 @@
     z-index: 20;
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     padding: 8px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
   }
@@ -239,7 +239,7 @@
     background: var(--slate-600);
   }
   .device.on {
-    border-inline-start-color: var(--brass);
+    border-inline-start-color: var(--porcelain);
     background: var(--slate-600);
   }
   .d-name {
@@ -278,7 +278,7 @@
   }
   .volume input[type="range"] {
     width: 100%;
-    accent-color: var(--brass);
+    accent-color: var(--porcelain);
     margin: 6px 0 0;
   }
   .volume .num {
@@ -302,7 +302,7 @@
     cursor: pointer;
   }
   .option input {
-    accent-color: var(--brass);
+    accent-color: var(--porcelain);
     margin-top: 3px;
   }
   .option span,

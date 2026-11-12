@@ -12,6 +12,7 @@
 
   "nav.screens": "畫面",
   "nav.player": "正在播放",
+  "tab.player": "正在播放",
   "nav.library": "資料庫",
   "nav.queue": "播放佇列",
 
@@ -250,6 +251,9 @@
   "settings.label": "設定",
   "settings.language": "語言",
   "settings.system": "跟隨系統（{name}）",
+  "settings.look": "外觀",
+  "settings.lookClassic": "經典",
+  "settings.lookGlass": "玻璃",
   "remote.setting": "手機遙控",
   "remote.help": "在同一網路中的手機或平板上瀏覽音樂庫並控制播放：用相機掃描條碼，或在瀏覽器中開啟網址。任何擁有此網址的人都能控制播放。",
   "remote.newAddress": "新網址",

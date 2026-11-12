@@ -12,6 +12,7 @@
 
   "nav.screens": "الشاشات",
   "nav.player": "قيد التشغيل",
+  "tab.player": "قيد التشغيل",
   "nav.library": "المكتبة",
   "nav.queue": "قائمة الانتظار",
 
@@ -278,6 +279,9 @@
   "settings.label": "الإعدادات",
   "settings.language": "اللغة",
   "settings.system": "لغة النظام ({name})",
+  "settings.look": "المظهر",
+  "settings.lookClassic": "كلاسيكي",
+  "settings.lookGlass": "زجاج",
   "remote.setting": "التحكم من الهاتف",
   "remote.help": "تصفّح المكتبة وتحكّم في التشغيل من هاتف أو جهاز لوحي على الشبكة نفسها: امسح الرمز بالكاميرا أو افتح العنوان في متصفحه. يستطيع أي شخص لديه العنوان التحكم في التشغيل.",
   "remote.newAddress": "عنوان جديد",

@@ -12,6 +12,7 @@
 
   "nav.screens": "画面",
   "nav.player": "再生中",
+  "tab.player": "再生中",
   "nav.library": "ライブラリ",
   "nav.queue": "再生キュー",
 
@@ -250,6 +251,9 @@
   "settings.label": "設定",
   "settings.language": "言語",
   "settings.system": "システムに合わせる（{name}）",
+  "settings.look": "外観",
+  "settings.lookClassic": "クラシック",
+  "settings.lookGlass": "ガラス",
   "remote.setting": "スマホでリモコン",
   "remote.help": "同じネットワーク上のスマホやタブレットから、ライブラリを見て再生を操作できます。カメラでコードを読み取るか、ブラウザでアドレスを開いてください。アドレスを知っている人は誰でも再生を操作できます。",
   "remote.newAddress": "新しいアドレス",

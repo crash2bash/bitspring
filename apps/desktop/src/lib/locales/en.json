@@ -12,6 +12,7 @@
 
   "nav.screens": "Screens",
   "nav.player": "Now Playing",
+  "tab.player": "Now Playing",
   "nav.library": "Library",
   "nav.queue": "Queue",
 
@@ -250,6 +251,9 @@
   "settings.label": "Settings",
   "settings.language": "Language",
   "settings.system": "System ({name})",
+  "settings.look": "Look",
+  "settings.lookClassic": "Classic",
+  "settings.lookGlass": "Glass",
   "remote.setting": "Phone remote",
   "remote.help": "Browse the library and control playback from a phone or tablet on the same network: scan the code with its camera or open the address in its browser. Anyone with the address can control playback.",
   "remote.newAddress": "New address",
