@@ -11,7 +11,7 @@
 //! (INDEX 00) plays at the end of the track before, as on the CD and as other players do.
 //! Sheets that list one file per track (made next to an already split rip) change nothing.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -269,13 +269,20 @@ pub struct Image {
 /// name, or else by its name with another audio extension (a sheet written for the WAV that
 /// was compressed to FLAC afterwards). Only files a sheet gives two or more tracks count; when
 /// two sheets describe the same file (EAC's plain and ReplayGain ones), the first one wins.
+/// A name compared the way a person reads it: the same letters match however they are
+/// encoded (a sheet's "й" is one code point, a macOS file name's often two).
+fn same_name(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    s.nfc().collect::<String>()
+}
+
 pub fn images(files: &[PathBuf], sheets: &[PathBuf]) -> Vec<Image> {
-    let present: HashSet<&Path> = files.iter().map(PathBuf::as_path).collect();
+    let present: HashMap<String, &PathBuf> = files.iter().map(|f| (same_name(&f.to_string_lossy()), f)).collect();
     // dir → (lowercased stem → audio files)
     let mut by_stem: HashMap<(&Path, String), Vec<&PathBuf>> = HashMap::new();
     for f in files {
         if let (Some(dir), Some(stem)) = (f.parent(), f.file_stem()) {
-            by_stem.entry((dir, stem.to_string_lossy().to_lowercase())).or_default().push(f);
+            by_stem.entry((dir, same_name(&stem.to_string_lossy()).to_lowercase())).or_default().push(f);
         }
     }
     let mut out: Vec<Image> = Vec::new();
@@ -294,10 +301,10 @@ pub fn images(files: &[PathBuf], sheets: &[PathBuf]) -> Vec<Image> {
                 continue;
             }
             let named = dir.join(f.name.replace('\\', "/"));
-            let file = if present.contains(named.as_path()) {
-                Some(named)
+            let file = if let Some(p) = present.get(&same_name(&named.to_string_lossy())) {
+                Some((*p).clone())
             } else {
-                let stem = Path::new(&f.name.replace('\\', "/")).file_stem().map(|s| s.to_string_lossy().to_lowercase());
+                let stem = Path::new(&f.name.replace('\\', "/")).file_stem().map(|s| same_name(&s.to_string_lossy()).to_lowercase());
                 stem.and_then(|s| by_stem.get(&(dir, s))).and_then(|c| c.first()).map(|p| (*p).clone())
             };
             let Some(file) = file.filter(|f| !crate::dsd::is_dsd_path(f)) else { continue };
@@ -315,6 +322,20 @@ mod tests {
     use super::*;
 
     const EAC: &str = "REM GENRE Rock\r\nREM DATE 2001\r\nREM DISCID B30D6C0C\r\nPERFORMER \"Би-2\"\r\nTITLE \"Мяу Кисс Ми\"\r\nFILE \"Image_CD.flac\" WAVE\r\n  TRACK 01 AUDIO\r\n    TITLE \"Мяу Кисс Ми\"\r\n    PERFORMER \"Би-2\"\r\n    INDEX 01 00:00:00\r\n  TRACK 02 AUDIO\r\n    TITLE \"Моя любовь\"\r\n    INDEX 01 03:50:16\r\n  TRACK 03 AUDIO\r\n    TITLE \"Ёлочный сок\"\r\n    INDEX 00 14:06:62\r\n    INDEX 01 14:07:62\r\n";
+
+    #[test]
+    fn a_sheet_finds_its_file_however_the_name_is_encoded() {
+        let dir = std::env::temp_dir().join(format!("bitspring-cue-nfd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // The file as macOS often names it: "й" as "и" + combining breve.
+        let file = dir.join("Гудбаи\u{306}.wv");
+        let sheet = dir.join("LP.cue");
+        std::fs::write(&sheet, "FILE \"Гудбай.wv\" WAVE\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n  TRACK 02 AUDIO\n    INDEX 01 01:00:00\n").unwrap();
+        let found = images(std::slice::from_ref(&file), &[sheet]);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].file, file);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn reads_an_eac_sheet_in_windows_1251() {

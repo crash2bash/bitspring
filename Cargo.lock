@@ -98,6 +98,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "ape-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95097ef8efebf7b1e1d638b77935cfce25576163614427b464efe256bb8b2ec1"
+dependencies = [
+ "crc32fast",
+ "md-5 0.10.6",
+]
+
+[[package]]
 name = "atk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1522,6 +1532,7 @@ name = "hifi-engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ape-decoder",
  "coreaudio-sys",
  "encoding_rs",
  "jni 0.21.1",
@@ -1532,13 +1543,17 @@ dependencies = [
  "objc2",
  "objc2-avf-audio",
  "objc2-foundation",
+ "oxideav-tta",
  "roxmltree",
  "rustfft",
  "rustls",
+ "scarletbook",
  "serde",
  "serde_json",
  "symphonia",
+ "unicode-normalization",
  "wasapi",
+ "wavicle",
  "windows",
 ]
 
@@ -1551,7 +1566,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hifi-engine",
  "log",
- "md-5",
+ "md-5 0.11.0",
  "regex",
  "roxmltree",
  "serde",
@@ -2215,6 +2230,16 @@ dependencies = [
 
 [[package]]
 name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest 0.10.7",
+]
+
+[[package]]
+name = "md-5"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
@@ -2705,6 +2730,12 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "oxideav-tta"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8319d48ca2eb5529ed2187b04ebfe09fabbd1850dbc9547c634225398cf43b5"
 
 [[package]]
 name = "pango"
@@ -3297,6 +3328,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "scarletbook"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20ebe6e6dbd2036f446fbffd44b4d091e7e617b055d0d2051f0f68f350233706"
+dependencies = [
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4797,6 +4837,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
+name = "unicode-normalization"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "unicode-segmentation"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5047,6 +5096,12 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
+
+[[package]]
+name = "wavicle"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e312eaf22b4a7e5b7bf038edb3a7e4703c7b86dfabaea49d17af85e55eb76ab"
 
 [[package]]
 name = "web-sys"

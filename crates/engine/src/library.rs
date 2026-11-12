@@ -20,7 +20,7 @@ use symphonia::core::meta::MetadataOptions;
 
 use crate::decode::read_meta;
 
-pub const AUDIO_EXTENSIONS: [&str; 12] = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff"];
+pub const AUDIO_EXTENSIONS: [&str; 16] = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff", "ape", "wv", "tta", "iso"];
 
 pub fn is_audio(p: &Path) -> bool {
     p.extension()
@@ -75,6 +75,32 @@ pub fn scan_file(path: &Path) -> Result<(TrackInfo, Option<Cover>)> {
     let (size, mtime) = file_stamp(path).ok_or_else(|| anyhow!("cannot stat {}", path.display()))?;
     if crate::dsd::is_dsd_path(path) {
         return scan_dsd(path, size, mtime);
+    }
+    if crate::lossless::is_lossless_extra(path) {
+        let i = crate::lossless::probe(path)?;
+        let title = i.meta.title.clone().unwrap_or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+        let m = i.meta.clone();
+        let info = TrackInfo {
+            path: path.to_string_lossy().into_owned(),
+            title,
+            artist: m.artist,
+            album_artist: m.album_artist,
+            album: m.album,
+            genre: m.genre,
+            year: m.year,
+            track_number: m.track_number,
+            disc_number: m.disc_number,
+            duration: i.duration_secs(),
+            sample_rate: i.sample_rate,
+            bits: Some(i.bits),
+            channels: i.channels,
+            format: i.kind.name().to_string(),
+            lossless: true,
+            has_cover: m.cover.is_some(),
+            size,
+            mtime,
+        };
+        return Ok((info, i.meta.cover));
     }
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
@@ -306,6 +332,30 @@ pub fn scan(
                     on_progress(done.fetch_add(1, Ordering::Relaxed) + 1, total);
                     continue;
                 };
+                // A SACD image: its tracks (all again only when the image has changed).
+                if crate::sacd::is_iso(path) {
+                    let key = path.to_string_lossy();
+                    let stamp = file_stamp(path);
+                    let before: Vec<TrackInfo> = previous
+                        .iter()
+                        .filter(|t| crate::sacd::split(&t.path).0 == key && Some((t.size, t.mtime)) == stamp)
+                        .cloned()
+                        .collect();
+                    let entry = if !before.is_empty() {
+                        before
+                    } else {
+                        match stamp.ok_or_else(|| anyhow!("cannot stat")).and_then(|(size, mtime)| crate::sacd::scan(path, size, mtime)) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                failed.lock().unwrap().push((key.into_owned(), format!("{e:#}")));
+                                Vec::new()
+                            }
+                        }
+                    };
+                    results.lock().unwrap()[i] = entry;
+                    on_progress(done.fetch_add(1, Ordering::Relaxed) + 1, total);
+                    continue;
+                }
                 let key = path.to_string_lossy();
                 let reused = known
                     .get(key.as_ref())

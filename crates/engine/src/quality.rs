@@ -349,7 +349,7 @@ fn correlation(a: &[f32], b: &[f32]) -> f32 {
 /// whatever speed the disk and CPU allow: a few seconds for a long hi-res track.
 pub fn analyze(path: &Path) -> Result<Report> {
     let p = path.to_string_lossy();
-    let file = crate::cue::split(&p).0;
+    let file = crate::source_file(&p);
     if crate::dsd::is_dsd_path(Path::new(file)) {
         let t = crate::open_file(path, crate::dsd::DsdMode::Pcm)?;
         return Ok(Report {

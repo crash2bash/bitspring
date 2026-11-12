@@ -56,6 +56,7 @@ pub fn is_dsd_path(p: &Path) -> bool {
     p.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("dsf") || e.eq_ignore_ascii_case("dff"))
+        || p.to_str().is_some_and(|s| crate::sacd::split(s).1.is_some())
 }
 
 /// "DSD64", "DSD128", … (by multiple of 44.1 kHz; the 48k family gets its own multiple).
@@ -75,6 +76,8 @@ enum Layout {
     Dsf { block: usize, lsb_first: bool },
     /// One byte per channel, interleaved.
     Dff,
+    /// A track of a SACD image (see crate::sacd).
+    Sacd,
 }
 
 /// What the header says, before any audio is read.
@@ -126,6 +129,10 @@ fn id3_meta(tag: &[u8]) -> TrackMeta {
 
 /// Parse a DSF or DFF header (and its tags).
 pub fn probe(path: &Path) -> Result<DsdHeader> {
+    if let Some(s) = path.to_str().filter(|s| crate::sacd::split(s).1.is_some()) {
+        let t = crate::sacd::probe(s)?;
+        return Ok(DsdHeader { rate: t.rate, channels: t.channels, samples: t.samples, meta: t.meta, container: "SACD", layout: Layout::Sacd, data_start: 0, data_len: 0 });
+    }
     let mut f = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let file_len = f.metadata()?.len();
     let mut magic = [0u8; 4];
@@ -277,6 +284,7 @@ fn start_step(h: &DsdHeader) -> u64 {
     match h.layout {
         Layout::Dsf { block, .. } => block as u64,
         Layout::Dff => 4096,
+        Layout::Sacd => crate::sacd::FRAME_BYTES,
     }
 }
 
@@ -284,6 +292,9 @@ fn start_step(h: &DsdHeader) -> u64 {
 /// from byte `from` of each channel (a multiple of `start_step`). `sink` returns false to stop
 /// early.
 fn read_bitstream(path: &Path, h: &DsdHeader, from: u64, mut sink: impl FnMut(&[Vec<u8>]) -> bool) -> Result<()> {
+    if matches!(h.layout, Layout::Sacd) {
+        return crate::sacd::read_bitstream(&path.to_string_lossy(), from, sink);
+    }
     let mut f = File::open(path)?;
     let ch = h.channels;
     let per_channel = h.samples.div_ceil(8);
@@ -335,6 +346,7 @@ fn read_bitstream(path: &Path, h: &DsdHeader, from: u64, mut sink: impl FnMut(&[
                 }
             }
         }
+        Layout::Sacd => unreachable!("read above"),
     }
     Ok(())
 }

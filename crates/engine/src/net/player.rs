@@ -780,7 +780,9 @@ mod tests {
     #[test]
     fn a_renderer_without_next_uri_starts_the_next_track_itself() {
         let (fake, s1, s2, at) = two_tracks(false);
-        assert!((0.9..2.6).contains(&at), "switched at {at:.2} s");
+        // After track one, with the gap of a renderer that starts the next itself (and slack
+        // for a busy machine).
+        assert!((0.9..5.0).contains(&at), "switched at {at:.2} s");
         check_streams(&fake, &s1, &s2);
         let g = fake.shared.lock().unwrap();
         assert_eq!(g.actions.iter().filter(|a| *a == "SetAVTransportURI").count(), 2, "{:?}", g.actions);

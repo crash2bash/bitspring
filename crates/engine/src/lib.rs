@@ -9,12 +9,14 @@ pub mod dsp;
 pub mod error;
 pub mod fpu;
 pub mod library;
+pub mod lossless;
 pub mod net;
 pub mod output;
 pub mod player;
 pub mod playlist;
 pub mod quality;
 pub mod rate;
+pub mod sacd;
 pub mod smart;
 pub mod ring;
 pub mod store;
@@ -38,6 +40,12 @@ pub use symphonia::core::io::MediaSource;
 use std::path::Path;
 use std::sync::Arc;
 
+/// The file a library path reads: an image's, for a track of a CUE image
+/// (`…#cue:<start>-<end>`) or a SACD image (`…#sacd:<n>`).
+pub fn source_file(path: &str) -> &str {
+    sacd::split(cue::split(path).0).0
+}
+
 /// Open any supported file for playback: DSD files in the given mode, everything else through
 /// the PCM decoders. Returns as soon as the headers are read; the rest loads in the background.
 pub fn open_file(path: &Path, dsd: dsd::DsdMode) -> anyhow::Result<Arc<Track>> {
@@ -51,7 +59,16 @@ pub fn open_file_at(path: &Path, dsd: dsd::DsdMode, start_secs: f64) -> anyhow::
     if let Some((file, Some(range))) = path.to_str().map(cue::split) {
         let file = Path::new(file);
         let meta = cue::track_meta(file, range).unwrap_or_default();
+        if lossless::is_lossless_extra(file) {
+            return lossless::open_range_at(file, Some(range), start_secs, meta);
+        }
         return decode::open_range_at(file, Some(range), start_secs, meta);
     }
-    if dsd::is_dsd_path(path) { dsd::open_dsd_at(path, dsd, start_secs) } else { decode::open_track_at(path, start_secs) }
+    if dsd::is_dsd_path(path) {
+        dsd::open_dsd_at(path, dsd, start_secs)
+    } else if lossless::is_lossless_extra(path) {
+        lossless::open_at(path, start_secs)
+    } else {
+        decode::open_track_at(path, start_secs)
+    }
 }

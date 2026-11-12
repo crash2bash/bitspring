@@ -42,7 +42,7 @@ impl TagEdit {
 /// Formats whose tags we write. Not DSD (DSF/DFF tags are rare and lofty doesn't write
 /// them) and not the tracks of a CUE image (their names live in the sheet).
 pub fn can_edit(path: &str) -> bool {
-    if crate::cue::split(path).1.is_some() {
+    if crate::source_file(path) != path {
         return false;
     }
     let ext = Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
