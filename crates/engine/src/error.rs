@@ -102,6 +102,12 @@ pub enum UserError {
     UpdateFailed { detail: String },
     /// Android: the app may not install apps yet (Settings → Install unknown apps).
     InstallNotAllowed,
+    /// The network player `device` didn't answer.
+    RendererUnreachable { device: String },
+    /// The network player `device` refused a command (`detail`: its reason).
+    RendererRefused { device: String, detail: String },
+    /// The network player `device` was told to play but never fetched the stream.
+    RendererSilent { device: String },
     /// Anything else, in the words of whatever failed.
     Other { message: String },
 }
@@ -181,6 +187,9 @@ impl fmt::Display for UserError {
             StreamRestricted { service } => write!(f, "{service} doesn't offer this track in your country or plan"),
             StreamChanged { service } => write!(f, "{service} changed its player; this app needs an update"),
             ServiceUnreachable { service, detail } => write!(f, "couldn't reach {service}: {detail}"),
+            RendererUnreachable { device } => write!(f, "{device} doesn't answer: is it on and on this network?"),
+            RendererRefused { device, detail } => write!(f, "{device} refused to play: {detail}"),
+            RendererSilent { device } => write!(f, "{device} didn't start playing: it may not be able to play streams from this device"),
             Other { message } => f.write_str(message),
         }
     }

@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use hifi_engine::output::{self, Device, DeviceInfo, PlayOptions, Player};
+use hifi_engine::output::{self, Device, DeviceInfo, PlayOptions};
+use hifi_engine::player::{self as outputs, Output, Player};
 use hifi_engine::dsp::crossfeed::CrossfeedLevel;
 use hifi_engine::dsp::{DspSettings, Upsample};
 use hifi_engine::dsp::lossy::LossySettings;
@@ -67,7 +68,11 @@ enum Cmd {
 
 fn main() -> Result<()> {
     match Cli::parse().cmd {
-        Cmd::Devices => list_devices(),
+        Cmd::Devices => {
+            list_devices()?;
+            list_renderers();
+            Ok(())
+        }
         Cmd::Info { file } => info(file),
         Cmd::Play { files, device, shared, upsample, eq, crossfeed, headroom, restore_highs, dop } => {
             let dsp = DspSettings {
@@ -132,6 +137,7 @@ fn main() -> Result<()> {
 }
 
 fn list_devices() -> Result<()> {
+    outputs::start_discovery();
     for (i, d) in output::output_devices()?.iter().enumerate() {
         println!(
             "{} [{i}] {}  ({:?}, {} ch, now {} kHz)\n      rates: {}\n      uid:   {}",
@@ -145,6 +151,24 @@ fn list_devices() -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Network players answer within a few seconds of the search.
+fn list_renderers() {
+    std::thread::sleep(Duration::from_millis(3500));
+    for r in hifi_engine::net::upnp::renderers() {
+        println!(
+            "  [net] {}  ({} {}, {} {:?}, up to {} kHz / {} bit)\n      uid:   {}",
+            r.name,
+            r.manufacturer,
+            r.model,
+            r.ip,
+            r.codec,
+            r.max_rate as f64 / 1000.0,
+            r.max_bits,
+            r.uid
+        );
+    }
 }
 
 fn info(file: PathBuf) -> Result<()> {
@@ -213,8 +237,33 @@ fn pick_device(query: Option<&str>) -> Result<DeviceInfo> {
     }
 }
 
+/// A local device, or else a network player whose name or uid contains `query`.
+fn pick_output(query: Option<&str>) -> Result<Output> {
+    if let Ok(d) = pick_device(query) {
+        return Ok(Output::Device(d));
+    }
+    let q = query.unwrap_or_default().to_lowercase();
+    if let Some(o) = outputs::find(&q)? {
+        return Ok(o);
+    }
+    outputs::start_discovery();
+    for _ in 0..20 {
+        std::thread::sleep(Duration::from_millis(250));
+        if let Some(r) = hifi_engine::net::upnp::renderers()
+            .into_iter()
+            .find(|r| r.name.to_lowercase().contains(&q) || r.uid.to_lowercase().contains(&q))
+        {
+            return Ok(Output::Renderer(r));
+        }
+    }
+    bail!("no such output; run `hifi devices`")
+}
+
 fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: PlayOptions) -> Result<()> {
-    let dev = pick_device(device.as_deref())?;
+    let out = pick_output(device.as_deref())?;
+    let dev_name = out.name().to_string();
+    // Network players take PCM only.
+    let dsd_mode = if out.is_network() { DsdMode::Pcm } else { dsd_mode };
     let open = |file: &PathBuf| -> Result<Arc<Track>> {
         print!("Opening {}… ", file.display());
         std::io::stdout().flush()?;
@@ -231,8 +280,8 @@ fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: Pl
     let mut i = 0;
     let mut track = open(&files[0])?;
     loop {
-        let mut player = Player::start(dev.device.clone(), track, &opts)?;
-        describe(&dev.name, &player.path);
+        let mut player = Player::start(&out, track, &opts)?;
+        describe(&dev_name, &player.path);
         // The next file, opened ahead: joined on, or to start anew if it couldn't be.
         let mut ahead: Option<(usize, Arc<Track>)> = None;
         let mut switches = player.switches();
@@ -243,7 +292,7 @@ fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: Pl
                 ahead = None;
                 player.path = player.path.for_next(&player.heard());
                 println!("\n→ joined on without a break: {}", files[i].display());
-                describe(&dev.name, &player.path);
+                describe(&dev_name, &player.path);
             }
             let (pos, dur) = (player.position_secs(), player.duration_secs());
             if ahead.is_none() && i + 1 < files.len() && dur - pos < 20.0 {
@@ -255,6 +304,9 @@ fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: Pl
                     println!("  can't follow without a break (another format): starts anew");
                 }
                 ahead = Some((i + 1, t));
+            }
+            if let Some(e) = player.output_error() {
+                bail!(e);
             }
             print!("\r  {} / {}  ", mmss(pos), mmss(dur));
             std::io::stdout().flush()?;

@@ -61,6 +61,8 @@ pub enum Transport {
     AirPlay,
     Aggregate,
     Virtual,
+    /// A network player we stream to (UPnP/DLNA): the samples reach it exactly, over TCP.
+    Network,
     Other(u32),
 }
 
@@ -886,8 +888,11 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
 
 impl Shared {
     /// Fill the device's buffers for one callback. Realtime-safe: no locks, no allocation.
+    /// Returns how many frames came from the music; the rest of the buffers (paused, still
+    /// decoding, the end) is silence. A DAC plays that silence; a network stream leaves it
+    /// out and waits.
     #[inline]
-    pub(crate) fn render(&self, buffers: &mut [OutBuf<'_>]) {
+    pub(crate) fn render(&self, buffers: &mut [OutBuf<'_>]) -> usize {
         // The EQ's filters decay into denormals on quiet passages, which run many times
         // slower on the CPU and can make the callback miss its deadline.
         let _ftz = crate::fpu::FlushDenormals::on();
@@ -954,6 +959,7 @@ impl Shared {
                     }
                 }
                 st.meter(peaks);
+                done
             }
             // Processed path: pre-rendered samples from the ring.
             Some(rs) => {
@@ -1020,6 +1026,7 @@ impl Shared {
                 if !paused && got < frames && rs.render_done.load(Ordering::Acquire) && rs.ring.available() == 0 {
                     st.finished.store(true, Ordering::Relaxed);
                 }
+                got
             }
         }
     }
