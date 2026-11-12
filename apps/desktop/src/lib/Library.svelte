@@ -55,7 +55,7 @@
   let artist = $state<string | null>(null);
   let genre = $state<string | null>(null);
   let foldersOpen = $state(false);
-  let foldersRoot: HTMLElement;
+  let foldersRoot = $state<HTMLElement>();
   let body: HTMLElement;
 
   $effect(() => {
@@ -266,6 +266,8 @@
 <svelte:window onclick={onWindowClick} />
 
 <section class="library" aria-label={t("lib.label")}>
+  <!-- An open album has its own Back button; the tabs, search and filters belong to the lists. -->
+  {#if !openAlbum}
   <div class="toolbar">
     <div class="seg" role="tablist" aria-label={t("lib.section")}>
       {#each VIEWS as v (v)}
@@ -275,7 +277,7 @@
 
     <input class="search" type="search" placeholder={t("lib.search")} bind:value={query} aria-label={t("lib.searchLabel")} />
 
-    {#if view !== "tracks" && view !== "playlists" && !openAlbum}
+    {#if view !== "tracks" && view !== "playlists"}
       <label class="sort">
         <select bind:value={albumSort} aria-label={t("lib.sortLabel")}>
           {#each ["artist", "title", "year", "added"] as k (k)}
@@ -285,7 +287,7 @@
       </label>
     {/if}
 
-    {#if view !== "playlists" && !openAlbum}<label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>{/if}
+    {#if view !== "playlists"}<label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>{/if}
 
     <div class="folders" bind:this={foldersRoot}>
       <button
@@ -341,6 +343,7 @@
       {/if}
     </div>
   </div>
+  {/if}
 
   <div class="body" bind:this={body}>
     {#if view === "playlists" && !openAlbum}
