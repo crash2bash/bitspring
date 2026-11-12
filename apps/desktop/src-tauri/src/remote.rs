@@ -188,10 +188,11 @@ fn handle(app: &AppHandle, token: &str, conn: &mut TcpStream) -> anyhow::Result<
             return Ok(http::respond(conn, "200 OK", "font/woff2", &[("Cache-Control", "max-age=604800")], font)?);
         }
         ("GET", p) if p.starts_with("/locales/") => {
-            return Ok(match locale(p.trim_start_matches("/locales/").trim_end_matches(".json")) {
+            match locale(p.trim_start_matches("/locales/").trim_end_matches(".json")) {
                 Some(text) => http::respond(conn, "200 OK", "application/json; charset=utf-8", &[("Cache-Control", "max-age=3600")], text.as_bytes())?,
                 None => http::respond(conn, "404 Not Found", "text/plain", &[], b"")?,
-            });
+            }
+            return Ok(());
         }
         _ => {}
     }
@@ -245,7 +246,7 @@ fn handle(app: &AppHandle, token: &str, conn: &mut TcpStream) -> anyhow::Result<
         }
         ("GET", "/api/volume") => {
             let uid = state.current.lock().unwrap().as_ref().map(|c| c.device_uid.clone());
-            let v = uid.and_then(|u| crate::output_volume(u));
+            let v = uid.and_then(crate::output_volume);
             json_ok(conn, &json!({"volume": v}))?;
         }
         ("POST", "/api/volume") => {
