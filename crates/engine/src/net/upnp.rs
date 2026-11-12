@@ -10,6 +10,7 @@ use anyhow::{Result, anyhow, bail};
 
 use super::encode::Codec;
 use super::http::{self, Url};
+use super::{Meta, Remote, State, Status};
 
 const AVT: &str = "urn:schemas-upnp-org:service:AVTransport:1";
 const RC: &str = "urn:schemas-upnp-org:service:RenderingControl:1";
@@ -38,16 +39,6 @@ pub struct Renderer {
     pub has_volume: bool,
 }
 
-/// What the transport is doing (GetTransportInfo).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum State {
-    Playing,
-    Paused,
-    Stopped,
-    Transitioning,
-    NoMedia,
-    Other,
-}
 
 impl Renderer {
 
@@ -97,6 +88,43 @@ impl Renderer {
         let rc = self.rendering.as_deref().ok_or_else(|| anyhow!("no volume control"))?;
         let v = volume.min(100).to_string();
         soap(rc, RC, "SetVolume", &[("InstanceID", "0"), ("Channel", "Master"), ("DesiredVolume", &v)], SOAP_TIMEOUT).map(drop)
+    }
+}
+
+/// One NetPlayer's line to a renderer.
+pub struct UpnpRemote {
+    r: Renderer,
+    /// A stream was handed over before: stop it before the next, as most renderers want.
+    handed: bool,
+}
+
+impl UpnpRemote {
+    pub fn new(r: Renderer) -> Self {
+        Self { r, handed: false }
+    }
+}
+
+impl Remote for UpnpRemote {
+    fn load(&mut self, url: &str, mime: &str, meta: &Meta, play: bool) -> Result<()> {
+        if self.handed {
+            let _ = self.r.stop();
+        }
+        self.handed = true;
+        let d = didl(url, mime, &meta.title, meta.artist.as_deref(), meta.album.as_deref(), meta.cover.as_deref());
+        self.r.set_uri(url, &d)?;
+        if play { self.r.play() } else { Ok(()) }
+    }
+    fn play(&mut self) -> Result<()> {
+        self.r.play()
+    }
+    fn pause(&mut self) -> Result<()> {
+        self.r.pause()
+    }
+    fn stop(&mut self) -> Result<()> {
+        self.r.stop()
+    }
+    fn status(&mut self) -> Result<Status> {
+        Ok(Status { state: self.r.state()?, position: self.r.position()? })
     }
 }
 

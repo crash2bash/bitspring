@@ -8,7 +8,7 @@ use anyhow::Result;
 use crate::decode::Track;
 use crate::dsp::eq::EqPreset;
 use crate::net::player::{self as net_player, NetPlayer};
-use crate::net::upnp::{self, Renderer};
+use crate::net::{self, Target};
 use crate::output::{self, DeviceInfo, PlayOptions, SignalPath, Transport};
 use crate::rate::RateRange;
 use crate::UserError;
@@ -20,49 +20,49 @@ pub const NETWORK: bool = cfg!(not(target_os = "ios"));
 #[derive(Debug, Clone)]
 pub enum Output {
     Device(DeviceInfo),
-    Renderer(Renderer),
+    Network(Target),
 }
 
 impl Output {
     pub fn uid(&self) -> &str {
         match self {
             Self::Device(d) => &d.uid,
-            Self::Renderer(r) => &r.uid,
+            Self::Network(t) => t.uid(),
         }
     }
 
     pub fn name(&self) -> &str {
         match self {
             Self::Device(d) => &d.name,
-            Self::Renderer(r) => &r.name,
+            Self::Network(t) => t.name(),
         }
     }
 
     pub fn transport(&self) -> Transport {
         match self {
             Self::Device(d) => d.transport,
-            Self::Renderer(_) => Transport::Network,
+            Self::Network(_) => Transport::Network,
         }
     }
 
     pub fn rates(&self) -> Vec<RateRange> {
         match self {
             Self::Device(d) => d.rates.clone(),
-            Self::Renderer(r) => net_player::rates(r),
+            Self::Network(t) => net_player::rates(t),
         }
     }
 
     pub fn output_channels(&self) -> u32 {
         match self {
             Self::Device(d) => d.output_channels,
-            Self::Renderer(_) => 2,
+            Self::Network(_) => 2,
         }
     }
 
     pub fn nominal_rate(&self) -> f64 {
         match self {
             Self::Device(d) => d.nominal_rate,
-            Self::Renderer(_) => 0.0,
+            Self::Network(_) => 0.0,
         }
     }
 
@@ -74,12 +74,12 @@ impl Output {
     pub fn supports_dop(&self, dsd_rate: u32) -> bool {
         match self {
             Self::Device(d) => d.device.supports_dop(dsd_rate),
-            Self::Renderer(_) => false,
+            Self::Network(_) => false,
         }
     }
 
     pub fn is_network(&self) -> bool {
-        matches!(self, Self::Renderer(_))
+        matches!(self, Self::Network(_))
     }
 }
 
@@ -87,15 +87,15 @@ impl Output {
 pub fn outputs() -> Result<Vec<Output>> {
     let mut v: Vec<Output> = output::output_devices()?.into_iter().map(Output::Device).collect();
     if NETWORK {
-        v.extend(upnp::renderers().into_iter().map(Output::Renderer));
+        v.extend(net::targets().into_iter().map(Output::Network));
     }
     Ok(v)
 }
 
 /// One output by uid. A network player not seen yet gets a few seconds to answer.
 pub fn find(uid: &str) -> Result<Option<Output>> {
-    if uid.starts_with("upnp:") {
-        return Ok(if NETWORK { upnp::find(uid).map(Output::Renderer) } else { None });
+    if net::is_network_uid(uid) {
+        return Ok(if NETWORK { net::find(uid).map(Output::Network) } else { None });
     }
     Ok(output::output_devices()?.into_iter().find(|d| d.uid == uid).map(Output::Device))
 }
@@ -105,14 +105,14 @@ pub fn find(uid: &str) -> Result<Option<Output>> {
 /// network players.)
 pub fn start_discovery() {
     if NETWORK {
-        upnp::start_discovery();
+        net::start_discovery();
     }
 }
 
 /// Look for network players again now.
 pub fn refresh() {
     if NETWORK {
-        upnp::refresh();
+        net::refresh();
     }
 }
 
@@ -146,8 +146,8 @@ impl Player {
                 let path = p.path.clone();
                 Self { kind: Kind::Device(p), path }
             }
-            Output::Renderer(r) => {
-                let p = NetPlayer::start(r.clone(), track, opts)?;
+            Output::Network(t) => {
+                let p = NetPlayer::start(t.clone(), track, opts)?;
                 let path = p.path.clone();
                 Self { kind: Kind::Net(p), path }
             }

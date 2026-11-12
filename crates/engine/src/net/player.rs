@@ -1,4 +1,4 @@
-//! Playing on a UPnP renderer.
+//! Playing on a network player (UPnP renderer or Cast device).
 //!
 //! A pump thread pulls audio from an ordinary [`Playback`] (the same processing, gapless
 //! joins and seeking as on a local DAC), encodes it and appends it to a live stream the
@@ -22,7 +22,7 @@ use anyhow::Result;
 
 use super::encode::{BLOCK, Codec, Encoder, Format};
 use super::http::{self, Stream};
-use super::upnp::{self, Renderer, State};
+use super::{Meta, Remote, State, Target};
 use crate::decode::Track;
 use crate::dsp::eq::EqPreset;
 use crate::output::{self, OutBuf, OutFormat, PlayOptions, Playback, SignalPath, StreamFormat, Transport};
@@ -40,13 +40,13 @@ const POLL: Duration = Duration::from_millis(500);
 /// The rates a renderer is assumed to take, up to its maximum.
 const RATES: [u32; 8] = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000, 352_800, 384_000];
 
-pub fn rates(r: &Renderer) -> Vec<RateRange> {
-    RATES.iter().filter(|&&hz| hz <= r.max_rate).map(|&hz| RateRange { min: hz as f64, max: hz as f64 }).collect()
+pub fn rates(t: &Target) -> Vec<RateRange> {
+    RATES.iter().filter(|&&hz| hz <= t.max_rate()).map(|&hz| RateRange { min: hz as f64, max: hz as f64 }).collect()
 }
 
 enum Cmd {
     /// Play this URL (a new stream: the first one, or after a seek).
-    Start { url: String, didl: String },
+    Start { url: String, mime: String, meta: Meta },
     Pause,
     Play,
 }
@@ -113,7 +113,7 @@ struct Entry {
 }
 
 struct Inner {
-    renderer: Renderer,
+    renderer: Target,
     format: Format,
     playback: Playback,
     /// Held by the pump for each block, and by a seek: they never interleave.
@@ -167,13 +167,13 @@ pub struct NetPlayer {
 }
 
 impl NetPlayer {
-    pub fn start(renderer: Renderer, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
+    pub fn start(renderer: Target, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let rates = rates(&renderer);
-        let plan = output::plan(&track, opts, &rates, &renderer.name, false)?;
+        let plan = output::plan(&track, opts, &rates, renderer.name(), false)?;
         let rate = plan.target.round() as u32;
         let source_bits = track.bits_per_sample.unwrap_or(24);
-        let bits: u16 = if renderer.max_bits <= 16 || (source_bits <= 16 && !plan.processing) { 16 } else { 24 };
-        let format = Format { codec: renderer.codec, rate, channels: track.channels.min(8) as u16, bits };
+        let bits: u16 = if renderer.max_bits() <= 16 || (source_bits <= 16 && !plan.processing) { 16 } else { 24 };
+        let format = Format { codec: renderer.codec(), rate, channels: track.channels.min(8) as u16, bits };
         // The renderer must reach us: check before telling it where.
         http::server()?;
         // Pausing is the pump's (and the renderer's) business: the playback itself never
@@ -212,7 +212,7 @@ impl NetPlayer {
         Ok(Self { inner, pump: Some(pump), control: Some(control), base_switches: AtomicU64::new(0), path })
     }
 
-    pub fn renderer(&self) -> &Renderer {
+    pub fn renderer(&self) -> &Target {
         &self.inner.renderer
     }
 
@@ -378,11 +378,11 @@ fn pump_loop(inner: Arc<Inner>) {
         Ok(s) => s,
         Err(e) => return inner.fail(UserError::other(e)),
     };
-    let local = match http::local_ip_for(inner.renderer.ip) {
+    let local = match http::local_ip_for(inner.renderer.ip()) {
         Ok(ip) => ip,
-        Err(_) => return inner.fail(UserError::RendererUnreachable { device: inner.renderer.name.clone() }),
+        Err(_) => return inner.fail(UserError::RendererUnreachable { device: inner.renderer.name().to_string() }),
     };
-    let mime = inner.renderer.mime.clone().unwrap_or_else(|| f.mime());
+    let mime = inner.renderer.mime().unwrap_or_else(|| f.mime());
     let length = (f.codec == Codec::Wav).then_some(u32::MAX as u64 - 1);
 
     while !inner.quit.load(Ordering::Acquire) {
@@ -402,8 +402,8 @@ fn pump_loop(inner: Arc<Inner>) {
             inner.ended.store(false, Ordering::Release);
             inner.done.store(false, Ordering::Release);
             *inner.clock.lock().unwrap() = Clock::new();
-            let didl = didl_for(&inner, server, &url, &mime);
-            inner.send(Cmd::Start { url, didl });
+            let meta = meta_for(&inner, server, &url);
+            inner.send(Cmd::Start { url, mime: mime.clone(), meta });
             path = Some(p);
         }
         let sent = *inner.sent.lock().unwrap();
@@ -473,7 +473,7 @@ fn host(ip: IpAddr, port: u16) -> String {
 }
 
 /// Metadata for the renderer's display: the track the stream starts with.
-fn didl_for(inner: &Inner, server: &http::Server, url: &str, mime: &str) -> String {
+fn meta_for(inner: &Inner, server: &http::Server, url: &str) -> Meta {
     let track = inner.timeline.lock().unwrap()[0].track.clone();
     let m = &track.meta;
     let title = m.title.clone().unwrap_or_else(|| "BitSpring".into());
@@ -483,7 +483,7 @@ fn didl_for(inner: &Inner, server: &http::Server, url: &str, mime: &str) -> Stri
         let base = url.split('/').take(3).collect::<Vec<_>>().join("/");
         format!("{base}{p}")
     });
-    upnp::didl(url, mime, &title, m.artist.as_deref(), m.album.as_deref(), cover.as_deref())
+    Meta { title, artist: m.artist.clone(), album: m.album.clone(), cover }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -491,55 +491,45 @@ fn didl_for(inner: &Inner, server: &http::Server, url: &str, mime: &str) -> Stri
 // ---------------------------------------------------------------------------------------------
 
 fn control_loop(inner: Arc<Inner>, rx: Receiver<Cmd>) {
-    let r = inner.renderer.clone();
-    let refused = |detail: String| UserError::RendererRefused { device: r.name.clone(), detail };
+    let name = inner.renderer.name().to_string();
+    let mut remote: Box<dyn Remote> = inner.renderer.remote();
+    let refused = |detail: String| UserError::RendererRefused { device: name.clone(), detail };
     let mut failures = 0;
     // When the current stream was handed over, until the renderer has fetched it.
     let mut awaiting: Option<Instant> = None;
     // The renderer's state lags a command for a moment: don't read anything into it then.
     let mut last_command = Instant::now();
-    let mut handed_before = false;
     loop {
         match rx.recv_timeout(POLL) {
-            Ok(Cmd::Start { url, didl }) => {
+            Ok(Cmd::Start { url, mime, meta }) => {
                 last_command = Instant::now();
-                // A stream handed over before: stop it first, as most renderers want.
-                if handed_before {
-                    let _ = r.stop();
-                }
-                handed_before = true;
-                let started = r.set_uri(&url, &didl).and_then(|_| {
-                    if inner.paused.load(Ordering::Relaxed) { Ok(()) } else { r.play() }
-                });
-                match started {
+                match remote.load(&url, &mime, &meta, !inner.paused.load(Ordering::Relaxed)) {
                     Ok(()) => {
                         inner.clock.lock().unwrap().handed = Instant::now();
                         awaiting = Some(Instant::now());
                     }
-                    Err(e) => inner.fail(if is_unreachable(&e) { UserError::RendererUnreachable { device: r.name.clone() } } else { refused(format!("{e:#}")) }),
+                    Err(e) => inner.fail(if is_unreachable(&e) { UserError::RendererUnreachable { device: name.clone() } } else { refused(format!("{e:#}")) }),
                 }
             }
             Ok(Cmd::Pause) => {
                 last_command = Instant::now();
-                let _ = r.pause();
+                let _ = remote.pause();
             }
             Ok(Cmd::Play) => {
                 last_command = Instant::now();
-                if let Err(e) = r.play() {
+                if let Err(e) = remote.play() {
                     inner.fail(refused(format!("{e:#}")));
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        // Poll.
-        let state = r.state();
-        let position = r.position();
-        match (&state, &position) {
-            (Ok(s), Ok(p)) => {
+        match remote.status() {
+            Ok(st) => {
                 failures = 0;
-                let playing = *s == State::Playing && !inner.paused.load(Ordering::Relaxed);
-                inner.clock.lock().unwrap().report(*p, playing);
+                let s = st.state;
+                let playing = s == State::Playing && !inner.paused.load(Ordering::Relaxed);
+                inner.clock.lock().unwrap().report(st.position, playing);
                 let connected = inner.stream.lock().unwrap().as_ref().is_some_and(|st| st.readers().1 > 0);
                 if connected {
                     awaiting = None;
@@ -548,7 +538,7 @@ fn control_loop(inner: Arc<Inner>, rx: Receiver<Cmd>) {
                     && t.elapsed() > CONNECT_TIMEOUT
                     && !inner.paused.load(Ordering::Relaxed)
                 {
-                    inner.fail(UserError::RendererSilent { device: r.name.clone() });
+                    inner.fail(UserError::RendererSilent { device: name.clone() });
                     awaiting = None;
                 }
                 let started = inner.clock.lock().unwrap().started;
@@ -560,20 +550,20 @@ fn control_loop(inner: Arc<Inner>, rx: Receiver<Cmd>) {
                     && last_command.elapsed() > Duration::from_secs(3)
                     && !inner.ended.load(Ordering::Acquire)
                     && !inner.paused.load(Ordering::Relaxed)
-                    && matches!(s, State::Paused | State::Stopped)
+                    && matches!(s, State::Paused | State::Stopped | State::NoMedia)
                 {
                     inner.paused.store(true, Ordering::Relaxed);
                 }
             }
-            _ => {
+            Err(_) => {
                 failures += 1;
                 if failures >= 6 {
-                    inner.fail(UserError::RendererUnreachable { device: r.name.clone() });
+                    inner.fail(UserError::RendererUnreachable { device: name.clone() });
                 }
             }
         }
     }
-    let _ = r.stop();
+    let _ = remote.stop();
 }
 
 fn is_unreachable(e: &anyhow::Error) -> bool {
@@ -585,6 +575,7 @@ mod tests {
     use super::*;
     use crate::decode::TrackMeta;
     use crate::net::fake::FakeRenderer;
+    use crate::net::upnp;
 
     fn track(seed: u32, frames: usize, title: &str) -> (Arc<Track>, Vec<i32>) {
         let mut x = seed;
@@ -607,6 +598,7 @@ mod tests {
         *fake.bytes_per_sec.lock().unwrap() = 44_100.0 * 4.0;
         let renderer = upnp::describe_at(&fake.location()).unwrap();
         assert_eq!((renderer.name.as_str(), renderer.codec), ("Test Streamer", Codec::Flac));
+        let renderer = Target::Upnp(renderer);
 
         let (t1, s1) = track(1, 44_100, "One");
         let (t2, s2) = track(2, 30_000, "Two");
@@ -644,7 +636,7 @@ mod tests {
     fn pause_and_seek_follow_the_renderer() {
         let fake = FakeRenderer::start("http-get:*:audio/flac:*");
         *fake.bytes_per_sec.lock().unwrap() = 44_100.0 * 4.0;
-        let renderer = upnp::describe_at(&fake.location()).unwrap();
+        let renderer = Target::Upnp(upnp::describe_at(&fake.location()).unwrap());
         let (t1, s1) = track(3, 44_100 * 4, "Long");
         let p = NetPlayer::start(renderer, t1, &PlayOptions::default()).unwrap();
         std::thread::sleep(Duration::from_millis(1200));

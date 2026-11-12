@@ -1526,6 +1526,7 @@ dependencies = [
  "objc2-foundation",
  "roxmltree",
  "rustfft",
+ "rustls",
  "serde",
  "serde_json",
  "symphonia",

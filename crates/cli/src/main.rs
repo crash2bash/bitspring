@@ -58,6 +58,8 @@ enum Cmd {
         #[arg(long)]
         dop: bool,
     },
+    /// Show (or set, 0–100) a network player's own volume.
+    Volume { device: String, set: Option<u32> },
     /// Set a device's sample rate (Hz), like Audio MIDI Setup does.
     #[cfg(target_os = "macos")]
     Rate { device: String, hz: f64 },
@@ -74,6 +76,14 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Info { file } => info(file),
+        Cmd::Volume { device, set } => {
+            let Output::Network(t) = pick_output(Some(&device))? else { bail!("not a network player") };
+            if let Some(v) = set {
+                t.set_volume(v)?;
+            }
+            println!("{}: volume {}", t.name(), t.volume()?);
+            Ok(())
+        }
         Cmd::Play { files, device, shared, upsample, eq, crossfeed, headroom, restore_highs, dop } => {
             let dsp = DspSettings {
                 upsample: upsample.map_or(Upsample::Off, |k| Upsample::UpTo(k * 1000.0)),
@@ -156,17 +166,17 @@ fn list_devices() -> Result<()> {
 /// Network players answer within a few seconds of the search.
 fn list_renderers() {
     std::thread::sleep(Duration::from_millis(3500));
-    for r in hifi_engine::net::upnp::renderers() {
+    for t in hifi_engine::net::targets() {
         println!(
-            "  [net] {}  ({} {}, {} {:?}, up to {} kHz / {} bit)\n      uid:   {}",
-            r.name,
-            r.manufacturer,
-            r.model,
-            r.ip,
-            r.codec,
-            r.max_rate as f64 / 1000.0,
-            r.max_bits,
-            r.uid
+            "  [net] {}  ({}, {} {}, {:?}, up to {} kHz / {} bit)\n      uid:   {}",
+            t.name(),
+            t.model(),
+            t.protocol(),
+            t.ip(),
+            t.codec(),
+            t.max_rate() as f64 / 1000.0,
+            t.max_bits(),
+            t.uid()
         );
     }
 }
@@ -249,11 +259,11 @@ fn pick_output(query: Option<&str>) -> Result<Output> {
     outputs::start_discovery();
     for _ in 0..20 {
         std::thread::sleep(Duration::from_millis(250));
-        if let Some(r) = hifi_engine::net::upnp::renderers()
+        if let Some(t) = hifi_engine::net::targets()
             .into_iter()
-            .find(|r| r.name.to_lowercase().contains(&q) || r.uid.to_lowercase().contains(&q))
+            .find(|t| t.name().to_lowercase().contains(&q) || t.uid().to_lowercase().contains(&q))
         {
-            return Ok(Output::Renderer(r));
+            return Ok(Output::Network(t));
         }
     }
     bail!("no such output; run `hifi devices`")
