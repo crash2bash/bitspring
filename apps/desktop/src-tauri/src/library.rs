@@ -244,6 +244,32 @@ impl Library {
     }
 }
 
+#[derive(Serialize)]
+pub struct TagFailure {
+    path: String,
+    error: String,
+}
+
+/// Write tags into library files (each its own change), then rescan so the library shows
+/// them. Returns the files that failed and why; those are left as they were.
+#[tauri::command(async)]
+pub fn edit_tags(app: AppHandle, lib: State<'_, Library>, edits: Vec<(String, hifi_engine::tags::TagEdit)>) -> Vec<TagFailure> {
+    let known = lib.known_paths();
+    let mut failed = Vec::new();
+    for (path, edit) in edits {
+        let result = if !known.contains(&path) {
+            Err(anyhow::anyhow!("not in the library"))
+        } else {
+            hifi_engine::tags::write(Path::new(&path), &edit)
+        };
+        if let Err(e) = result {
+            failed.push(TagFailure { path, error: format!("{e:#}") });
+        }
+    }
+    lib.rescan(app);
+    failed
+}
+
 /// What the phone remote shows of a track in the queue.
 pub struct QueuedTrack {
     pub title: String,

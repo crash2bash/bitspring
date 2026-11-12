@@ -169,6 +169,8 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
   switch (cmd) {
     case "list_devices":
       return devices as T;
+    case "edit_tags":
+      return [] as T;
     case "remote_status":
     case "remote_enable":
     case "remote_new_address": {

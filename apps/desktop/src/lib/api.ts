@@ -443,6 +443,8 @@ export interface QualityReport {
 }
 
 export const api = {
+  /** Write tags (path → what to change); returns the files that failed and why. */
+  editTags: (edits: [string, TagEdit][]) => call<{ path: string; error: string }[]>("edit_tags", { edits }),
   remoteStatus: () => call<RemoteStatus>("remote_status"),
   remoteEnable: (enabled: boolean) => call<RemoteStatus>("remote_enable", { enabled }),
   remoteNewAddress: () => call<RemoteStatus>("remote_new_address"),
@@ -582,6 +584,18 @@ const DEVICE_KEYS: Record<string, string> = {
   Dock: "dev.dock",
   "Audio output": "dev.output",
 };
+
+/** Tag changes for one file: a field left out stays as it is, "" removes it. */
+export interface TagEdit {
+  title?: string;
+  artist?: string;
+  album?: string;
+  albumArtist?: string;
+  genre?: string;
+  year?: string;
+  trackNumber?: string;
+  discNumber?: string;
+}
 
 /** The phone remote (Settings): on or off, and where a phone finds it. */
 export interface RemoteStatus {

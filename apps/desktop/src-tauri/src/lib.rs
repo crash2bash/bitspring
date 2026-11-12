@@ -1289,6 +1289,7 @@ pub fn run() {
             library::library_remove_folder,
             library::library_rescan,
             library::import_files,
+            library::edit_tags,
             output_volume,
             set_output_volume,
             remote::remote_status,

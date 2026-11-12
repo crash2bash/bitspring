@@ -4,6 +4,7 @@
   import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
   import QualityDialog from "./QualityDialog.svelte";
+  import TagEditor from "./TagEditor.svelte";
   import { SUSPECT, verdictLabel } from "./quality";
   import { remember } from "./labels.svelte";
   import AddToPlaylist from "./AddToPlaylist.svelte";
@@ -127,6 +128,9 @@
   let checking = $state<{ album: string; done: number; total: number } | null>(null);
   let qualityError = $state<string | null>(null);
   let shownQuality = $state<LibTrack | null>(null);
+  let editingTags = $state(false);
+  // After a tag edit the album may get a new id (a new title or artist): follow its tracks.
+  let followPath: string | null = null;
   let albumQuality = $derived(albumTracks.map((tr) => quality[tr.path]).filter(Boolean));
   let albumChecked = $derived(albumTracks.length > 0 && albumQuality.length === albumTracks.length);
   /** "Upsampled (11), Genuine (1)": the album's verdicts, most common first. */
@@ -175,7 +179,11 @@
       [albums, tracks] = await Promise.all([api.libraryAlbums(), api.libraryTracks()]);
       // The queue names tracks by their files; a CUE track's file is its whole album.
       remember(tracks.filter((t) => t.path.includes("#cue:")));
-      if (openAlbum) openAlbum = albums.find((a) => a.id === openAlbum!.id) ?? null;
+      if (openAlbum) {
+        const i = followPath ? tracks.findIndex((tr) => tr.path === followPath) : -1;
+        openAlbum = albums.find((a) => a.id === openAlbum!.id) ?? (i >= 0 ? (albums.find((a) => a.tracks.includes(i)) ?? null) : null);
+        followPath = null;
+      }
     }
   }
 
@@ -397,6 +405,9 @@
               <button class="primary" onclick={() => playAlbum(openAlbum!)}>{t("common.play")}</button>
               <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("lib.enqueue")}</button>
               <AddToPlaylist entries={() => albumTracks.map(entryFromTrack)} />
+              {#if !isIOS && !isAndroid}
+                <button class="ghost" onclick={() => (editingTags = true)}>{t("tags.edit")}</button>
+              {/if}
               {#if !albumChecked}
                 <button class="ghost" onclick={checkQuality} disabled={!!checking}>
                   {checking?.album === openAlbum.id ? t("q.checking", { done: num(checking.done), total: num(checking.total) }) : t("q.check")}
@@ -435,6 +446,9 @@
           {/snippet}
           {#snippet actions(tr)}<AddToPlaylist compact entries={() => [entryFromTrack(tr)]} />{/snippet}
         </TrackTable>
+        {#if editingTags}
+          <TagEditor tracks={albumTracks} onclose={() => (editingTags = false)} onsaved={(p) => (followPath = p)} />
+        {/if}
         {#if shownQuality && quality[shownQuality.path]}
           <QualityDialog track={shownQuality} report={quality[shownQuality.path]} onclose={() => (shownQuality = null)} />
         {/if}
