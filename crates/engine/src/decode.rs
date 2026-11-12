@@ -900,7 +900,10 @@ fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: 
         }
         track = track.windowed(WINDOW_BYTES);
     }
-    let own = std::mem::take(&mut track.meta);
+    let mut own = std::mem::take(&mut track.meta);
+    if let Some(p) = &path {
+        crate::tags::fill_from_file(p, &mut own);
+    }
     track.meta = TrackMeta {
         title: meta.title.or(own.title),
         artist: meta.artist.or(own.artist),

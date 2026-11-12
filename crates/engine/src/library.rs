@@ -84,7 +84,8 @@ pub fn scan_file(path: &Path) -> Result<(TrackInfo, Option<Cover>)> {
     let mut format = symphonia::default::get_probe()
         .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
         .context("unrecognised format")?;
-    let meta = read_meta(&mut *format);
+    let mut meta = read_meta(&mut *format);
+    crate::tags::fill_from_file(path, &mut meta);
     let track = format.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
     let audio = track.codec_params.as_ref().and_then(|p| p.audio()).ok_or_else(|| anyhow!("no audio params"))?;
     let sample_rate = audio.sample_rate.unwrap_or(0);

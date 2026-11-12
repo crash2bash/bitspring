@@ -17,6 +17,7 @@ pub mod quality;
 pub mod rate;
 pub mod ring;
 pub mod store;
+pub mod tags;
 pub mod testsignal;
 
 #[cfg(target_os = "macos")]
