@@ -477,7 +477,7 @@ fn mac_menu(app: &tauri::AppHandle, labels: &std::collections::HashMap<String, S
     Menu::with_items(app, &[&app_menu, &edit, &view, &window])
 }
 
-const AUDIO_EXTENSIONS: [&str; 12] = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff"];
+const AUDIO_EXTENSIONS: [&str; 16] = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff", "ape", "wv", "tta", "iso"];
 
 /// Turn dropped files and folders into a flat, ordered list of audio files.
 /// Folders are walked recursively and sorted by path, so an album lands in track order.

@@ -29,7 +29,7 @@
   "formats.title": "Від CD до 768 кГц",
   "formats.lede": "Плеєр перемикає ЦАП на частоту кожного треку. Якщо ЦАП її не підтримує, звук акуратно перераховується — і плеєр прямо про це повідомляє.",
   "formats.dsd": "DSD — нативно через DoP, якщо ЦАП це вміє, або в PCM 176,4 кГц, якщо ні.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "кГц",
   "rates.cd": "Якість CD",
   "rates.video": "Відео і студійний запис",

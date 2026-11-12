@@ -29,7 +29,7 @@
   "formats.title": "CD부터 768 kHz까지",
   "formats.lede": "플레이어는 곡마다 DAC를 해당 샘플레이트로 전환합니다. DAC가 지원하지 않는 샘플레이트라면 정교하게 리샘플링하고, 그 사실을 분명히 알려 줍니다.",
   "formats.dsd": "DSD는 DAC가 지원하면 DoP로 네이티브 재생하고, 지원하지 않으면 176.4 kHz PCM으로 재생합니다.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD 음질",
   "rates.video": "영상 및 스튜디오 녹음",

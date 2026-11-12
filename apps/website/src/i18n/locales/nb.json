@@ -29,7 +29,7 @@
   "formats.title": "Fra CD til 768 kHz",
   "formats.lede": "Spilleren stiller DAC-en om til samplingsfrekvensen for hvert spor. Takler ikke DAC-en frekvensen, blir lyden forsiktig resamplet, og spilleren sier ifra.",
   "formats.dsd": "DSD spilles nativt via DoP hvis DAC-en din støtter det, ellers som PCM i 176,4 kHz.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD-kvalitet",
   "rates.video": "Video og studioinnspilling",

@@ -29,7 +29,7 @@
   "formats.title": "Del CD a 768 kHz",
   "formats.lede": "El reproductor cambia tu DAC a la frecuencia de muestreo de cada pista. Si el DAC no la admite, el audio se remuestrea con cuidado, y el reproductor te lo indica.",
   "formats.dsd": "El DSD se reproduce de forma nativa por DoP si tu DAC lo admite, o como PCM a 176,4 kHz si no.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "Calidad CD",
   "rates.video": "Vídeo y grabación de estudio",

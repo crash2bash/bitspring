@@ -29,7 +29,7 @@
   "formats.title": "Von CD bis 768 kHz",
   "formats.lede": "Der Player stellt deinen DAC auf die Abtastrate jedes Titels um. Schafft der DAC diese Rate nicht, wird sorgfältig umgerechnet, und der Player sagt es dir.",
   "formats.dsd": "DSD läuft nativ über DoP, wenn dein DAC das unterstützt, sonst als PCM mit 176,4 kHz.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD-Qualität",
   "rates.video": "Video und Studioaufnahme",

@@ -29,7 +29,7 @@
   "formats.title": "Από CD έως 768 kHz",
   "formats.lede": "Το player γυρίζει το DAC σας στη συχνότητα δειγματοληψίας κάθε κομματιού. Αν το DAC δεν υποστηρίζει αυτή τη συχνότητα, γίνεται προσεκτικό resampling — και το player σάς το λέει.",
   "formats.dsd": "Το DSD παίζει εγγενώς μέσω DoP, αν το υποστηρίζει το DAC σας, αλλιώς ως PCM στα 176,4 kHz.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "Ποιότητα CD",
   "rates.video": "Βίντεο και ηχογράφηση στούντιο",

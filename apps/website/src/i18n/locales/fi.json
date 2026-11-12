@@ -29,7 +29,7 @@
   "formats.title": "CD:stä 768 kHz:iin",
   "formats.lede": "Soitin vaihtaa DAC:n kunkin kappaleen omaan näytetaajuuteen. Jos DAC ei tue taajuutta, ääni muunnetaan huolellisesti, ja soitin kertoo siitä.",
   "formats.dsd": "DSD soi natiivisti DoP:n kautta, jos DAC tukee sitä, ja muuten 176,4 kHz:n PCM:nä.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD-laatu",
   "rates.video": "Video ja studiotallennus",

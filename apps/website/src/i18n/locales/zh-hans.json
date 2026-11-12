@@ -29,7 +29,7 @@
   "formats.title": "从 CD 到 768 kHz",
   "formats.lede": "播放器会把解码器切换到每首曲目的采样率。如果解码器不支持这个采样率，音频会经过精细的重采样，播放器也会明确告诉你。",
   "formats.dsd": "解码器支持时，DSD 通过 DoP 原生播放；不支持时，以 176.4 kHz PCM 播放。",
-  "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、DSF、DFF、MP3、AAC、Ogg Vorbis",
+  "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、APE、WavPack、TTA、DSF、DFF、SACD ISO、MP3、AAC、Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD 音质",
   "rates.video": "视频与录音室录音",

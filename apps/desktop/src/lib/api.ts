@@ -534,7 +534,7 @@ export const api = {
   stop: () => call<void>("stop"),
 };
 
-export const AUDIO_EXTENSIONS = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff"];
+export const AUDIO_EXTENSIONS = ["flac", "wav", "aif", "aiff", "m4a", "alac", "mp3", "ogg", "caf", "mka", "dsf", "dff", "ape", "wv", "tta", "iso"];
 
 export function isAudioPath(p: string): boolean {
   const ext = p.split(".").pop()?.toLowerCase() ?? "";
@@ -553,7 +553,7 @@ export function clock(secs: number): string {
 /** The file a path reads: a CUE track's path ("…/Image.flac#cue:17266-39553") names its
  *  album's image file and its part of it. */
 export function filePath(p: string): string {
-  return p.replace(/#cue:\d+-\d*$/, "");
+  return p.replace(/#cue:\d+-\d*$/, "").replace(/#sacd:\d+$/, "");
 }
 
 export function fileName(p: string): string {

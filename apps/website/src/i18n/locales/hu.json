@@ -29,7 +29,7 @@
   "formats.title": "A CD-től a 768 kHz-ig",
   "formats.lede": "A lejátszó minden számnál a saját mintavételi frekvenciájára kapcsolja a DAC-ot. Ha a DAC ezt nem tudja, a hangot gondosan újramintavételezi – és ezt jelzi is.",
   "formats.dsd": "A DSD natívan, DoP-n keresztül szól, ha a DAC támogatja; ha nem, 176,4 kHz-es PCM-ként.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD-minőség",
   "rates.video": "Videó és stúdiófelvétel",

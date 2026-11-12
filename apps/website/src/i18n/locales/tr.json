@@ -29,7 +29,7 @@
   "formats.title": "CD'den 768 kHz'e",
   "formats.lede": "Çalar, DAC'ını her parçanın örnekleme hızına geçirir. DAC o hızı desteklemiyorsa ses özenle yeniden örneklenir ve çalar bunu sana açıkça söyler.",
   "formats.dsd": "DAC'ın destekliyorsa DSD, DoP üzerinden native olarak çalınır; desteklemiyorsa 176,4 kHz PCM'e dönüştürülür.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD kalitesi",
   "rates.video": "Video ve stüdyo kaydı",

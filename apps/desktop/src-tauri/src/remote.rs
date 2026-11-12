@@ -299,7 +299,7 @@ fn same(a: &str, b: &str) -> bool {
 }
 
 fn file_title(path: &str) -> String {
-    Path::new(hifi_engine::cue::split(path).0).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string())
+    Path::new(hifi_engine::source_file(path)).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string())
 }
 
 /// The UI's own dictionaries, for the page.

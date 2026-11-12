@@ -29,7 +29,7 @@
   "formats.title": "CDから768 kHzまで",
   "formats.lede": "プレーヤーはDACを曲ごとのサンプリングレートに切り替えます。DACが対応していないレートなら丁寧にリサンプリングし、そのことをはっきり表示します。",
   "formats.dsd": "DSDは、DACが対応していればDoPでネイティブ再生。非対応なら176.4 kHzのPCMで再生します。",
-  "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、DSF、DFF、MP3、AAC、Ogg Vorbis",
+  "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、APE、WavPack、TTA、DSF、DFF、SACD ISO、MP3、AAC、Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD音質",
   "rates.video": "映像・スタジオ録音",

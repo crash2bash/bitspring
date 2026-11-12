@@ -29,7 +29,7 @@
   "formats.title": "De la CD la 768 kHz",
   "formats.lede": "Playerul comută DAC-ul pe frecvența de eșantionare a fiecărei piese. Dacă DAC-ul nu suportă acea frecvență, sunetul este reeșantionat cu grijă, iar playerul îți spune asta.",
   "formats.dsd": "DSD se redă nativ prin DoP dacă DAC-ul îl suportă, iar dacă nu, ca PCM la 176,4 kHz.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "Calitate CD",
   "rates.video": "Video și înregistrări de studio",

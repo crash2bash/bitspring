@@ -8,7 +8,7 @@
   const ALBUM_FIELDS: AlbumField[] = ["album", "albumArtist", "artist", "year", "genre"];
 
   // The tracks we can write (not DSD, not the parts of a CUE image).
-  const editable = (tr: LibTrack) => !tr.path.includes("#cue:") && !/\.(dsf|dff)$/i.test(tr.path);
+  const editable = (tr: LibTrack) => !tr.path.includes("#cue:") && !tr.path.includes("#sacd:") && !/\.(dsf|dff)$/i.test(tr.path);
   // svelte-ignore state_referenced_locally
   const writable = tracks.filter(editable);
   // svelte-ignore state_referenced_locally

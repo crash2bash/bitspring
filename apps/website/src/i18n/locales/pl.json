@@ -29,7 +29,7 @@
   "formats.title": "Od CD do 768 kHz",
   "formats.lede": "Odtwarzacz przełącza przetwornik na częstotliwość każdego utworu. Jeśli DAC jej nie obsługuje, dźwięk jest starannie przeliczany, a odtwarzacz otwarcie o tym informuje.",
   "formats.dsd": "DSD gra natywnie przez DoP, jeśli DAC to obsługuje, albo jako PCM 176,4 kHz, jeśli nie.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "Jakość CD",
   "rates.video": "Wideo i nagrania studyjne",

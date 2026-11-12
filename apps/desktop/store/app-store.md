@@ -52,8 +52,8 @@ BIT-PERFECT
 • Gapless playback for live albums, operas and DJ mixes.
 
 EVERY FORMAT YOU OWN
-• FLAC, ALAC, WAV, AIFF, CAF, MKA, MP3, AAC and Ogg Vorbis.
-• DSD (DSF and DFF): native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
+• FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, MP3, AAC and Ogg Vorbis.
+• DSD (DSF, DFF and SACD disc images): native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags and a library that finds new files by itself.
 • Albums ripped to one file with a CUE sheet play track by track.
 • Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.
@@ -89,8 +89,8 @@ BIT-PERFECT
 • Phone remote: browse the library and control playback from any phone on your network, no app to install.
 
 EVERY FORMAT YOU OWN
-• FLAC, ALAC, WAV, AIFF, CAF, MKA, MP3, AAC and Ogg Vorbis.
-• DSD (DSF and DFF) up to DSD1024: native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
+• FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, MP3, AAC and Ogg Vorbis.
+• DSD (DSF, DFF and SACD disc images) up to DSD1024: native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags, and a library that watches your music folders.
 • Albums ripped to one file with a CUE sheet play track by track.
 • Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.

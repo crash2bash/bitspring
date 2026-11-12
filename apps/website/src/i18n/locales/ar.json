@@ -29,7 +29,7 @@
   "formats.title": "من CD إلى 768 كيلوهرتز",
   "formats.lede": "يضبط المشغّل الـDAC على معدل العيّنات الخاص بكل مقطع. وإن لم يدعم الـDAC ذلك المعدل، يُعاد أخذ العيّنات بعناية، ويخبرك المشغّل بذلك صراحةً.",
   "formats.dsd": "يُشغَّل DSD أصليًا عبر DoP إن كان الـDAC يدعمه، أو بصيغة PCM بمعدل 176.4 كيلوهرتز إن لم يكن.",
-  "formats.files": "FLAC، ALAC، WAV، AIFF، CAF، MKA، DSF، DFF، MP3، AAC، Ogg Vorbis",
+  "formats.files": "FLAC، ALAC، WAV، AIFF، CAF، MKA، APE، WavPack، TTA، DSF، DFF، SACD ISO، MP3، AAC، Ogg Vorbis",
   "rates.khz": "كيلوهرتز",
   "rates.cd": "جودة CD",
   "rates.video": "الفيديو والتسجيل في الاستوديو",

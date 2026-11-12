@@ -31,7 +31,7 @@ pub struct Quality {
 
 /// Size and modification time of the file a library path reads (a CUE track: its image).
 fn stamp(path: &str) -> Option<(u64, u64)> {
-    let m = std::fs::metadata(hifi_engine::cue::split(path).0).ok()?;
+    let m = std::fs::metadata(hifi_engine::source_file(path)).ok()?;
     Some((m.len(), m.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_secs()))
 }
 

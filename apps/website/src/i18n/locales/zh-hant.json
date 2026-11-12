@@ -29,7 +29,7 @@
   "formats.title": "從 CD 到 768 kHz",
   "formats.lede": "播放器會把 DAC 切換到每首曲目的取樣率。若 DAC 不支援該取樣率，音訊會經過細緻的重新取樣，播放器也會明白告訴你。",
   "formats.dsd": "DAC 支援時，DSD 透過 DoP 原生播放；不支援時，以 176.4 kHz PCM 播放。",
-  "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、DSF、DFF、MP3、AAC、Ogg Vorbis",
+  "formats.files": "FLAC、ALAC、WAV、AIFF、CAF、MKA、APE、WavPack、TTA、DSF、DFF、SACD ISO、MP3、AAC、Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "CD 音質",
   "rates.video": "影片與錄音室錄音",

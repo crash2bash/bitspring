@@ -29,7 +29,7 @@
   "formats.title": "Od CD po 768 kHz",
   "formats.lede": "Přehrávač přepne převodník na vzorkovací frekvenci každé skladby. Pokud ji DAC nezvládne, zvuk se pečlivě převzorkuje a přehrávač vám to řekne.",
   "formats.dsd": "DSD hraje nativně přes DoP, pokud to váš DAC podporuje, jinak jako PCM 176,4 kHz.",
-  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, DSF, DFF, MP3, AAC, Ogg Vorbis",
+  "formats.files": "FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, DSF, DFF, SACD ISO, MP3, AAC, Ogg Vorbis",
   "rates.khz": "kHz",
   "rates.cd": "Kvalita CD",
   "rates.video": "Video a studiové nahrávání",
