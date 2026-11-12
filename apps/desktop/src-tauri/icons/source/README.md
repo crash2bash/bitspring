@@ -34,5 +34,11 @@ a hole. That is expected for a mark this fine.
 
 The website's header mark (apps/website/index.html, download/, privacy/) is a hand-drawn
 seven-strand version of the same vortex: a ring and seven half-circles, each leaving the ring
-tangentially and landing on the hole, all turning the same way as the icon. og.png is the site's
-hero with that header mark.
+tangentially and landing on the hole, all turning the same way as the icon.
+
+Link previews are cards with the icon and the name, in the site's fonts and colours:
+`cards/og.html` (1200 × 630, apps/website/public/og.png) and `cards/github.html` (1280 × 640,
+.github/social-preview.png). To render one, put `icon.png` (windows.png from the masters) and the
+Barlow / Barlow Semi Condensed latin woff2 files from apps/website/node_modules/@fontsource next to
+it and screenshot it with headless Chrome at exactly that window size and device scale 1. GitHub has
+no API for the social preview: upload it in the repository's Settings → General → Social preview.
