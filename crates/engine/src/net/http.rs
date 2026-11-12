@@ -178,6 +178,9 @@ enum Resource {
 }
 
 const MAX_CONNECTIONS: u64 = 32;
+const MAX_PER_PEER: u64 = 8;
+/// A request must arrive whole within this, however slowly its bytes come.
+const HEAD_TIME: Duration = Duration::from_secs(5);
 
 pub struct Server {
     port: u16,
@@ -197,20 +200,34 @@ pub fn server() -> Result<&'static Server> {
                 .spawn(move || {
                     // A player opens one or two connections at a time; anything far beyond
                     // that isn't a player.
-                    static OPEN: AtomicU64 = AtomicU64::new(0);
-                    for conn in listener.incoming().flatten() {
-                        if OPEN.load(Ordering::Acquire) >= MAX_CONNECTIONS {
-                            continue; // dropped: closes it
+                    // Open connections per peer address.
+                    static OPEN: Mutex<Option<HashMap<IpAddr, u64>>> = Mutex::new(None);
+                    let release = |ip: IpAddr| {
+                        let mut open = OPEN.lock().unwrap();
+                        if let Some(n) = open.get_or_insert_default().get_mut(&ip) {
+                            *n -= 1;
                         }
-                        OPEN.fetch_add(1, Ordering::AcqRel);
+                    };
+                    for conn in listener.incoming().flatten() {
+                        let Ok(peer) = conn.peer_addr() else { continue };
+                        let ip = peer.ip();
+                        {
+                            let mut open = OPEN.lock().unwrap();
+                            let open = open.get_or_insert_default();
+                            open.retain(|_, n| *n > 0);
+                            if open.values().sum::<u64>() >= MAX_CONNECTIONS || open.get(&ip).copied().unwrap_or(0) >= MAX_PER_PEER {
+                                continue; // dropped: closes it
+                            }
+                            *open.entry(ip).or_insert(0) += 1;
+                        }
                         let spawned = std::thread::Builder::new().name("hifi-http-conn".into()).spawn(move || {
                             if let Ok(server) = server() {
                                 let _ = server.handle(conn);
                             }
-                            OPEN.fetch_sub(1, Ordering::AcqRel);
+                            release(ip);
                         });
                         if spawned.is_err() {
-                            OPEN.fetch_sub(1, Ordering::AcqRel);
+                            release(ip);
                         }
                     }
                 })
@@ -260,10 +277,9 @@ impl Server {
     }
 
     fn handle(&self, mut conn: TcpStream) -> Result<()> {
-        conn.set_read_timeout(Some(Duration::from_secs(10)))?;
         conn.set_write_timeout(Some(Duration::from_secs(30)))?;
         let _ = conn.set_nodelay(true);
-        let mut reader = BufReader::new(conn.try_clone()?);
+        let mut reader = BufReader::new(Deadline { conn: conn.try_clone()?, until: Instant::now() + HEAD_TIME });
         let (method, target, headers) = read_head(&mut reader)?;
         let path = target.split('?').next().unwrap_or("").to_string();
         let resource = match self.resources.lock().unwrap().get(&path) {
@@ -310,6 +326,23 @@ impl Server {
         let _ = conn.flush();
         let _ = conn.shutdown(std::net::Shutdown::Both);
         Ok(())
+    }
+}
+
+/// Reads that fail once `until` has passed.
+struct Deadline {
+    conn: TcpStream,
+    until: Instant,
+}
+
+impl Read for Deadline {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        self.conn.set_read_timeout(Some(left))?;
+        self.conn.read(buf)
     }
 }
 
