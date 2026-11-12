@@ -1,5 +1,7 @@
 // Browser-only stand-in for the Rust backend, so the layout can be built and reviewed
 // without Tauri. Never used inside the app.
+// Device and preset names are generic on purpose: these screens end up in screenshots, and
+// BitSpring works with any DAC and any headphones.
 import { isIOS } from "./api";
 import type { Album, Device, DeviceEq, DspSettings, EqPreset, EqState, LibTrack, NowPlaying, Signal, Status, StoredPreset } from "./api";
 
@@ -43,9 +45,9 @@ export function mockCover(id: string): string {
 let libFolders = ["/Users/me/Music"];
 
 const devices: Device[] = [
-  { uid: "q7", name: "FiiO Q7", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256 },
-  { uid: "spk", name: "Mac Studio Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null },
-  { uid: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null },
+  { uid: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256 },
+  { uid: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null },
+  { uid: "air", name: "Bluetooth Headphones", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null },
 ];
 
 let dsp: DspSettings = { upsampleKhz: null, crossfeed: null, convolution: null, headroom: true, restoreHighs: false };
@@ -54,7 +56,7 @@ let lastExclusive = true;
 
 // ---- equalizer --------------------------------------------------------------------------------
 const LCD2: EqPreset = {
-  name: "Audeze LCD-2 (2021)", preamp: -6.4, autoPreamp: true, balance: 0, phase: "minimum", curve: [],
+  name: "Planar headphones", preamp: -6.4, autoPreamp: true, balance: 0, phase: "minimum", curve: [],
   bands: [
     { enabled: true, kind: "lowShelf", freq: 105, gain: 5.5, q: 0.7, slope: 12, channels: "both" },
     { enabled: true, kind: "peak", freq: 180, gain: -2.1, q: 0.9, slope: 12, channels: "both" },
@@ -297,7 +299,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "eq_import_file":
     case "eq_import_text": {
       const id = `p${eqSeq++}`;
-      const name = cmd === "eq_import_text" ? (args.name as string) : "Audeze LCD-2 (imported)";
+      const name = cmd === "eq_import_text" ? (args.name as string) : "My headphones (imported)";
       eq.presets.push({ ...structuredClone(LCD2), name, id, updated: Date.now() });
       eq.activeId = id;
       eq.enabled = true;

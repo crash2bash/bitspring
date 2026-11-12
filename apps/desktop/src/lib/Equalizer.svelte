@@ -273,7 +273,7 @@
   async function importFile() {
     menu = null;
     try {
-      if (!inTauri) return await afterImport(await api.eqImportFile("/Users/me/AutoEq/Audeze LCD-2 ParametricEQ.txt"));
+      if (!inTauri) return await afterImport(await api.eqImportFile("/Users/me/AutoEq/My Headphones ParametricEQ.txt"));
       const { open } = await import("@tauri-apps/plugin-dialog");
       const picked = await open({
         multiple: true,
@@ -1403,7 +1403,7 @@
   }
 
   /* phone: presets above the editor */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .equalizer {
       grid-template-columns: 1fr;
       grid-template-rows: auto minmax(0, 1fr);

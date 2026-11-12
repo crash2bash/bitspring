@@ -42,10 +42,14 @@
 	</array>
 	<key>CFBundleDisplayName</key>
 	<string>BitSpring</string>
-	<!-- The phone layout is built for portrait. -->
+	<!-- Any orientation: held sideways, a phone gets the one-screen layout (short screens count as
+	     phones, see +page.svelte); the unfolded iPhone Duo is wide and tall enough for the layout
+	     with the queue beside the player. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<!-- Only standard HTTPS: exempt from export compliance (no documents per upload). -->
 	<key>ITSAppUsesNonExemptEncryption</key>

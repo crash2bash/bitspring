@@ -266,7 +266,7 @@
   }
 
   /* phone: number, title, length — the rest is on the album page */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .artist,
     .album,
     .year,

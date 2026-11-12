@@ -584,7 +584,7 @@
     color: var(--brass);
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .toolbar {
       gap: 10px;
       padding: 10px 12px;

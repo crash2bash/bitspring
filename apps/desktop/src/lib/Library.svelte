@@ -730,7 +730,7 @@
   }
 
   /* phone: toolbar wraps, sections scroll sideways, album header stacks */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .toolbar {
       flex-wrap: wrap;
       gap: 10px;

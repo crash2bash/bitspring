@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { trackSafeArea } from "$lib/safeArea";
   import { api, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
@@ -89,7 +90,8 @@
   }
   $effect(() => save("screen", screen));
   /** The library tab on a phone is the library alone; a desktop window shows the queue beside everything. */
-  const phone = typeof window !== "undefined" ? window.matchMedia("(max-width: 700px)") : null;
+  const phone = typeof window !== "undefined" ? window.matchMedia("(max-width: 700px), (max-height: 500px)") : null;
+  onMount(() => trackSafeArea());
   onMount(() => {
     const fit = () => {
       if (!phone?.matches && screen === "queue") screen = "player";
@@ -1058,7 +1060,7 @@
   }
 
   /* --- phone: one screen at a time, tab bar at the bottom --- */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .app {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -1066,8 +1068,8 @@
     }
     header {
       gap: 10px;
-      padding: env(safe-area-inset-top) 12px 0;
-      min-height: calc(54px + env(safe-area-inset-top));
+      padding: var(--safe-top, env(safe-area-inset-top)) 12px 0;
+      min-height: calc(54px + var(--safe-top, env(safe-area-inset-top)));
     }
     header .tabs {
       display: none;
@@ -1084,6 +1086,15 @@
     header :global(.picker .trigger) {
       min-width: 0;
     }
+  }
+  /* The narrowest phones (iPhone Duo folded, mini): the device's name matters more than its rate,
+     which the now-playing card shows in large anyway. */
+  @media (max-width: 420px) {
+    header :global(.picker .rate) {
+      display: none;
+    }
+  }
+  @media (max-width: 700px), (max-height: 500px) {
     main,
     .queue {
       grid-row: 2;
@@ -1117,7 +1128,7 @@
       display: flex;
       background: var(--slate-900);
       border-top: 1px solid var(--slate-600);
-      padding-bottom: env(safe-area-inset-bottom);
+      padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom));
     }
     .tabbar button {
       position: relative;
@@ -1179,7 +1190,37 @@
     }
   }
 
-  @media (min-width: 701px) and (max-width: 1000px) {
+  /* --- phone held sideways: clear the Dynamic Island on either side, and put the cover beside
+     the title so the transport fits without scrolling --- */
+  @media (max-height: 500px) and (min-width: 600px) {
+    header,
+    .mini,
+    .tabbar {
+      padding-inline: max(12px, var(--safe-left, env(safe-area-inset-left))) max(12px, var(--safe-right, env(safe-area-inset-right)));
+    }
+    .panel,
+    .queue {
+      padding-inline: max(20px, var(--safe-left, env(safe-area-inset-left))) max(20px, var(--safe-right, env(safe-area-inset-right)));
+    }
+    .np {
+      grid-template-columns: auto minmax(0, 1fr);
+      justify-items: start;
+      align-items: center;
+      text-align: start;
+      gap: 22px;
+    }
+    .np .cover {
+      width: min(150px, 34dvh);
+    }
+    .album {
+      margin-inline: 0;
+    }
+    .link {
+      text-align: start;
+    }
+  }
+
+  @media (min-width: 701px) and (max-width: 1000px) and (min-height: 501px) {
     .app {
       grid-template-columns: 220px minmax(0, 1fr);
     }
@@ -1187,7 +1228,7 @@
       padding: 22px 24px;
     }
   }
-  @media (min-width: 701px) and (max-height: 700px) {
+  @media (min-width: 701px) and (min-height: 501px) and (max-height: 700px) {
     .panel {
       gap: 14px;
       padding-block: 18px;

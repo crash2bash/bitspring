@@ -624,7 +624,7 @@
     color: var(--mist);
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .playlists {
       grid-template-columns: minmax(0, 1fr);
       padding: 14px 12px 24px;

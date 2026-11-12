@@ -172,12 +172,12 @@
       animation: none;
     }
   }
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .notice {
       left: 10px;
       right: 10px;
       width: auto;
-      bottom: calc(env(safe-area-inset-bottom) + 132px);
+      bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 132px);
     }
   }
 </style>

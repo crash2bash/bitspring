@@ -252,7 +252,7 @@
   }
 
   /* phone: the panel spans the screen under the header */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .trigger {
       max-width: 100%;
     }
@@ -260,9 +260,9 @@
       position: fixed;
       left: 10px;
       right: 10px;
-      top: calc(env(safe-area-inset-top) + 58px);
+      top: calc(var(--safe-top, env(safe-area-inset-top)) + 58px);
       width: auto;
-      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 80px);
+      max-height: calc(100dvh - var(--safe-top, env(safe-area-inset-top)) - var(--safe-bottom, env(safe-area-inset-bottom)) - 80px);
       overflow-y: auto;
     }
   }

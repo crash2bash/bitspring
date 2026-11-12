@@ -139,7 +139,7 @@
   }
 
   /* phone: a bare icon (the header is tight), and the panel spans the screen under it */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .trigger {
       width: 26px;
       border-color: transparent;
@@ -148,7 +148,7 @@
       position: fixed;
       left: 10px;
       right: 10px;
-      top: calc(env(safe-area-inset-top) + 58px);
+      top: calc(var(--safe-top, env(safe-area-inset-top)) + 58px);
       width: auto;
     }
   }

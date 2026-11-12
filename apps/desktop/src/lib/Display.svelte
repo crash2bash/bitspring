@@ -501,7 +501,7 @@
     }
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) {
     .node {
       max-width: 84px;
     }
