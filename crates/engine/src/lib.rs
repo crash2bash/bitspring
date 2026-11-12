@@ -11,6 +11,7 @@ pub mod fpu;
 pub mod library;
 pub mod output;
 pub mod playlist;
+pub mod quality;
 pub mod rate;
 pub mod ring;
 pub mod store;

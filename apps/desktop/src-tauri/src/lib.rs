@@ -11,6 +11,7 @@ mod bookmarks;
 mod eq;
 mod library;
 mod playlists;
+mod quality;
 /// Qobuz and TIDAL: the real thing outside the App Store, a stand-in inside it.
 #[cfg_attr(all(feature = "streaming", not(target_os = "ios")), path = "stream_on.rs")]
 #[cfg_attr(not(all(feature = "streaming", not(target_os = "ios"))), path = "stream_off.rs")]
@@ -1158,6 +1159,7 @@ pub fn run() {
             let lib = library::Library::load(app.handle());
             app.manage(lib);
             app.manage(playlists::Playlists::default());
+            app.manage(quality::Quality::load(app.handle()));
             *app.state::<AppState>().eq.lock().unwrap() = eq::EqStore::load(app.handle());
             stream::init(app.handle());
             // Android: the main window is made here rather than from the config (see
@@ -1249,6 +1251,8 @@ pub fn run() {
             library::library_remove_folder,
             library::library_rescan,
             library::import_files,
+            quality::quality_cached,
+            quality::quality_check,
             playlists::playlists_list,
             playlists::playlist_get,
             playlists::playlist_create,

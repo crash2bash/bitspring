@@ -415,6 +415,25 @@ function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return inTauri ? invoke<T>(cmd, args) : mock<T>(cmd, args);
 }
 
+/** What the quality check concludes about a file (see the engine's quality.rs). */
+export type QualityVerdict = "genuine" | "upsampled" | "fromLossy" | "padded" | "lossy" | "dsd" | "inconclusive";
+
+export interface QualityReport {
+  verdict: { kind: QualityVerdict; bits?: number };
+  sampleRate: number;
+  bits: number | null;
+  effectiveBits: number | null;
+  /** Where the music ends (Hz); null: it fills the file's whole range. */
+  cutoffHz: number | null;
+  /** It ends at a wall rather than fading out. */
+  wall: boolean;
+  /** Average spectrum in dB, evenly from 0 Hz to half the sample rate. */
+  spectrum: number[];
+  peakDb: number;
+  clipped: number;
+  analysedSecs: number;
+}
+
 export const api = {
   listDevices: () => call<Device[]>("list_devices"),
   systemLocales: () => call<string[]>("system_locales"),
@@ -448,6 +467,8 @@ export const api = {
   libraryAddFolder: (path: string) => call<LibraryStatus>("library_add_folder", { path }),
   libraryRemoveFolder: (path: string) => call<LibraryStatus>("library_remove_folder", { path }),
   libraryRescan: () => call<LibraryStatus>("library_rescan"),
+  qualityCached: (paths: string[]) => call<(QualityReport | null)[]>("quality_cached", { paths }),
+  qualityCheck: (path: string) => call<QualityReport>("quality_check", { path }),
   meter: () => call<[number, number]>("meter"),
   playlists: () => call<PlaylistSummary[]>("playlists_list"),
   playlist: (id: string) => call<PlaylistDetail>("playlist_get", { id }),

@@ -16,6 +16,7 @@
     sortAsc = $bindable(true),
     onplay,
     actions,
+    marker,
     dimmed,
   }: {
     tracks: LibTrack[];
@@ -28,6 +29,8 @@
     onplay: (list: LibTrack[], index: number) => void;
     /** Buttons at the end of each row (index = position in `tracks` as given). */
     actions?: Snippet<[LibTrack, number]>;
+    /** Something small after each title (the quality check's badge). */
+    marker?: Snippet<[LibTrack]>;
     /** Rows that can't be played (missing files): shown greyed, not playable. */
     dimmed?: (t: LibTrack) => boolean;
   } = $props();
@@ -113,7 +116,11 @@
                 </button>
               {/if}
             {:else if c === "title"}
-              {tr.title}
+              {#if marker}
+                <span class="title-cell"><span class="title-text">{tr.title}</span>{@render marker(tr)}</span>
+              {:else}
+                {tr.title}
+              {/if}
             {:else if c === "artist"}
               {tr.artist ?? "—"}
             {:else if c === "album"}
@@ -231,6 +238,17 @@
   }
   td.title {
     font-weight: 500;
+  }
+  .title-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   td.artist,
   td.album,

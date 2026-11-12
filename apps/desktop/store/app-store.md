@@ -56,6 +56,7 @@ EVERY FORMAT YOU OWN
 • DSD (DSF and DFF): native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags and a library that finds new files by itself.
 • Albums ripped to one file with a CUE sheet play track by track.
+• Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM
 • Parametric EQ with presets for your headphones; imports AutoEQ, Equalizer APO and EasyEffects presets.
@@ -90,6 +91,7 @@ EVERY FORMAT YOU OWN
 • DSD (DSF and DFF) up to DSD1024: native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags, and a library that watches your music folders.
 • Albums ripped to one file with a CUE sheet play track by track.
+• Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM
 • Parametric EQ with presets for your headphones, in linear or minimum phase; imports AutoEQ, Equalizer APO and EasyEffects presets.

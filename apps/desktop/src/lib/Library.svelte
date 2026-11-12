@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { api, artistLabel, coverUrl, entryFromTrack, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type LibraryGoto, type LibraryStatus, type StreamingStatus } from "./api";
+  import { api, artistLabel, errorText, coverUrl, entryFromTrack, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type QualityReport, type QualityVerdict, type LibraryGoto, type LibraryStatus, type StreamingStatus } from "./api";
   import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
+  import QualityDialog from "./QualityDialog.svelte";
+  import { SUSPECT, verdictLabel } from "./quality";
   import { remember } from "./labels.svelte";
   import AddToPlaylist from "./AddToPlaylist.svelte";
   import Playlists from "./Playlists.svelte";
@@ -119,6 +121,50 @@
 
   let currentAlbumId = $derived(tracks.find((t) => t.path === currentPath)?.albumId ?? null);
   let albumTracks = $derived(openAlbum ? openAlbum.tracks.map((i) => tracks[i]).filter(Boolean) : []);
+
+  // ---- quality check --------------------------------------------------------------------------
+  let quality = $state<Record<string, QualityReport>>({});
+  let checking = $state<{ album: string; done: number; total: number } | null>(null);
+  let qualityError = $state<string | null>(null);
+  let shownQuality = $state<LibTrack | null>(null);
+  let albumQuality = $derived(albumTracks.map((tr) => quality[tr.path]).filter(Boolean));
+  let albumChecked = $derived(albumTracks.length > 0 && albumQuality.length === albumTracks.length);
+  /** "Upsampled (11), Genuine (1)": the album's verdicts, most common first. */
+  let qualitySummary = $derived.by(() => {
+    const counts = new Map<QualityVerdict, number>();
+    for (const r of albumQuality) counts.set(r.verdict.kind, (counts.get(r.verdict.kind) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1]).map(([k, n]) => (counts.size > 1 ? `${verdictLabel(k)} (${num(n)})` : verdictLabel(k)));
+  });
+
+  // Results from earlier checks show as soon as the album opens.
+  $effect(() => {
+    const paths = albumTracks.map((tr) => tr.path).filter((p) => !quality[p]);
+    if (!paths.length) return;
+    api.qualityCached(paths).then((rs) => rs.forEach((r, i) => r && (quality[paths[i]] = r)));
+  });
+
+  async function checkQuality() {
+    const album = openAlbum;
+    if (!album || checking) return;
+    const todo = albumTracks.filter((tr) => !quality[tr.path]);
+    checking = { album: album.id, done: 0, total: todo.length };
+    qualityError = null;
+    // A few at once: each decodes a whole file, and the disk may be slow.
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length) {
+        const tr = todo[next++];
+        try {
+          quality[tr.path] = await api.qualityCheck(tr.path);
+        } catch (e) {
+          qualityError = t("q.error", { name: tr.title, error: errorText(e) });
+        }
+        if (checking) checking.done++;
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    checking = null;
+  }
 
   // ---- data loading ---------------------------------------------------------------------------
   let revision = -1;
@@ -239,7 +285,7 @@
       </label>
     {/if}
 
-    {#if view !== "playlists"}<label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>{/if}
+    {#if view !== "playlists" && !openAlbum}<label class="hires"><input type="checkbox" bind:checked={hiResOnly} />{t("lib.hiresOnly")}</label>{/if}
 
     <div class="folders" bind:this={foldersRoot}>
       <button
@@ -348,7 +394,16 @@
               <button class="primary" onclick={() => playAlbum(openAlbum!)}>{t("common.play")}</button>
               <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("lib.enqueue")}</button>
               <AddToPlaylist entries={() => albumTracks.map(entryFromTrack)} />
+              {#if !albumChecked}
+                <button class="ghost" onclick={checkQuality} disabled={!!checking}>
+                  {checking?.album === openAlbum.id ? t("q.checking", { done: num(checking.done), total: num(checking.total) }) : t("q.check")}
+                </button>
+              {/if}
             </div>
+            {#if albumQuality.length && !checking}
+              <p class="facts quality">{t("q.summary")}: {list(qualitySummary)}</p>
+            {/if}
+            {#if qualityError}<p class="facts q-err">{qualityError}</p>{/if}
           </div>
         </div>
         <TrackTable
@@ -358,8 +413,28 @@
           columns={["number", "title", "duration", "format"]}
           onplay={(_, i) => playAlbum(openAlbum!, i)}
         >
+          {#snippet marker(tr)}
+            {@const r = quality[tr.path]}
+            {#if r}
+              <button
+                class="q-badge {SUSPECT.includes(r.verdict.kind) ? 'suspect' : r.verdict.kind === 'genuine' ? 'ok' : 'open'}"
+                onclick={(e) => (e.stopPropagation(), (shownQuality = tr))}
+                ondblclick={(e) => e.stopPropagation()}
+                title={verdictLabel(r.verdict.kind)}
+              >
+                {#if r.verdict.kind === "genuine"}
+                  <svg width="11" height="11" viewBox="0 0 11 11" aria-label={verdictLabel("genuine")}><path d="M1.5 5.8l2.6 2.6 5.4-6" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
+                {:else}
+                  {verdictLabel(r.verdict.kind)}
+                {/if}
+              </button>
+            {/if}
+          {/snippet}
           {#snippet actions(tr)}<AddToPlaylist compact entries={() => [entryFromTrack(tr)]} />{/snippet}
         </TrackTable>
+        {#if shownQuality && quality[shownQuality.path]}
+          <QualityDialog track={shownQuality} report={quality[shownQuality.path]} onclose={() => (shownQuality = null)} />
+        {/if}
       </div>
     {:else if view === "tracks"}
       {#if visibleTracks.length}
@@ -688,8 +763,38 @@
   }
   .album-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     margin-top: 16px;
+  }
+  .facts.quality {
+    margin-top: 12px;
+  }
+  .facts.q-err {
+    color: var(--alarm);
+  }
+  .q-badge {
+    flex: none;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: var(--t-xs);
+    font-weight: 500;
+    line-height: 1.5;
+    border: 1px solid currentColor;
+  }
+  .q-badge.ok {
+    padding: 2px 5px;
+    color: var(--brass);
+    border-color: transparent;
+  }
+  .q-badge.suspect {
+    color: var(--alarm);
+  }
+  .q-badge.open {
+    color: var(--mist);
+  }
+  .q-badge:hover {
+    background: var(--slate-600);
   }
 
   .primary {

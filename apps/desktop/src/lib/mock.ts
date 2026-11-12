@@ -42,6 +42,8 @@ export function mockCover(id: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="${c}"/><circle cx="150" cy="150" r="90" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="2"/></svg>`)}`;
 }
 
+const mockChecks: Record<string, unknown> = {};
+
 let libFolders = ["/Users/me/Music"];
 
 const devices: Device[] = [
@@ -177,6 +179,26 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return libAlbums as T;
     case "library_tracks":
       return libTracks as T;
+    case "quality_cached":
+      return (args.paths as string[]).map((p) => mockChecks[p] ?? null) as T;
+    case "quality_check": {
+      await new Promise((r) => setTimeout(r, 400));
+      const path = args.path as string;
+      const t = libTracks.find((x) => x.path === path);
+      const rate = t?.sampleRate ?? 44100;
+      // The second track of a hi-res album "turns out" upsampled, so every state can be seen.
+      const n = t?.trackNumber ?? 1;
+      const kind = !t?.lossless ? "lossy" : rate > 48000 && n === 2 ? "upsampled" : t?.format === "WAV" ? "inconclusive" : "genuine";
+      const top = kind === "upsampled" ? 21600 : kind === "lossy" ? 16000 : kind === "inconclusive" ? 20100 : rate > 48000 ? rate * 0.36 : rate / 2;
+      const spectrum = Array.from({ length: 400 }, (_, i) => {
+        const hz = ((i + 0.5) / 400) * (rate / 2);
+        const music = -38 - 22 * Math.log10(1 + hz / 900) + Math.sin(i * 1.7) * 2;
+        return hz < top ? music : kind === "genuine" || kind === "lossy" ? Math.min(music, -150) : -150 - (i % 7);
+      });
+      const r = { verdict: { kind }, sampleRate: rate, bits: t?.bits ?? null, effectiveBits: t?.bits === 24 ? 24 : null, cutoffHz: kind === "genuine" && rate <= 48000 ? null : Math.round(top), wall: kind !== "genuine", spectrum, peakDb: -0.3 - n * 0.4, clipped: n === 3 ? 4 : 0, analysedSecs: t?.duration ?? 60 };
+      mockChecks[path] = r;
+      return r as T;
+    }
     case "expand_paths":
       return (args.paths as string[]).map((path) => ({ path, title: null, artist: null })) as T;
     case "play_file": {
