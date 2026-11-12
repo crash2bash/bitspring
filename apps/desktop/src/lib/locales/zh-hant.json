@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} 縮混為{to}，{db} dB 以免削波",
+  "layout.stereo": "立體聲",
+  "layout.mono": "單聲道",
+  "layout.channels": { "other": "{n} 聲道" },
   "step.eq": "等化器「{name}」",
   "step.crossfeed.light": "交叉饋送（輕）",
   "step.crossfeed.medium": "交叉饋送（中）",
@@ -132,6 +136,7 @@
   "dsd.volume": "DoP 要求 iPhone 音量調到最大，請在 DAC 上調整音量",
   "dsd.dsp": "等化器與交叉饋送只能處理 PCM",
   "dsd.rate": "{device} 不支援 DoP {dsd} 所需的 {rate} kHz",
+  "dsd.channels": "檔案的聲道數（{n}）多於裝置，而 DoP 無法縮混",
 
   "enh.button": "音效強化",
   "enh.dialog": "音訊處理",

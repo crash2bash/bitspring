@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} mixed down to {to}, {db} dB so it never clips",
+  "layout.stereo": "stereo",
+  "layout.mono": "mono",
+  "layout.channels": { "one": "{n} channel", "other": "{n} channels" },
   "step.eq": "equalizer “{name}”",
   "step.crossfeed.light": "light crossfeed",
   "step.crossfeed.medium": "medium crossfeed",
@@ -132,6 +136,7 @@
   "dsd.volume": "for DoP the iPhone volume must be at maximum; adjust the volume on the DAC",
   "dsd.dsp": "the equalizer and crossfeed work on PCM",
   "dsd.rate": "{device} doesn't run at {rate} kHz, which DoP {dsd} needs",
+  "dsd.channels": "the file has more channels ({n}) than the device, and DoP can't mix them down",
 
   "enh.button": "Enhancers",
   "enh.dialog": "Sound processing",

@@ -56,6 +56,7 @@ EVERY FORMAT YOU OWN
 • DSD (DSF, DFF and SACD disc images): native over DoP on DACs that support it, or converted to 176.4 kHz PCM.
 • Album art, tags and a library that finds new files by itself.
 • Albums ripped to one file with a CUE sheet play track by track.
+• Multichannel files (5.1, 7.1) play channel for channel on multichannel DACs and receivers, or are mixed down to stereo without clipping.
 • Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM

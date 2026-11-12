@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} 缩混为{to}，{db} dB 以免削波",
+  "layout.stereo": "立体声",
+  "layout.mono": "单声道",
+  "layout.channels": { "other": "{n} 声道" },
   "step.eq": "均衡器“{name}”",
   "step.crossfeed.light": "交叉馈送（轻）",
   "step.crossfeed.medium": "交叉馈送（中）",
@@ -132,6 +136,7 @@
   "dsd.volume": "DoP 要求 iPhone 音量调到最大，请在 DAC 上调节音量",
   "dsd.dsp": "均衡器和交叉馈送只能处理 PCM",
   "dsd.rate": "{device} 不支持 DoP {dsd} 所需的 {rate} kHz",
+  "dsd.channels": "文件的声道数（{n}）多于设备，而 DoP 无法缩混",
 
   "enh.button": "音效增强",
   "enh.dialog": "音频处理",

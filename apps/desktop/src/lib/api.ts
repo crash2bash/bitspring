@@ -2,7 +2,7 @@
 // Outside Tauri (plain browser, for layout work) it falls back to mock data.
 import { invoke } from "@tauri-apps/api/core";
 import { mock, mockCover } from "./mock";
-import { num, t } from "./i18n.svelte";
+import { num, t, tn } from "./i18n.svelte";
 
 export interface Device {
   uid: string;
@@ -48,6 +48,10 @@ export interface Signal {
   dop: boolean;
   /** Why DoP was asked for but this file plays as PCM. */
   dsdNote: DsdNote | null;
+  /** The source's channels as the engine names them: "Stereo", "Mono", "5.1", "10 ch". */
+  layout: string;
+  /** A multichannel source folded down to the device's speakers (gainDb keeps it from clipping). */
+  downmix: { to: string; gainDb: number } | null;
   bitPerfect: boolean;
 }
 
@@ -58,7 +62,8 @@ export type DsdNote =
   | { kind: "exclusive" }
   | { kind: "volume" }
   | { kind: "dsp" }
-  | { kind: "rate"; device: string; khz: number; dsd: string };
+  | { kind: "rate"; device: string; khz: number; dsd: string }
+  | { kind: "channels"; channels: number };
 
 /** The queue stopped at a track it couldn't play. */
 export interface AdvanceError {
@@ -669,9 +674,18 @@ export function transportLabel(transport: string): string {
   return TRANSPORT_NAMES[transport] ?? (TRANSPORT_KEYS.has(transport) ? t(`transport.${transport}`) : transport);
 }
 
+/** A channel layout ("Stereo", "5.1", "10 ch" from the engine) in the UI language. */
+export function layoutName(layout: string): string {
+  if (layout === "Stereo") return t("layout.stereo");
+  if (layout === "Mono") return t("layout.mono");
+  const n = /^(\d+) ch$/.exec(layout);
+  return n ? tn("layout.channels", +n[1]) : layout;
+}
+
 /** Why DoP isn't used, in the UI language. */
 export function dsdNoteText(n: DsdNote): string {
   if (n.kind === "rate") return t("dsd.rate", { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  if (n.kind === "channels") return t("dsd.channels", { n: num(n.channels) });
   return t(`dsd.${n.kind}`);
 }
 

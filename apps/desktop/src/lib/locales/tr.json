@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from}, {to} olarak indirildi; kırpılmasın diye {db} dB",
+  "layout.stereo": "stereo",
+  "layout.mono": "mono",
+  "layout.channels": { "one": "{n} kanal", "other": "{n} kanal" },
   "step.eq": "“{name}” ekolayzır profili",
   "step.crossfeed.light": "hafif crossfeed",
   "step.crossfeed.medium": "orta crossfeed",
@@ -132,6 +136,7 @@
   "dsd.volume": "DoP için iPhone'un ses seviyesi maksimumda olmalı; sesi DAC'tan ayarla",
   "dsd.dsp": "ekolayzır ve crossfeed PCM üzerinde çalışır",
   "dsd.rate": "{device} aygıtı, DoP {dsd} için gereken {rate} kHz'de çalışmıyor",
+  "dsd.channels": "dosyada cihazdan daha fazla kanal ({n}) var ve DoP bunları indirgeyemez",
 
   "enh.button": "İyileştirmeler",
   "enh.dialog": "Ses işleme",

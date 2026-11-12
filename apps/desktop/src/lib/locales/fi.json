@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} miksattu muotoon {to}, {db} dB, jottei mikään säröydy",
+  "layout.stereo": "stereo",
+  "layout.mono": "mono",
+  "layout.channels": { "one": "{n} kanava", "other": "{n} kanavaa" },
   "step.eq": "taajuuskorjain ”{name}”",
   "step.crossfeed.light": "kevyt crossfeed",
   "step.crossfeed.medium": "keskivahva crossfeed",
@@ -132,6 +136,7 @@
   "dsd.volume": "DoP vaatii iPhonen äänenvoimakkuuden maksimiin; säädä voimakkuutta DAC:sta",
   "dsd.dsp": "taajuuskorjain ja crossfeed toimivat PCM:llä",
   "dsd.rate": "{device} ei toimi {rate} kHz:n taajuudella, jota DoP {dsd} vaatii",
+  "dsd.channels": "tiedostossa on enemmän kanavia ({n}) kuin laitteessa, eikä DoP osaa miksata niitä",
 
   "enh.button": "Parannukset",
   "enh.dialog": "Äänenkäsittely",

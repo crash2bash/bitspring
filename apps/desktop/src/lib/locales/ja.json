@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} を{to}にダウンミックス（クリップしないよう {db} dB）",
+  "layout.stereo": "ステレオ",
+  "layout.mono": "モノラル",
+  "layout.channels": { "other": "{n} チャンネル" },
   "step.eq": "イコライザー「{name}」",
   "step.crossfeed.light": "クロスフィード（弱）",
   "step.crossfeed.medium": "クロスフィード（中）",
@@ -132,6 +136,7 @@
   "dsd.volume": "DoPにはiPhoneの音量を最大にする必要があり、音量はDAC側で調整します",
   "dsd.dsp": "イコライザーとクロスフィードはPCMで動作します",
   "dsd.rate": "{device}はDoP {dsd}に必要な{rate} kHzで動作しません",
+  "dsd.channels": "ファイルのチャンネル数（{n}）がデバイスより多く、DoP ではダウンミックスできません",
 
   "enh.button": "サウンド調整",
   "enh.dialog": "サウンド処理",

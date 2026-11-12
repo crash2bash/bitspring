@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} mixat în {to}, {db} dB ca să nu distorsioneze niciodată",
+  "layout.stereo": "stereo",
+  "layout.mono": "mono",
+  "layout.channels": { "one": "{n} canal", "few": "{n} canale", "other": "{n} de canale" },
   "step.eq": "egalizator „{name}”",
   "step.crossfeed.light": "crossfeed ușor",
   "step.crossfeed.medium": "crossfeed mediu",
@@ -132,6 +136,7 @@
   "dsd.volume": "pentru DoP, volumul iPhone-ului trebuie să fie la maximum; reglează volumul din DAC",
   "dsd.dsp": "egalizatorul și crossfeed-ul lucrează pe PCM",
   "dsd.rate": "{device} nu funcționează la {rate} kHz, frecvența cerută de DoP {dsd}",
+  "dsd.channels": "fișierul are mai multe canale ({n}) decât dispozitivul, iar DoP nu le poate mixa",
 
   "enh.button": "Îmbunătățiri",
   "enh.dialog": "Procesarea sunetului",

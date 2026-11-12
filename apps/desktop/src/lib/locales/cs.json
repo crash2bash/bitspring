@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} smícháno do {to}, {db} dB, aby se nic nepřebudilo",
+  "layout.stereo": "stereo",
+  "layout.mono": "mono",
+  "layout.channels": { "one": "{n} kanál", "few": "{n} kanály", "many": "{n} kanálu", "other": "{n} kanálů" },
   "step.eq": "ekvalizér „{name}“",
   "step.crossfeed.light": "slabý crossfeed",
   "step.crossfeed.medium": "střední crossfeed",
@@ -132,6 +136,7 @@
   "dsd.volume": "pro DoP musí být hlasitost iPhonu na maximu; hlasitost regulujte na převodníku",
   "dsd.dsp": "ekvalizér a crossfeed pracují s PCM",
   "dsd.rate": "{device} nepracuje na {rate} kHz, které DoP {dsd} potřebuje",
+  "dsd.channels": "soubor má víc kanálů ({n}) než zařízení a DoP je neumí smíchat",
 
   "enh.button": "Vylepšení",
   "enh.dialog": "Zpracování zvuku",

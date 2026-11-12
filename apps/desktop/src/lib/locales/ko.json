@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from}을(를) {to}(으)로 다운믹스, 클리핑이 없도록 {db} dB",
+  "layout.stereo": "스테레오",
+  "layout.mono": "모노",
+  "layout.channels": { "other": "{n}채널" },
   "step.eq": "이퀄라이저 “{name}”",
   "step.crossfeed.light": "크로스피드(약)",
   "step.crossfeed.medium": "크로스피드(중)",
@@ -132,6 +136,7 @@
   "dsd.volume": "DoP를 쓰려면 iPhone 볼륨이 최대여야 하며, 볼륨은 DAC에서 조절해야 합니다",
   "dsd.dsp": "이퀄라이저와 크로스피드는 PCM에서 작동합니다",
   "dsd.rate": "{device}에서 DoP {dsd}에 필요한 {rate} kHz를 쓸 수 없습니다",
+  "dsd.channels": "파일의 채널 수({n})가 장치보다 많고, DoP는 다운믹스할 수 없습니다",
 
   "enh.button": "사운드 조정",
   "enh.dialog": "사운드 처리",

@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} кГц",
   "step.resample": "{from} → {to} кГц",
+  "step.downmix": "{from} сведено в {to}, {db} дБ, чтобы не было клиппинга",
+  "layout.stereo": "стерео",
+  "layout.mono": "моно",
+  "layout.channels": { "one": "{n} канал", "few": "{n} канала", "many": "{n} каналов", "other": "{n} канала" },
   "step.eq": "эквалайзер «{name}»",
   "step.crossfeed.light": "кроссфид лёгкий",
   "step.crossfeed.medium": "кроссфид средний",
@@ -132,6 +136,7 @@
   "dsd.volume": "для DoP громкость iPhone должна быть на максимуме — громкость регулируйте на DAC",
   "dsd.dsp": "эквалайзер и кроссфид работают с PCM",
   "dsd.rate": "{device} не работает на {rate} кГц, нужных для DoP {dsd}",
+  "dsd.channels": "в файле больше каналов ({n}), чем у устройства, а DoP не умеет их сводить",
 
   "enh.button": "Обработка",
   "enh.dialog": "Обработка звука",

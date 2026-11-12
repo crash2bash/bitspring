@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} nedmixat till {to}, {db} dB så att det aldrig klipper",
+  "layout.stereo": "stereo",
+  "layout.mono": "mono",
+  "layout.channels": { "one": "{n} kanal", "other": "{n} kanaler" },
   "step.eq": "equalizer ”{name}”",
   "step.crossfeed.light": "crossfeed (lätt)",
   "step.crossfeed.medium": "crossfeed (mellan)",
@@ -132,6 +136,7 @@
   "dsd.volume": "för DoP måste iPhonens volym stå på max; justera volymen på DAC:en",
   "dsd.dsp": "equalizern och crossfeed arbetar med PCM",
   "dsd.rate": "{device} kan inte köras i {rate} kHz, vilket DoP {dsd} kräver",
+  "dsd.channels": "filen har fler kanaler ({n}) än enheten, och DoP kan inte mixa ned dem",
 
   "enh.button": "Förbättringar",
   "enh.dialog": "Ljudbearbetning",

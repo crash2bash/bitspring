@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} ← PCM {rate} كيلوهرتز",
   "step.resample": "{from} ← {to} كيلوهرتز",
+  "step.downmix": "{from} مُدمج إلى {to}، {db} ديسيبل كي لا يحدث تشوّه أبدًا",
+  "layout.stereo": "ستيريو",
+  "layout.mono": "أحادي",
+  "layout.channels": { "zero": "{n} قناة", "one": "قناة واحدة", "two": "قناتان", "few": "{n} قنوات", "many": "{n} قناة", "other": "{n} قناة" },
   "step.eq": "معادل الصوت «{name}»",
   "step.crossfeed.light": "تغذية متقاطعة خفيفة",
   "step.crossfeed.medium": "تغذية متقاطعة متوسطة",
@@ -132,6 +136,7 @@
   "dsd.volume": "يتطلّب DoP رفع صوت الـiPhone إلى الحد الأقصى، فاضبط مستوى الصوت من الـDAC",
   "dsd.dsp": "معادل الصوت والتغذية المتقاطعة يعملان على PCM",
   "dsd.rate": "لا يعمل {device} بمعدل {rate} كيلوهرتز الذي يتطلّبه DoP {dsd}",
+  "dsd.channels": "في الملف قنوات أكثر ({n}) مما في الجهاز، ولا يستطيع DoP دمجها",
 
   "enh.button": "المحسّنات",
   "enh.dialog": "معالجة الصوت",

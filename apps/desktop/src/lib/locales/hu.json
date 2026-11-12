@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} lekeverve {to} formára, {db} dB, hogy sose torzuljon",
+  "layout.stereo": "sztereó",
+  "layout.mono": "monó",
+  "layout.channels": { "one": "{n} csatorna", "other": "{n} csatorna" },
   "step.eq": "„{name}” EQ-profil",
   "step.crossfeed.light": "enyhe crossfeed",
   "step.crossfeed.medium": "közepes crossfeed",
@@ -132,6 +136,7 @@
   "dsd.volume": "a DoP-hez az iPhone hangerejének maximumon kell lennie; a hangerőt a DAC-on állítsd",
   "dsd.dsp": "a hangszínszabályzó és a crossfeed PCM-en dolgozik",
   "dsd.rate": "{device} nem működik {rate} kHz-en, pedig a {dsd} DoP-n keresztüli lejátszásához ez kell",
+  "dsd.channels": "a fájlnak több csatornája van ({n}), mint az eszköznek, és a DoP nem tudja lekeverni őket",
 
   "enh.button": "Hangfeldolgozás",
   "enh.dialog": "Hangfeldolgozás",

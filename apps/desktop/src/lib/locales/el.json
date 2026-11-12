@@ -102,6 +102,10 @@
 
   "step.dsdToPcm": "{dsd} → PCM {rate} kHz",
   "step.resample": "{from} → {to} kHz",
+  "step.downmix": "{from} μιξαρισμένο σε {to}, {db} dB ώστε να μην παραμορφώνει ποτέ",
+  "layout.stereo": "στερεοφωνικό",
+  "layout.mono": "μονοφωνικό",
+  "layout.channels": { "one": "{n} κανάλι", "other": "{n} κανάλια" },
   "step.eq": "ισοσταθμιστής «{name}»",
   "step.crossfeed.light": "ήπιο crossfeed",
   "step.crossfeed.medium": "μεσαίο crossfeed",
@@ -132,6 +136,7 @@
   "dsd.volume": "για το DoP η ένταση του iPhone πρέπει να είναι στο μέγιστο· ρυθμίστε την ένταση στο DAC",
   "dsd.dsp": "ο ισοσταθμιστής και το crossfeed λειτουργούν σε PCM",
   "dsd.rate": "η συσκευή {device} δεν λειτουργεί στα {rate} kHz που απαιτεί το DoP {dsd}",
+  "dsd.channels": "το αρχείο έχει περισσότερα κανάλια ({n}) από τη συσκευή, και το DoP δεν μπορεί να τα μιξάρει",
 
   "enh.button": "Βελτιώσεις",
   "enh.dialog": "Επεξεργασία ήχου",

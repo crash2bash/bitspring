@@ -15,6 +15,7 @@ const LIB: [string, string, string | null, string | null, string, number, number
   ["Northern Lights Trio", "Quiet Hours", "2019", "Jazz", "FLAC", 96000, 24, "#2b4a5c", ["Morning Glass", "Slow Current", "Blue Hour", "Afterglow"]],
   ["Northern Lights Trio", "City Rain", "2022", "Jazz", "FLAC", 44100, 16, "#5c3a2b", ["Neon Puddles", "Last Tram", "Umbrella Song"]],
   [UNKNOWN_ARTIST, "Untitled Sketches", null, null, "WAV", 44100, 16, null, ["01 sketch one", "02 sketch two"]],
+  ["Halvorsen Quartet", "Surround Sessions 5.1", "2023", "Classical", "FLAC", 48000, 24, "#3b2e6b", ["Room Tone", "Canon in Six"]],
 ];
 const libTracks: LibTrack[] = [];
 const libAlbums: Album[] = LIB.map(([artist, title, year, genre, format, rate, bits, color, names], ai) => {
@@ -121,10 +122,12 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
       exclusive, transport: dev.transport, resampled: deviceRate !== 176400,
       eq: dop ? null : eqOn(), eqLinear: false, convolution: dop ? null : convName(), crossfeed: dop ? null : dsp.crossfeed,
       sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
-      dsdRate, dop, dsdNote, bitPerfect: dop,
+      dsdRate, dop, dsdNote, layout: "Stereo", downmix: null, bitPerfect: dop,
     };
   }
   const src = 44100;
+  // A surround file folds down to stereo on every mock device.
+  const surround = /surround|5\.1/i.test(path);
   const up = dsp.upsampleKhz ? Math.min(dsp.upsampleKhz * 1000, air ? 48000 : 352800) : null;
   const rate = up ?? (air ? 48000 : src);
   return {
@@ -133,7 +136,8 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
     eq: eqOn(), eqLinear: eqSnapshot().presets.find((p) => p.name === eqOn())?.phase === "linear", convolution: convName(), crossfeed: dsp.crossfeed,
     sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
     dsdRate: null, dop: false, dsdNote: null,
-    bitPerfect: !air && exclusive && rate === src && !eqOn() && !dsp.convolution && !dsp.crossfeed,
+    layout: surround ? "5.1" : "Stereo", downmix: surround ? { to: "Stereo", gainDb: -7.7 } : null,
+    bitPerfect: !surround && !air && exclusive && rate === src && !eqOn() && !dsp.convolution && !dsp.crossfeed,
   };
 }
 
@@ -365,7 +369,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "eq_export_text":
       return "Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.7\n" as T;
     case "channel_test":
-      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, dsdRate: null, dop: false, dsdNote: null, bitPerfect: true } as T;
+      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, dsdRate: null, dop: false, dsdNote: null, layout: "Stereo", downmix: null, bitPerfect: true } as T;
     case "playlists_list":
       return [...mockLists].sort((a, b) => b.updated - a.updated).map(mockSummary) as T;
     case "playlist_get": {

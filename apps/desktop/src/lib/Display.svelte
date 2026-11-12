@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, clock, deviceLabel, dsdName, dsdNoteText, filePath, khz, osMixer, transportLabel, type NowPlaying, type Status } from "./api";
+  import { api, clock, deviceLabel, dsdName, dsdNoteText, filePath, khz, layoutName, osMixer, transportLabel, type NowPlaying, type Status } from "./api";
   import { list, num, sentences, t } from "./i18n.svelte";
 
   let {
@@ -24,12 +24,16 @@
 
   let signal = $derived(now?.signal ?? null);
   let format = $derived(now && !testing ? (filePath(now.path).split(".").pop()?.toUpperCase() ?? null) : null);
+  /** The source's channels, when it isn't plain stereo ("5.1", "Mono"). */
+  let layout = $derived(signal && signal.layout !== "Stereo" ? layoutName(signal.layout) : null);
 
   // ---- signal path ---------------------------------------------------------------------------
   let processing = $derived.by(() => {
     if (!signal) return [] as string[];
     const steps: string[] = [];
     if (signal.dsdRate !== null && !signal.dop) steps.push(t("step.dsdToPcm", { dsd: dsdName(signal.dsdRate), rate: khz(signal.sourceRate) }));
+    if (signal.downmix)
+      steps.push(t("step.downmix", { from: layoutName(signal.layout), to: layoutName(signal.downmix.to), db: num(signal.downmix.gainDb) }));
     if (signal.resampled) steps.push(t("step.resample", { from: khz(signal.sourceRate), to: khz(signal.deviceRate) }));
     if (signal.eq) steps.push(t(signal.eqLinear ? "step.eqLinear" : "step.eq", { name: signal.eq }));
     if (signal.convolution) steps.push(t("step.convolution", { name: signal.convolution }));
@@ -147,9 +151,9 @@
       <p class="source">
         {#if signal && !testing}
           {#if signal.dsdRate !== null}
-            {t("source.file", { details: list([dsdName(signal.dsdRate), `${num(signal.dsdRate / 1e6, { maximumFractionDigits: 2 })} ${t("unit.mhz")}`, format]) })}
+            {t("source.file", { details: list([dsdName(signal.dsdRate), `${num(signal.dsdRate / 1e6, { maximumFractionDigits: 2 })} ${t("unit.mhz")}`, format, layout]) })}
           {:else}
-            {t("source.file", { details: list([`${khz(signal.sourceRate)} ${t("unit.khz")}`, t("source.bits", { bits: signal.sourceBits ?? "?" }), format]) })}
+            {t("source.file", { details: list([`${khz(signal.sourceRate)} ${t("unit.khz")}`, t("source.bits", { bits: signal.sourceBits ?? "?" }), format, layout]) })}
           {/if}
         {:else if testing}
           {t("source.test")}

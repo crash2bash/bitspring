@@ -69,6 +69,8 @@ enum DsdNote {
     Dsp,
     /// The device doesn't run at the PCM rate DoP needs (`khz`) for this DSD rate (`dsd`).
     Rate { device: String, khz: f64, dsd: String },
+    /// The file has more channels (`channels`) than the device: DoP can't fold them down.
+    Channels { channels: usize },
 }
 
 /// The queue stopped at a track it couldn't play: which one, and the engine's reason.
@@ -237,7 +239,18 @@ struct SignalDto {
     dop: bool,
     /// Why DoP was asked for but this DSD file plays as PCM.
     dsd_note: Option<DsdNote>,
+    /// The source's channels: "Stereo", "Mono", "5.1", "10 ch"…
+    layout: String,
+    /// A multichannel source folded down to the device's speakers.
+    downmix: Option<DownmixDto>,
     bit_perfect: bool,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DownmixDto {
+    to: String,
+    gain_db: f64,
 }
 
 impl From<&SignalPath> for SignalDto {
@@ -263,6 +276,8 @@ impl From<&SignalPath> for SignalDto {
             dsd_rate: p.dsd.map(|d| d.rate),
             dop: p.dsd.is_some_and(|d| d.dop),
             dsd_note: None,
+            layout: p.layout.clone(),
+            downmix: p.downmix.as_ref().map(|d| DownmixDto { to: d.to.clone(), gain_db: d.gain_db }),
             bit_perfect: p.bit_perfect,
         }
     }
@@ -357,8 +372,8 @@ fn dsd_mode(path: &std::path::Path, device: &Output, exclusive: bool, dop: bool,
     if !dop || !dsd::is_dsd_path(path) {
         return (DsdMode::Pcm, None);
     }
-    let rate = match dsd::probe(path) {
-        Ok(h) => h.rate,
+    let (rate, channels) = match dsd::probe(path) {
+        Ok(h) => (h.rate, h.channels),
         Err(_) => return (DsdMode::Pcm, None),
     };
     let note = if !exclusive {
@@ -367,6 +382,8 @@ fn dsd_mode(path: &std::path::Path, device: &Output, exclusive: bool, dop: bool,
         Some(DsdNote::Volume)
     } else if dsp.eq.is_some() || dsp.convolution.is_some() || dsp.crossfeed.is_some() {
         Some(DsdNote::Dsp)
+    } else if channels > 2 && channels > device.output_channels() as usize {
+        Some(DsdNote::Channels { channels })
     } else if !device.supports_dop(rate) {
         Some(DsdNote::Rate {
             device: device.name().trim().to_string(),
