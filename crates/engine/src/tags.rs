@@ -78,11 +78,19 @@ pub fn write(path: &Path, edit: &TagEdit) -> Result<()> {
         bail!("tags of this kind of file can't be edited");
     }
     let name = path.file_name().ok_or_else(|| anyhow!("not a file"))?.to_string_lossy().into_owned();
-    // Hidden, and with the original's extension (which tells the tag writer the format).
-    let tmp: PathBuf = path.with_file_name(format!(".bitspring-{name}"));
+    // Hidden, with a random part, and the original's extension (the decoder that checks it
+    // goes by the extension). Created new or not at all: whatever already has the name (a
+    // link planted there) is never followed or written through.
+    let tmp: PathBuf = path.with_file_name(format!(".bitspring-{}-{name}", &crate::net::http::random_hex()[..12]));
+    let mut copy = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .context("couldn't make a copy to write the tags into")?;
     let result = (|| {
-        std::fs::copy(path, &tmp).context("couldn't copy the file to write its tags")?;
-        apply(&tmp, edit)?;
+        std::io::copy(&mut File::open(path)?, &mut copy).context("couldn't copy the file to write its tags")?;
+        apply(&mut copy, edit)?;
         verify(path, &tmp)?;
         // Keep the original's permissions; then the copy takes its place in one step.
         if let Ok(meta) = std::fs::metadata(path) {
@@ -97,8 +105,10 @@ pub fn write(path: &Path, edit: &TagEdit) -> Result<()> {
     result
 }
 
-fn apply(path: &Path, edit: &TagEdit) -> Result<()> {
-    let mut file = lofty::read_from_path(path).context("couldn't read the file's tags")?;
+fn apply(handle: &mut File, edit: &TagEdit) -> Result<()> {
+    use std::io::{Seek, SeekFrom};
+    handle.seek(SeekFrom::Start(0))?;
+    let mut file = lofty::read_from(handle).context("couldn't read the file's tags")?;
     if file.primary_tag_mut().is_none() {
         let kind = file.primary_tag_type();
         file.insert_tag(Tag::new(kind));
@@ -110,7 +120,9 @@ fn apply(path: &Path, edit: &TagEdit) -> Result<()> {
             apply_to(tag, edit)?;
         }
     }
-    file.save_to_path(path, WriteOptions::default()).context("couldn't write the tags")?;
+    handle.seek(SeekFrom::Start(0))?;
+    file.save_to(handle, WriteOptions::default()).context("couldn't write the tags")?;
+    handle.sync_all()?;
     Ok(())
 }
 
