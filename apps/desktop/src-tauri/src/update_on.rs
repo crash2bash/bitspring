@@ -45,6 +45,12 @@ fn failed(e: impl std::fmt::Display) -> UserError {
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<UpdateCheck, UserError> {
     let current = app.package_info().version.to_string();
+    // A development build is a bare binary in target/debug, not an installed app: the macOS
+    // updater takes the folder around it for the app bundle and replaces it wholesale (it once
+    // swapped target/debug for a release BitSpring.app). Only installed builds update.
+    if cfg!(debug_assertions) {
+        return Ok(UpdateCheck { enabled: false, current, update: None });
+    }
     let update = platform::check(&app, &current).await?;
     Ok(UpdateCheck { enabled: true, current, update })
 }
@@ -53,6 +59,9 @@ pub async fn update_check(app: AppHandle) -> Result<UpdateCheck, UserError> {
 /// installer, which takes over).
 #[tauri::command]
 pub async fn update_install(app: AppHandle) -> Result<(), UserError> {
+    if cfg!(debug_assertions) {
+        return Ok(()); // see update_check
+    }
     DONE.store(0, Ordering::Relaxed);
     TOTAL.store(0, Ordering::Relaxed);
     platform::install(&app).await

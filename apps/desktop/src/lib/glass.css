@@ -8,7 +8,7 @@
 
    One pane of real glass: the signal readout, with a dark instrument screen set into it.
    Everything else is quieter (thin edges, no lift), and whatever floats over content (menus,
-   dialogs, sticky headers) is frosted so it reads over anything. The slate surface tokens turn
+   dialogs, notices) is frosted so it reads over anything. The slate surface tokens turn
    translucent, which carries most components along without touching them. */
 
 @property --halo {
@@ -131,7 +131,8 @@ html[data-look="glass"] :focus-visible {
 
 /* ---- what floats over content: frosted strong enough to read over anything ---- */
 html[data-look="glass"] [role="dialog"],
-html[data-look="glass"] [role="menu"] {
+html[data-look="glass"] [role="menu"],
+html[data-look="glass"] aside.notice {
   background: var(--glass-tint-strong);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -139,7 +140,25 @@ html[data-look="glass"] [role="menu"] {
   border-radius: var(--r-lg);
   box-shadow: var(--glass-rim), 0 24px 60px rgba(0, 0, 0, 0.45);
 }
-/* sticky headers in long lists: content slides under frosted glass, not under a solid bar */
+/* the small "Added to …" note under a track's + button */
+html[data-look="glass"] .done[role="status"] {
+  background: var(--glass-tint-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+}
+/* the update notice rises from its corner like the menus grow from their buttons */
+html[data-look="glass"] aside.notice {
+  transform-origin: bottom right;
+  animation:
+    glass-in 420ms var(--spring-soft) backwards,
+    glass-fade 160ms ease-out backwards;
+}
+html[data-look="glass"][dir="rtl"] aside.notice {
+  transform-origin: bottom left;
+}
+/* sticky headers in long lists: near-solid, since a blur under every cell was re-run on each scroll frame */
 html[data-look="glass"] .tracks th {
   background: rgba(14, 21, 27, 0.94);
 }
