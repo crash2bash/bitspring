@@ -6,6 +6,7 @@
 //! on Windows) only finds the device, sets its rate and format, and calls
 //! [`Shared::render`] from its realtime callback with the device's buffers.
 
+use crate::channels::{Route, Speaker};
 use std::cell::UnsafeCell;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU64, AtomicUsize, Ordering};
@@ -107,6 +108,10 @@ impl Default for PlayOptions {
 /// "bit-perfect" is a verifiable claim, not a badge.
 #[derive(Debug, Clone)]
 pub struct SignalPath {
+    /// The source's channels: "Stereo", "5.1"…
+    pub layout: String,
+    /// The source is folded down to fewer speakers on the way.
+    pub downmix: Option<Downmix>,
     pub source_rate: u32,
     pub source_bits: Option<u32>,
     pub device_rate: f64,
@@ -135,6 +140,15 @@ pub struct SignalPath {
     out_bits: u32,
     /// Bit-perfect apart from the source's bit depth (rate, access, transport, no processing).
     pcm_clean: bool,
+}
+
+/// A multichannel source folded down to the speakers the device has.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Downmix {
+    /// "Stereo", "5.1"…
+    pub to: String,
+    /// Overall level change that keeps the mix from clipping, in dB.
+    pub gain_db: f64,
 }
 
 impl SignalPath {
@@ -265,6 +279,8 @@ pub(crate) struct Plan {
     /// Audio goes through the render thread (resampling, DSP or lossy enhancers).
     pub processing: bool,
     pub dop: bool,
+    /// How the track's channels reach the device's (straight, or folded down).
+    pub route: Route,
 }
 
 pub(crate) fn dop_error(device_name: &str, track: &Track) -> anyhow::Error {
@@ -277,11 +293,14 @@ pub(crate) fn dop_error(device_name: &str, track: &Track) -> anyhow::Error {
 }
 
 /// `rates`: what the device can run at. `dop_ok`: the device could carry this DoP track.
-pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], device_name: &str, dop_ok: bool) -> Result<Plan> {
+/// `speakers`: what each device channel feeds (see [`crate::channels`]).
+pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], device_name: &str, dop_ok: bool, speakers: &[Speaker]) -> Result<Plan> {
     let src_hz = track.sample_rate as f64;
-    // DoP: the DSD bits must reach the DAC exactly, so no processing and no rate change.
+    let route = Route::new(&track.layout, speakers);
+    // DoP: the DSD bits must reach the DAC exactly, so no processing, no rate change and no
+    // folding channels together.
     let dop = track.is_dop();
-    if dop && (!opts.exclusive || !dop_ok) {
+    if dop && (!opts.exclusive || !dop_ok || !route.is_direct()) {
         return Err(dop_error(device_name, track));
     }
     let mut target = match choose_device_rate(track.sample_rate, rates) {
@@ -308,7 +327,7 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     if resampled && crate::dsp::resample::phases(track.sample_rate, target as u32) > crate::dsp::resample::MAX_PHASES {
         bail!(crate::UserError::Resample { from: track.sample_rate, to: target as u32 });
     }
-    Ok(Plan { target, start_frame, lossy, resampled, processing, dop })
+    Ok(Plan { target, start_frame, lossy, resampled, processing, dop, route })
 }
 
 /// Fill in the signal path from what the backend actually got from the device.
@@ -327,13 +346,18 @@ pub(crate) fn signal_path(
         && (device_rate - src_hz).abs() < 0.5
         && exclusive
         && transport.can_be_bit_perfect()
-        && track.channels <= 2;
+        && plan.route.is_direct();
     // (Up to 24 bits: f32 holds those exactly.)
     let bits_ok = match (physical, track.bits_per_sample) {
         (Some(p), Some(b)) => (p.float || p.bits >= b) && out.bits() >= b && b <= 24,
         _ => false,
     };
     SignalPath {
+        layout: crate::channels::name(&track.layout),
+        downmix: plan.route.folds().then(|| Downmix {
+            to: crate::channels::name(&plan.route.program_layout),
+            gain_db: plan.route.gain_db,
+        }),
         source_rate: track.sample_rate,
         source_bits: track.bits_per_sample,
         device_rate,
@@ -405,6 +429,8 @@ pub(crate) struct Shared {
     meter: [AtomicU32; 2],
     /// The track is raw DSD: the callback packs it as DoP.
     dop: bool,
+    /// Track channels → device channels.
+    route: Route,
     /// Callback-only: marker of the next DoP frame (false = 0x05, true = 0xFA). Runs on across
     /// callbacks, pauses, seeks and tracks — a break in the alternation makes the DAC drop out
     /// of DSD.
@@ -482,7 +508,9 @@ impl Playback {
             seek_track: AtomicPtr::new(std::ptr::null_mut()),
         });
         let (ring, render) = if plan.processing {
-            let channels = track.channels;
+            // The chain works on the program: the track's channels, or the speakers it is
+            // folded down to (so EQ and crossfeed see the stereo pair they were made for).
+            let channels = plan.route.program_channels();
             // Check against the rate the device actually settled on — it can differ from the
             // one planned — so the resampler is never built for a ratio it refuses.
             let out_rate = device_rate.round() as u32;
@@ -526,9 +554,10 @@ impl Playback {
             let handle = {
                 let (slots, rs) = (slots.clone(), rs.clone());
                 let start = plan.start_frame;
+                let route = plan.route.clone();
                 std::thread::Builder::new()
                     .name("hifi-render".into())
-                    .spawn(move || render_loop(slots, rs, chain, start))?
+                    .spawn(move || render_loop(slots, rs, chain, start, route))?
             };
             // Let the ring fill a little before IO starts, so playback doesn't open on silence.
             let deadline = Instant::now() + Duration::from_millis(500);
@@ -550,6 +579,7 @@ impl Playback {
             ring,
             meter: [AtomicU32::new(0), AtomicU32::new(0)],
             dop: plan.dop,
+            route: plan.route.clone(),
             dop_phase: AtomicBool::new(false),
             lossy_enhancers: opts.dsp.lossy.any(),
         });
@@ -611,6 +641,7 @@ impl Playback {
     fn can_follow(&self, prev: &Track, next: &Track) -> bool {
         prev.sample_rate == next.sample_rate
             && prev.channels == next.channels
+            && prev.layout == next.layout
             && prev.is_dop() == next.is_dop()
             && !(self.shared.lossy_enhancers && (prev.lossy || next.lossy))
     }
@@ -791,7 +822,7 @@ impl Drop for Playback {
 /// At the end of a track it carries straight on with the one lined up next, through the same
 /// chain (no reset: filters ring on across the join as they would within a track), and tells
 /// the callback at which output frame the new track begins to be heard.
-fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_frame: usize) {
+fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_frame: usize, route: Route) {
     // Our own thread: flush-to-zero for its whole life (the FIR's tails, see fpu.rs).
     let _ftz = crate::fpu::FlushDenormals::on();
     const BLOCK: usize = 2048;
@@ -801,6 +832,8 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
     let mut stretch = start_frame;
     let mut flushed = false;
     let mut out: Vec<f32> = Vec::new();
+    // The track folded down to the program, when the route folds it.
+    let mut folded: Vec<f32> = Vec::new();
     let mut sent = 0usize;
     let nap = || std::thread::sleep(Duration::from_millis(2));
 
@@ -887,7 +920,12 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
         }
         rs.starved.store(false, Ordering::Relaxed);
         src += input.len() / track.channels;
-        let processed = chain.process(input, false);
+        let processed = if route.folds() {
+            route.fold_block(input, &mut folded);
+            chain.process(&folded, false)
+        } else {
+            chain.process(input, false)
+        };
         out.clear();
         // Not clamped yet: the callback's EQ may still lower the level (its preamp).
         out.extend(processed.iter().map(|&v| v as f32));
@@ -941,10 +979,11 @@ impl Shared {
                     let next = if ended { slots.next.load(Ordering::Acquire) } else { std::ptr::null_mut() };
                     // Joining the next track: only this track's frames now, the rest from it.
                     let to = if next.is_null() { frames } else { done + avail };
+                    let route = &st.route;
                     let p = if st.dop {
-                        fill_dop(buffers, done..to, avail, &st.dop_phase, |f, dc| dop_sample(track, pos + f, dc))
+                        fill_dop(buffers, done..to, avail, &st.dop_phase, |f, dc| dop_sample(track, route, pos + f, dc))
                     } else {
-                        fill(buffers, done..to, avail, |f, dc| track_sample(track, pos + f, dc))
+                        fill(buffers, done..to, avail, |f, dc| track_sample(track, route, pos + f, dc))
                     };
                     peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
                     done += avail;
@@ -1005,7 +1044,8 @@ impl Shared {
                     };
                     rs.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
                     let to = if n < want { frames } else { got + want };
-                    let p = fill(buffers, got..to, n, |f, dc| source_sample(scratch, ch, f, dc));
+                    let route = &st.route;
+                    let p = fill(buffers, got..to, n, |f, dc| source_sample(scratch, ch, route, f, dc));
                     peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
                     got += n;
                     if n < want {
@@ -1132,35 +1172,28 @@ fn fill_dop(
 }
 
 #[inline(always)]
-fn dop_sample(track: &Track, frame: usize, device_channel: usize) -> u16 {
-    if track.channels == 1 && device_channel < 2 {
-        track.dop_payload(frame, 0)
-    } else if device_channel < track.channels {
-        track.dop_payload(frame, device_channel)
-    } else {
-        DOP_IDLE
+fn dop_sample(track: &Track, route: &Route, frame: usize, device_channel: usize) -> u16 {
+    // DoP only ever goes channel for channel (see `plan`).
+    match route.program_channel(device_channel) {
+        Some(c) => track.dop_payload(frame, c),
+        None => DOP_IDLE,
     }
 }
 
 #[inline(always)]
-fn track_sample(track: &Track, frame: usize, device_channel: usize) -> f32 {
-    if track.channels == 1 && device_channel < 2 {
-        track.sample(frame, 0) // mono → both speakers
-    } else if device_channel < track.channels {
-        track.sample(frame, device_channel)
-    } else {
-        0.0
+fn track_sample(track: &Track, route: &Route, frame: usize, device_channel: usize) -> f32 {
+    match route.program_channel(device_channel) {
+        Some(pc) => route.program_sample(pc, |c| track.sample(frame, c)),
+        None => 0.0,
     }
 }
 
+/// From the ring, which holds program channels already folded down.
 #[inline(always)]
-fn source_sample(samples: &[f32], channels: usize, frame: usize, device_channel: usize) -> f32 {
-    if channels == 1 && device_channel < 2 {
-        samples[frame] // mono → both speakers
-    } else if device_channel < channels {
-        samples[frame * channels + device_channel]
-    } else {
-        0.0
+fn source_sample(samples: &[f32], channels: usize, route: &Route, frame: usize, device_channel: usize) -> f32 {
+    match route.program_channel(device_channel) {
+        Some(pc) => samples[frame * channels + pc],
+        None => 0.0,
     }
 }
 
@@ -1194,7 +1227,7 @@ mod tests {
 
         fn start(eq: EqPreset) -> Playback {
             let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
-            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false };
+            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
             Playback::new(sine_track(8.0), &opts, &plan, FS as f64).unwrap()
         }
 
@@ -1279,7 +1312,7 @@ mod tests {
         }
 
         fn playback(first: Arc<Track>, processing: bool) -> Playback {
-            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop() };
+            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop(), route: stereo_route() };
             Playback::new(first.clone(), &PlayOptions::default(), &plan, first.sample_rate as f64).unwrap()
         }
 
@@ -1362,7 +1395,7 @@ mod tests {
                 ..Default::default()
             };
             let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
-            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false };
+            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
             let p = Playback::new(a, &opts, &plan, fs as f64).unwrap();
             assert!(p.queue_next(b));
             let rs = p.shared().ring.as_ref().unwrap();
@@ -1503,6 +1536,75 @@ mod tests {
         }
     }
 
+    fn stereo_route() -> Route {
+        Route::new(&crate::channels::default_layout(2), &crate::channels::default_layout(2))
+    }
+
+    /// Multichannel: 5.1 straight onto a 5.1 device, folded onto a stereo one.
+    mod multichannel {
+        use super::*;
+        use crate::channels::default_layout;
+        use crate::decode::TrackMeta;
+
+        /// 5.1 where each channel carries its own constant: FL 0.1, FR 0.2, C 0.3, LFE 0.4, BL 0.5, BR 0.6.
+        fn five_one(frames: usize) -> Arc<Track> {
+            let samples: Vec<f32> = (0..frames).flat_map(|_| [0.1f32, 0.2, 0.3, 0.4, 0.5, 0.6]).collect();
+            Arc::new(Track::from_samples(48_000, 6, Some(24), &samples, TrackMeta::default()))
+        }
+
+        fn run(device: &[Speaker], processing: bool) -> Vec<f32> {
+            let track = five_one(48_000);
+            let opts = PlayOptions::default();
+            let mut plan = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", false, device).unwrap();
+            plan.processing = processing;
+            let p = Playback::new(track, &opts, &plan, 48_000.0).unwrap();
+            let ch = device.len();
+            let frames = 256;
+            let mut data = vec![0u8; frames * ch * 4];
+            if let Some(rs) = p.shared().ring.as_ref() {
+                while rs.ring.available() < frames * plan.route.program_channels() {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+            p.shared().render(&mut [OutBuf { data: &mut data, channels: ch, format: OutFormat::F32 }]);
+            // The first frame, every device channel.
+            data[..ch * 4].chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect()
+        }
+
+        #[test]
+        fn five_one_plays_channel_for_channel_on_a_five_one_device() {
+            // CoreAudio's 5.1 order: L R Ls Rs C LFE.
+            let device = [Speaker::FrontLeft, Speaker::FrontRight, Speaker::SideLeft, Speaker::SideRight, Speaker::FrontCenter, Speaker::Lfe];
+            for processing in [false, true] {
+                let got = run(&device, processing);
+                assert_eq!(got, [0.1, 0.2, 0.5, 0.6, 0.3, 0.4], "processing {processing}");
+            }
+            let track = five_one(10);
+            let opts = PlayOptions::default();
+            let p = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", false, &device).unwrap();
+            let path = signal_path(&track, &opts, &p, 48_000.0, None, OutFormat::F32, true, Transport::Usb);
+            assert_eq!(path.layout, "5.1");
+            assert!(path.downmix.is_none());
+        }
+
+        #[test]
+        fn five_one_folds_onto_stereo_the_same_either_way() {
+            let device = default_layout(2);
+            let want_l = (0.1 + 0.3 * std::f32::consts::FRAC_1_SQRT_2 + 0.5 * std::f32::consts::FRAC_1_SQRT_2) / (1.0 + 2.0 * std::f32::consts::FRAC_1_SQRT_2);
+            for processing in [false, true] {
+                let got = run(&device, processing);
+                assert!((got[0] - want_l).abs() < 1e-5, "processing {processing}: {got:?} vs {want_l}");
+                assert!(got[1] > got[0], "the right side is louder here");
+            }
+            let track = five_one(10);
+            let opts = PlayOptions::default();
+            let p = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", false, &device).unwrap();
+            let path = signal_path(&track, &opts, &p, 48_000.0, None, OutFormat::F32, true, Transport::Usb);
+            assert_eq!(path.downmix.as_ref().map(|d| d.to.as_str()), Some("Stereo"));
+            assert!(!path.bit_perfect);
+        }
+    }
+
     /// A device asking for more than the scratch holds gets all of it, not silence at the end.
     #[test]
     fn a_callback_bigger_than_the_scratch_is_served_whole() {
@@ -1510,7 +1612,7 @@ mod tests {
         let samples: Vec<f32> = (0..fs as usize * 4).flat_map(|i| [((i % 100) as f32 + 1.0) / 1000.0; 2]).collect();
         let track = Arc::new(Track::from_samples(fs, 2, Some(24), &samples, crate::decode::TrackMeta::default()));
         let opts = PlayOptions { dsp: DspSettings { crossfeed: None, ..Default::default() }, ..Default::default() };
-        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false };
+        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
         let p = Playback::new(track, &opts, &plan, fs as f64).unwrap();
         let rs = p.shared().ring.as_ref().unwrap();
         // Bigger than the scratch, smaller than the ring (which holds ~0.68 s here).

@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, bail};
 use coreaudio_sys as ca;
 
+use crate::channels::Speaker;
 use crate::decode::Track;
 use crate::output::{self, OutBuf, OutFormat, PlayOptions, Playback, Shared, SignalPath, StreamFormat, Transport};
 use crate::rate::RateRange;
@@ -154,6 +155,50 @@ fn format_from_asbd(d: &ca::AudioStreamBasicDescription) -> StreamFormat {
     }
 }
 
+/// An AudioChannelLayout, as the 32-bit words CoreAudio hands over: the speakers in device
+/// channel order, when it says.
+fn parse_channel_layout(words: &[u32]) -> Option<Vec<Speaker>> {
+    use Speaker::*;
+    let (&tag, &bitmap, &n) = (words.first()?, words.get(1)?, words.get(2)?);
+    const USE_DESCRIPTIONS: u32 = 0;
+    const USE_BITMAP: u32 = 1 << 16;
+    let label = |l: u32| match l {
+        1 => FrontLeft,
+        2 => FrontRight,
+        3 => FrontCenter,
+        4 => Lfe,
+        // CoreAudio's "surround" pair is 5.1's surrounds and 7.1's side pair; its rear pair is 7.1's back.
+        5 | 10 => SideLeft,
+        6 | 11 => SideRight,
+        7 => FrontLeftCenter,
+        8 => FrontRightCenter,
+        9 => BackCenter,
+        33 => BackLeft,
+        34 => BackRight,
+        _ => Other,
+    };
+    match tag {
+        USE_DESCRIPTIONS => {
+            let d: Vec<Speaker> = words.get(3..)?.chunks_exact(5).take(n as usize).map(|d| label(d[0])).collect();
+            (d.len() == n as usize).then_some(d)
+        }
+        USE_BITMAP => Some(crate::channels::from_mask(bitmap as u64)),
+        _ => {
+            // The few named layouts devices use (tag = kind << 16 | channel count).
+            let v: &[Speaker] = match tag >> 16 {
+                100 => &[FrontCenter],
+                101 | 102 => &[FrontLeft, FrontRight],
+                108 => &[FrontLeft, FrontRight, SideLeft, SideRight],
+                121 => &[FrontLeft, FrontRight, FrontCenter, Lfe, SideLeft, SideRight],
+                123 => &[FrontLeft, FrontCenter, FrontRight, SideLeft, SideRight, Lfe],
+                128 => &[FrontLeft, FrontRight, FrontCenter, Lfe, SideLeft, SideRight, BackLeft, BackRight],
+                _ => return None,
+            };
+            Some(v.to_vec())
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
     pub device: Device,
@@ -233,6 +278,22 @@ impl Device {
 
     fn output_streams(&self) -> Result<Vec<ca::AudioStreamID>> {
         get_vec::<ca::AudioStreamID>(self.id, ca::kAudioDevicePropertyStreams as u32, OUTPUT)
+    }
+
+    /// What each of the device's `channels` output channels feeds, from its speaker setup
+    /// (Audio MIDI Setup → Configure Speakers, or the driver). A device that doesn't say is
+    /// taken to be in the usual order (L R C LFE, then surrounds).
+    pub fn speakers(&self, channels: usize) -> Vec<Speaker> {
+        let said = get_vec::<u32>(self.id, ca::kAudioDevicePropertyPreferredChannelLayout as u32, OUTPUT)
+            .ok()
+            .and_then(|w| parse_channel_layout(&w));
+        match said {
+            Some(mut v) if v.iter().any(|&s| s != Speaker::Other) && v.len() <= channels => {
+                v.resize(channels, Speaker::Other);
+                v
+            }
+            _ => crate::channels::default_layout(channels.max(1)),
+        }
     }
 
     /// Which device channels (1-based) carry left and right, as set in Audio MIDI Setup →
@@ -495,7 +556,8 @@ impl Player {
         let restore = DeviceRestore::capture(device)?;
 
         let dop_ok = track.dsd.is_some_and(|d| device.supports_dop(d.rate));
-        let plan = output::plan(&track, opts, &info.rates, &info.name, dop_ok)?;
+        let speakers = device.speakers(info.output_channels as usize);
+        let plan = output::plan(&track, opts, &info.rates, &info.name, dop_ok, &speakers)?;
 
         // Physical format first: setting it can itself move the nominal rate.
         let physical = match device.apply_best_physical_format(plan.target, hog.is_some()) {
@@ -601,3 +663,24 @@ unsafe extern "C" fn io_proc(
 }
 
 pub use crate::output::format_rates;
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use Speaker::*;
+
+    #[test]
+    fn speaker_setups_read_as_coreaudio_gives_them() {
+        // Configure Speakers → 5.1: descriptions L R C LFE Ls Rs.
+        let mut w = vec![0, 0, 6];
+        for l in [1, 2, 3, 4, 5, 6] {
+            w.extend([l, 0, 0, 0, 0]);
+        }
+        assert_eq!(parse_channel_layout(&w).unwrap(), [FrontLeft, FrontRight, FrontCenter, Lfe, SideLeft, SideRight]);
+        // A bitmap (WAVE's bits), and a named layout (MPEG 5.1 C: L C R Ls Rs LFE).
+        assert_eq!(parse_channel_layout(&[1 << 16, 0x3F, 0]).unwrap(), crate::channels::default_layout(6));
+        assert_eq!(parse_channel_layout(&[(123 << 16) | 6, 0, 0]).unwrap()[1], FrontCenter);
+        assert_eq!(parse_channel_layout(&[(999 << 16) | 6, 0, 0]), None);
+        assert_eq!(parse_channel_layout(&[0, 0, 2, 1, 0, 0, 0, 0]), None, "short");
+    }
+}

@@ -2,6 +2,7 @@
 //!
 //! UI-agnostic: the CLI, the Tauri desktop app and (later) the phone remote all drive it.
 
+pub mod channels;
 pub mod cue;
 pub mod decode;
 pub mod dsd;

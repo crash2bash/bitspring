@@ -196,11 +196,14 @@ pub struct NetPlayer {
 impl NetPlayer {
     pub fn start(renderer: Target, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let rates = rates(&renderer);
-        let plan = output::plan(&track, opts, &rates, renderer.name(), false)?;
+        // Network players take mono or stereo: anything wider is folded down to stereo.
+        let speakers = crate::channels::default_layout(track.channels.min(2));
+        let plan = output::plan(&track, opts, &rates, renderer.name(), false, &speakers)?;
         let rate = plan.target.round() as u32;
         let source_bits = track.bits_per_sample.unwrap_or(24);
-        let bits: u16 = if renderer.max_bits() <= 16 || (source_bits <= 16 && !plan.processing) { 16 } else { 24 };
-        let format = Format { codec: renderer.codec(), rate, channels: track.channels.min(8) as u16, bits };
+        let untouched = !plan.processing && !plan.route.folds();
+        let bits: u16 = if renderer.max_bits() <= 16 || (source_bits <= 16 && untouched) { 16 } else { 24 };
+        let format = Format { codec: renderer.codec(), rate, channels: speakers.len() as u16, bits };
         // The player must reach us: check before telling it where.
         http::server()?;
         // Pausing is the pump's (and the player's) business: the playback itself never

@@ -363,7 +363,7 @@ impl Player {
         let bit_perfect_on = opts.exclusive && !info.bit_perfect.is_empty();
         let rates = if bit_perfect_on { info.rates.clone() } else { vec![RateRange::exact(info.mixer_rate as f64)] };
         let opts_eff = PlayOptions { exclusive: bit_perfect_on, ..opts.clone() };
-        let plan = output::plan(&track, &opts_eff, &rates, &info.name, dop_ok)?;
+        let plan = output::plan(&track, &opts_eff, &rates, &info.name, dop_ok, &crate::channels::default_layout(2))?;
         let target = plan.target as u32;
 
         // The bit-perfect format at the target rate: integer first, ≥24-bit for DoP.
@@ -398,7 +398,7 @@ impl Player {
         let (plan, rate) = if bit_perfect || !bit_perfect_on {
             (plan, target)
         } else {
-            let p = output::plan(&track, &PlayOptions { exclusive: false, ..opts.clone() }, &[RateRange::exact(info.mixer_rate as f64)], &info.name, false)?;
+            let p = output::plan(&track, &PlayOptions { exclusive: false, ..opts.clone() }, &[RateRange::exact(info.mixer_rate as f64)], &info.name, false, &crate::channels::default_layout(2))?;
             (p, info.mixer_rate)
         };
 

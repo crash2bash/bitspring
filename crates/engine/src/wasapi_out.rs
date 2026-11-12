@@ -28,6 +28,7 @@ use windows::Win32::System::Threading::AvSetMmThreadCharacteristicsW;
 use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
 use windows::core::w;
 
+use crate::channels::Speaker;
 use crate::UserError;
 use crate::decode::Track;
 use crate::output::{self, OutBuf, OutFormat, PlayOptions, Playback, SignalPath, StreamFormat, Transport};
@@ -75,6 +76,9 @@ pub struct DeviceInfo {
     pub uid: String,
     pub transport: Transport,
     pub output_channels: u32,
+    /// Where the mixer's channels go (Sound settings → device → Configure speakers), as a
+    /// WAVE channel mask.
+    pub channel_mask: u32,
     /// Rate of the Windows mixer (Sound settings → device → Format).
     pub nominal_rate: f64,
     /// Rates the device accepts in exclusive mode (or just the mixer rate, if none).
@@ -112,7 +116,7 @@ impl Device {
         let name = d.get_friendlyname().unwrap_or_else(|_| "Audio device".into());
         let client = d.get_iaudioclient().map_err(wasapi_err)?;
         let mix = client.get_mixformat().map_err(wasapi_err)?;
-        let probe = |hz: u32| exclusive_format(&client, hz, 2, false).is_some();
+        let probe = |hz: u32| exclusive_format(&client, hz, 2, None, false).is_some();
         let mut rates: Vec<RateRange> = RATES.iter().copied().filter(|&hz| probe(hz)).map(exact).collect();
         if rates.is_empty() {
             rates.push(exact(mix.get_samplespersec()));
@@ -121,6 +125,7 @@ impl Device {
             device: self.clone(),
             transport: transport(&d, &name),
             output_channels: mix.get_nchannels() as u32,
+            channel_mask: mix.get_dwchannelmask(),
             nominal_rate: mix.get_samplespersec() as f64,
             rates,
             is_default: default.as_ref() == Some(self),
@@ -135,17 +140,18 @@ impl Device {
     pub fn supports_dop(&self, dsd_rate: u32) -> bool {
         let Ok(d) = self.open() else { return false };
         let Ok(client) = d.get_iaudioclient() else { return false };
-        exclusive_format(&client, dsd_rate / 16, 2, true).is_some()
+        exclusive_format(&client, dsd_rate / 16, 2, None, true).is_some()
     }
 }
 
-/// The best exclusive format at `hz`. `dop`: only integer formats of 24 bits or more.
-fn exclusive_format(client: &wasapi::AudioClient, hz: u32, channels: usize, dop: bool) -> Option<(WaveFormat, OutFormat)> {
+/// The best exclusive format at `hz` with `channels` (placed as `mask` says, else the usual
+/// way). `dop`: only integer formats of 24 bits or more.
+fn exclusive_format(client: &wasapi::AudioClient, hz: u32, channels: usize, mask: Option<u32>, dop: bool) -> Option<(WaveFormat, OutFormat)> {
     EXCLUSIVE_FORMATS
         .iter()
         .filter(|(_, valid, kind, _)| !dop || (*kind == SampleType::Int && *valid >= 24))
         .find_map(|&(store, valid, kind, out)| {
-            let wf = WaveFormat::new(store, valid, kind, hz as usize, channels, None);
+            let wf = WaveFormat::new(store, valid, kind, hz as usize, channels, mask);
             client.is_supported_exclusive_with_quirks(&wf).ok().map(|wf| (wf, out))
         })
 }
@@ -205,6 +211,16 @@ struct Negotiated {
     rate: f64,
     format: OutFormat,
     physical: StreamFormat,
+    channels: usize,
+    mask: u32,
+}
+
+/// The speakers of `n` channels laid out as `mask` says (when it covers them), else the usual way.
+fn speakers_for(n: usize, mask: Option<u32>) -> Vec<Speaker> {
+    match mask.filter(|m| m.count_ones() as usize == n) {
+        Some(m) => crate::channels::from_mask(m as u64),
+        None => crate::channels::default_layout(n.max(1)),
+    }
 }
 
 pub struct Player {
@@ -230,7 +246,17 @@ impl Player {
         let dop_ok = track.dsd.is_some_and(|d| device.supports_dop(d.rate));
         // Shared mode can only run at the mixer's rate.
         let rates = if opts.exclusive { info.rates.clone() } else { vec![RateRange { min: info.nominal_rate, max: info.nominal_rate }] };
-        let plan = output::plan(&track, opts, &rates, &info.name, dop_ok)?;
+        // Exclusive mode opens a stereo pair, or every channel for a multichannel track on a
+        // multichannel device; shared mode runs whatever the mixer has.
+        let wide = opts.exclusive && track.channels > 2 && info.output_channels > 2;
+        let open_channels = if wide { info.output_channels as usize } else { 2 };
+        let open_mask = wide.then_some(info.channel_mask).filter(|m| m.count_ones() as usize == open_channels);
+        let speakers = if opts.exclusive {
+            speakers_for(open_channels, open_mask)
+        } else {
+            speakers_for(info.output_channels as usize, Some(info.channel_mask))
+        };
+        let mut plan = output::plan(&track, opts, &rates, &info.name, dop_ok, &speakers)?;
 
         let (fmt_tx, fmt_rx) = mpsc::sync_channel::<Result<Negotiated>>(1);
         let (pb_tx, pb_rx) = mpsc::sync_channel::<Option<Arc<Playback>>>(1);
@@ -238,9 +264,10 @@ impl Player {
         let failure = Arc::new(Mutex::new(None));
         let thread = {
             let (id, exclusive, target, dop) = (device.id.clone(), opts.exclusive, plan.target as u32, plan.dop);
+            let (channels, mask) = (open_channels, open_mask);
             let (stop, failure) = (stop.clone(), failure.clone());
             std::thread::Builder::new().name("hifi-wasapi".into()).spawn(move || {
-                if let Err(e) = stream_thread(&id, exclusive, target, dop, &fmt_tx, &pb_rx, &stop) {
+                if let Err(e) = stream_thread(&id, exclusive, target, dop, channels, mask, &fmt_tx, &pb_rx, &stop) {
                     // Before negotiation the error goes back to `start`; after, it's a failure.
                     let msg = UserError::of(&e);
                     if fmt_tx.try_send(Err(e)).is_err() {
@@ -264,6 +291,18 @@ impl Player {
             let _ = pb_tx.send(None);
             let _ = thread.join();
             return Err(output::dop_error(&info.name, &track));
+        }
+        // The device took fewer channels than asked (a driver without multichannel exclusive
+        // formats): fold down to what it did take.
+        if neg.channels != speakers.len() {
+            match output::plan(&track, opts, &rates, &info.name, dop_ok, &speakers_for(neg.channels, Some(neg.mask))) {
+                Ok(p) => plan = p,
+                Err(e) => {
+                    let _ = pb_tx.send(None);
+                    let _ = thread.join();
+                    return Err(e);
+                }
+            }
         }
         let path = output::signal_path(&track, opts, &plan, neg.rate, Some(neg.physical), neg.format, opts.exclusive, info.transport);
         let playback = match Playback::new(track, opts, &plan, neg.rate) {
@@ -299,11 +338,14 @@ impl Drop for Player {
 }
 
 /// Open the device, negotiate the format, report it, then feed the device until `stop`.
+#[allow(clippy::too_many_arguments)]
 fn stream_thread(
     id: &str,
     exclusive: bool,
     target: u32,
     dop: bool,
+    channels: usize,
+    mask: Option<u32>,
     fmt_tx: &mpsc::SyncSender<Result<Negotiated>>,
     pb_rx: &mpsc::Receiver<Option<Arc<Playback>>>,
     stop: &AtomicBool,
@@ -313,7 +355,8 @@ fn stream_thread(
     let mut client = device.get_iaudioclient().map_err(wasapi_err)?;
 
     let (wf, format, mode) = if exclusive {
-        let (wf, format) = exclusive_format(&client, target, 2, dop)
+        let (wf, format) = exclusive_format(&client, target, channels, mask, dop)
+            .or_else(|| if channels != 2 { exclusive_format(&client, target, 2, None, dop) } else { None })
             .ok_or(UserError::RateRefused { khz: target as f64 / 1000.0 })?;
         let (default_period, _) = client.get_device_period().map_err(wasapi_err)?;
         let period = client.calculate_aligned_period_near(default_period, Some(128), &wf).map_err(wasapi_err)?;
@@ -359,7 +402,7 @@ fn stream_thread(
         non_mixable: exclusive,
     };
     let rate = wf.get_samplespersec() as f64;
-    if fmt_tx.send(Ok(Negotiated { rate, format, physical })).is_err() {
+    if fmt_tx.send(Ok(Negotiated { rate, format, physical, channels, mask: wf.get_dwchannelmask() })).is_err() {
         return Ok(());
     }
     let Ok(Some(playback)) = pb_rx.recv() else { return Ok(()) };

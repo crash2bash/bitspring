@@ -275,7 +275,7 @@ impl Player {
         } else {
             info.rates.clone()
         };
-        let mut plan = output::plan(&track, opts, &wide, &info.name, dop_ok)?;
+        let mut plan = output::plan(&track, opts, &wide, &info.name, dop_ok, &crate::channels::default_layout(2))?;
         let device_rate = activate_at(plan.target)?;
         remember_rate(&info.uid, device_rate);
         if (device_rate - plan.target).abs() >= 0.5 {
@@ -283,7 +283,7 @@ impl Player {
                 failed_dop().lock().unwrap().entry(info.uid.clone()).or_default().push(plan.target as u32);
                 return Err(output::dop_error(&info.name, &track));
             }
-            plan = output::plan(&track, opts, &[RateRange::exact(device_rate)], &info.name, false)?;
+            plan = output::plan(&track, opts, &[RateRange::exact(device_rate)], &info.name, false, &crate::channels::default_layout(2))?;
         }
 
         let channels = 2u32;

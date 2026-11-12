@@ -51,6 +51,8 @@ pub(crate) const MAX_PCM_RATE: u32 = 1_536_000;
 pub struct Track {
     pub sample_rate: u32,
     pub channels: usize,
+    /// Which speaker each channel is for (from the file, else the usual order for its count).
+    pub layout: Vec<crate::channels::Speaker>,
     /// Bit depth of the source as stored in the file (16, 24, ...), when the codec reports it.
     pub bits_per_sample: Option<u32>,
     /// Lossy codec (MP3, AAC, Vorbis, Opus): decoded peaks may exceed full scale.
@@ -196,6 +198,7 @@ impl Track {
         Self {
             sample_rate,
             channels: channels.max(1),
+            layout: crate::channels::default_layout(channels.max(1)),
             bits_per_sample: bits,
             lossy,
             meta,
@@ -220,6 +223,7 @@ impl Track {
         Self {
             sample_rate: dsd_rate / 16,
             channels,
+            layout: crate::channels::default_layout(channels),
             bits_per_sample: Some(1),
             lossy: false,
             meta,
@@ -745,7 +749,14 @@ fn open(source: Box<dyn MediaSource>, hint: &Hint, expected_frames: Option<usize
         None => trim,
     };
     let expected = trim.keep.or(num_frames).or(expected_frames).unwrap_or(0);
-    let track = Track::new(sample_rate, channels, params.bits_per_sample, lossy, meta, expected);
+    let mut track = Track::new(sample_rate, channels, params.bits_per_sample, lossy, meta, expected);
+    // Where the file says its speakers are (a WAVE channel mask, FLAC's layouts).
+    if let Some(symphonia::core::audio::Channels::Positioned(p)) = &params.channels {
+        let layout = crate::channels::from_mask(p.bits());
+        if layout.len() == channels {
+            track.layout = layout;
+        }
+    }
     Ok(Opened { format, decoder, track_id, track, trim })
 }
 
