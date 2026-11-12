@@ -19,9 +19,12 @@ type Opts = unknown | { key: unknown; part?: string };
 type Box = { l: number; r: number; t: number; b: number };
 
 const FRAME = 1000 / 60;
-// the edge in front: quick and a little lively; the edge behind: slower, a beat later
-const LEAD = { w: 19, z: 0.62, delay: 0 };
-const TRAIL = { w: 13, z: 0.68, delay: 40 };
+// The edge in front is a little quicker than the edge behind, so the pill stretches to about
+// 1.5× on the way and lands with a 2px give, in 0.4s. Springs further apart (front 19/0.62,
+// back 13/0.68, 40ms later) stretched it 2× and let the back edge arrive and overshoot on its
+// own: it read as two moves, a stretch and then a second settle.
+const LEAD = { w: 26, z: 0.8, delay: 0 };
+const TRAIL = { w: 20, z: 0.85, delay: 10 };
 const MAX_MS = 900;
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
