@@ -177,6 +177,8 @@ enum Resource {
     File { mime: String, bytes: Arc<Vec<u8>> },
 }
 
+const MAX_CONNECTIONS: u64 = 32;
+
 pub struct Server {
     port: u16,
     resources: Mutex<HashMap<String, Resource>>,
@@ -193,12 +195,23 @@ pub fn server() -> Result<&'static Server> {
             std::thread::Builder::new()
                 .name("hifi-http".into())
                 .spawn(move || {
+                    // A player opens one or two connections at a time; anything far beyond
+                    // that isn't a player.
+                    static OPEN: AtomicU64 = AtomicU64::new(0);
                     for conn in listener.incoming().flatten() {
-                        let _ = std::thread::Builder::new().name("hifi-http-conn".into()).spawn(move || {
+                        if OPEN.load(Ordering::Acquire) >= MAX_CONNECTIONS {
+                            continue; // dropped: closes it
+                        }
+                        OPEN.fetch_add(1, Ordering::AcqRel);
+                        let spawned = std::thread::Builder::new().name("hifi-http-conn".into()).spawn(move || {
                             if let Ok(server) = server() {
                                 let _ = server.handle(conn);
                             }
+                            OPEN.fetch_sub(1, Ordering::AcqRel);
                         });
+                        if spawned.is_err() {
+                            OPEN.fetch_sub(1, Ordering::AcqRel);
+                        }
                     }
                 })
                 .map_err(|e| e.to_string())?;
@@ -214,10 +227,16 @@ impl Server {
     }
 
     fn name(&self, ext: &str) -> String {
-        // Unguessable enough for a home network, and never reused within a run.
+        // Whoever has the address can listen in: 128 random bits (from the OS's random keys
+        // for hash maps), so nobody else on the network can guess it.
+        use std::hash::{BuildHasher, Hasher};
         let n = self.next.fetch_add(1, Ordering::Relaxed);
-        let salt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
-        format!("/{n}-{salt:08x}.{ext}")
+        let random = || {
+            let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+            h.write_u64(n);
+            h.finish()
+        };
+        format!("/{:016x}{:016x}.{ext}", random(), random())
     }
 
     /// Serve `stream` under a new path (returned, e.g. "/7-1a2b3c4d.flac").
@@ -299,21 +318,36 @@ fn parse_range(r: &str) -> Option<u64> {
 }
 
 /// Request or status line, then headers (names lower-cased).
+/// Lines longer than this, or more header lines, and the message is refused.
+const MAX_LINE: u64 = 8 << 10;
+const MAX_HEADERS: usize = 100;
+
+fn read_line(r: &mut impl BufRead, line: &mut String) -> Result<usize> {
+    line.clear();
+    let n = r.take(MAX_LINE).read_line(line)?;
+    if n as u64 == MAX_LINE && !line.ends_with('\n') {
+        bail!("HTTP line too long");
+    }
+    Ok(n)
+}
+
 fn read_head(r: &mut impl BufRead) -> Result<(String, String, HashMap<String, String>)> {
     let mut line = String::new();
-    r.read_line(&mut line)?;
+    read_line(r, &mut line)?;
     let mut parts = line.split_whitespace();
     let a = parts.next().unwrap_or("").to_string();
     let b = parts.next().unwrap_or("").to_string();
     let mut headers = HashMap::new();
-    loop {
-        line.clear();
-        if r.read_line(&mut line)? == 0 {
+    for _ in 0..=MAX_HEADERS {
+        if read_line(r, &mut line)? == 0 {
             break;
         }
         let l = line.trim_end();
         if l.is_empty() {
             break;
+        }
+        if headers.len() >= MAX_HEADERS {
+            bail!("too many HTTP headers");
         }
         if let Some((k, v)) = l.split_once(':') {
             headers.insert(k.trim().to_ascii_lowercase(), v.trim().to_string());
@@ -374,6 +408,11 @@ pub struct Response {
 /// One HTTP request. `body` with `headers` for SOAP; GET when there is no body.
 pub fn request(url: &str, headers: &[(&str, &str)], body: Option<&str>, timeout: Duration) -> Result<Response> {
     let u = Url::parse(url)?;
+    // Addresses come from devices on the network: nothing that could smuggle a second line
+    // into the request.
+    if u.path.bytes().chain(u.host.bytes()).any(|b| b.is_ascii_control() || b == b' ') {
+        bail!("bad URL from a network device: {url:?}");
+    }
     let mut conn = TcpStream::connect_timeout(&u.addr()?, timeout).with_context(|| format!("can't reach {}", u.host))?;
     conn.set_read_timeout(Some(timeout))?;
     conn.set_write_timeout(Some(timeout))?;
@@ -398,26 +437,38 @@ pub fn request(url: &str, headers: &[(&str, &str)], body: Option<&str>, timeout:
     let mut r = BufReader::new(conn);
     let (_version, status, headers) = read_head(&mut r)?;
     let status: u16 = status.parse().context("bad HTTP status")?;
+    // Device descriptions and SOAP answers are a few kilobytes: anything past this is refused,
+    // whatever the headers say, and so is an answer that dribbles in for too long.
+    const MAX_BODY: usize = 1 << 20;
+    let deadline = Instant::now() + timeout * 3;
     let mut bytes = Vec::new();
     if headers.get("transfer-encoding").is_some_and(|t| t.eq_ignore_ascii_case("chunked")) {
+        let mut size = String::new();
         loop {
-            let mut size = String::new();
-            r.read_line(&mut size)?;
-            let n = usize::from_str_radix(size.trim().split(';').next().unwrap_or("0"), 16).unwrap_or(0);
+            if Instant::now() > deadline {
+                bail!("answer took too long");
+            }
+            read_line(&mut r, &mut size)?;
+            let n = usize::from_str_radix(size.trim().split(';').next().unwrap_or("0"), 16).context("bad chunk size")?;
             if n == 0 {
                 break;
             }
-            let mut chunk = vec![0; n];
-            r.read_exact(&mut chunk)?;
-            bytes.extend_from_slice(&chunk);
-            let mut crlf = String::new();
-            r.read_line(&mut crlf)?;
+            if n > MAX_BODY - bytes.len() {
+                bail!("answer too large");
+            }
+            let at = bytes.len();
+            bytes.resize(at + n, 0);
+            r.read_exact(&mut bytes[at..])?;
+            read_line(&mut r, &mut size)?;
         }
     } else if let Some(n) = headers.get("content-length").and_then(|n| n.parse::<usize>().ok()) {
-        bytes.resize(n.min(8 << 20), 0);
+        if n > MAX_BODY {
+            bail!("answer too large");
+        }
+        bytes.resize(n, 0);
         r.read_exact(&mut bytes)?;
     } else {
-        r.take(8 << 20).read_to_end(&mut bytes)?;
+        (&mut r).take(MAX_BODY as u64).read_to_end(&mut bytes)?;
     }
     Ok(Response { status, body: String::from_utf8_lossy(&bytes).into_owned() })
 }

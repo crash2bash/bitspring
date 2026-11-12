@@ -223,13 +223,20 @@ fn search(wait: Duration) -> Result<HashSet<String>> {
 
 /// Read a device description and, for a media renderer in it, what it can play.
 fn describe(location: &str) -> Result<Renderer> {
+    // Only devices on this network: an answer to our search names a local address, and
+    // everything in its description must stay on that device.
+    let loc = Url::parse(location)?;
+    let device_ip: IpAddr = loc.host.parse().map_err(|_| anyhow!("renderer address {} isn't an IP", loc.host))?;
+    if !is_local(device_ip) {
+        bail!("{device_ip} isn't on the local network");
+    }
     let r = http::request(location, &[], None, SOAP_TIMEOUT)?;
     if r.status != 200 {
         bail!("description: HTTP {}", r.status);
     }
     let doc = roxmltree::Document::parse(&r.body)?;
     let base_url = doc.descendants().find(|n| n.tag_name().name() == "URLBase").and_then(|n| n.text()).map(str::trim).unwrap_or(location);
-    let base = Url::parse(base_url).or_else(|_| Url::parse(location))?;
+    let base = Url::parse(base_url).ok().filter(|b| b.host == loc.host).unwrap_or(loc);
     let child_text = |n: roxmltree::Node, name: &str| {
         n.children().find(|c| c.tag_name().name() == name).and_then(|c| c.text()).map(|t| t.trim().to_string())
     };
@@ -244,7 +251,10 @@ fn describe(location: &str) -> Result<Renderer> {
     for s in renderer.descendants().filter(|n| n.tag_name().name() == "service") {
         if let (Some(t), Some(c)) = (child_text(s, "serviceType"), child_text(s, "controlURL")) {
             let kind = t.rsplit(':').nth(1).unwrap_or("").to_string();
-            services.entry(kind).or_insert_with(|| base.join(&c));
+            let url = base.join(&c);
+            if Url::parse(&url).is_ok_and(|u| u.host == base.host) {
+                services.entry(kind).or_insert(url);
+            }
         }
     }
     let av_transport = services.get("AVTransport").cloned().ok_or_else(|| anyhow!("not a media renderer"))?;
@@ -256,7 +266,7 @@ fn describe(location: &str) -> Result<Renderer> {
         .or_else(|| child_text(*renderer, "friendlyName"))
         .or_else(|| child_text(root, "friendlyName"))
         .unwrap_or_else(|| model.clone());
-    let ip: IpAddr = base.host.parse().map_err(|_| anyhow!("renderer address {} isn't an IP", base.host))?;
+    let ip = device_ip;
 
     let sink: Vec<String> = services
         .get("ConnectionManager")
@@ -279,6 +289,14 @@ fn describe(location: &str) -> Result<Renderer> {
         max_rate,
         max_bits,
     })
+}
+
+/// A private, link-local or loopback address: on this network.
+pub fn is_local(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local() || v4.is_loopback(),
+        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unicast_link_local() || v6.is_unique_local(),
+    }
 }
 
 /// From the renderer's sink protocols: what to send it.
