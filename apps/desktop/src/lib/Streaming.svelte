@@ -8,6 +8,7 @@
   import { list, sentences, t, tn } from "./i18n.svelte";
   import AddToPlaylist from "./AddToPlaylist.svelte";
   import AlbumTile from "./AlbumTile.svelte";
+  import { liquidPill } from "./liquid";
   import TrackTable from "./TrackTable.svelte";
 
   let {
@@ -182,7 +183,7 @@
 
 <section class="streaming" aria-label={t("nav.streaming")}>
   <div class="toolbar">
-    <div class="seg" role="tablist" aria-label={t("stream.service")}>
+    <div class="seg" role="tablist" aria-label={t("stream.service")} use:liquidPill={service}>
       {#each ["qobuz", "tidal"] as const as s (s)}
         <button role="tab" aria-selected={service === s} class:sel={service === s} onclick={() => (service = s)}>
           {SERVICE_NAME[s]}{#if status.accounts.find((a) => a.service === s)?.signedIn}<i class="dot" aria-label={t("stream.signedIn")}></i>{/if}
@@ -190,7 +191,7 @@
       {/each}
     </div>
     {#if signedIn}
-      <div class="seg" role="tablist" aria-label={t("stream.section")}>
+      <div class="seg" role="tablist" aria-label={t("stream.section")} use:liquidPill={tab}>
         {#each TABS as tb (tb)}
           <button role="tab" aria-selected={tab === tb && !open} class:sel={tab === tb && !open} onclick={() => ((tab = tb), (open = null), loadTab())}>{t(`stream.${tb}`)}</button>
         {/each}

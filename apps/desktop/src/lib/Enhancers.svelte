@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Crossfeed, DspSettings, IrInfo } from "./api";
   import { list, num, t } from "./i18n.svelte";
+  import { liquidPill } from "./liquid";
 
   let {
     settings,
@@ -57,7 +58,7 @@
     <div class="panel" role="dialog" aria-label={t("enh.dialog")}>
       <fieldset>
         <legend>{t("enh.upsampling")}</legend>
-        <div class="seg" role="radiogroup" aria-label={t("enh.upsampling")}>
+        <div class="seg" role="radiogroup" aria-label={t("enh.upsampling")} use:liquidPill={settings.upsampleKhz}>
           {#each UPSAMPLE as v (v)}
             <button role="radio" aria-checked={settings.upsampleKhz === v} class:sel={settings.upsampleKhz === v} onclick={() => set({ upsampleKhz: v })}>
               {v ? t("enh.upTo", { rate: num(v) }) : t("enh.offShort")}
@@ -79,7 +80,7 @@
 
       <fieldset>
         <legend>{t("enh.crossfeed")}</legend>
-        <div class="seg" role="radiogroup" aria-label={t("enh.crossfeed")}>
+        <div class="seg" role="radiogroup" aria-label={t("enh.crossfeed")} use:liquidPill={settings.crossfeed}>
           {#each CROSSFEED as v (v)}
             <button role="radio" aria-checked={settings.crossfeed === v} class:sel={settings.crossfeed === v} onclick={() => set({ crossfeed: v })}>
               {v ? t(`enh.cf.${v}`) : t("enh.offShort")}

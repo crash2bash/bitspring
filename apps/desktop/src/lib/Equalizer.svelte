@@ -20,6 +20,7 @@
     type StoredPreset,
   } from "./api";
   import EqCurve from "./EqCurve.svelte";
+  import { liquidPill } from "./liquid";
   import HeadphonePicker from "./HeadphonePicker.svelte";
   import { TEMPLATES, effectivePreamp, hasGain, hasSlope, maxBoostDb, newBand } from "./eqmath";
   import { list, num, t, tn } from "./i18n.svelte";
@@ -566,7 +567,7 @@
         >
           {t("eq.compare")}
         </button>
-        <div class="seg" role="radiogroup" aria-label={t("eq.phase")}>
+        <div class="seg" role="radiogroup" aria-label={t("eq.phase")} use:liquidPill={draft.phase}>
           {#each ["minimum", "linear"] as const as ph (ph)}
             <button role="radio" aria-checked={draft.phase === ph} class:sel={draft.phase === ph} title={t(`eq.phaseHelp.${ph}`)} onclick={() => patch({ phase: ph })}>
               {t(`eq.phase.${ph}`)}
@@ -625,7 +626,7 @@
         </div>
         <div class="field">
           <span class="label" id="eq-range">{t("eq.range")}</span>
-          <div class="seg small" role="radiogroup" aria-labelledby="eq-range">
+          <div class="seg small" role="radiogroup" aria-labelledby="eq-range" use:liquidPill={range}>
             {#each [6, 12, 24] as r (r)}
               <button role="radio" aria-checked={range === r} class:sel={range === r} onclick={() => (range = r)}>±{r}</button>
             {/each}

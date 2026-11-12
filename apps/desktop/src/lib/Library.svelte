@@ -3,6 +3,7 @@
   import { api, artistLabel, errorText, coverUrl, entryFromTrack, inTauri, isAndroid, isIOS, longDuration, resolution, UNKNOWN_ARTIST, type Album, type LibTrack, type QualityReport, type QualityVerdict, type LibraryGoto, type LibraryStatus, type StreamingStatus } from "./api";
   import { collator as makeCollator, i18n, list, num, t, tn } from "./i18n.svelte";
   import AlbumTile from "./AlbumTile.svelte";
+  import { liquidPill } from "./liquid";
   import QualityDialog from "./QualityDialog.svelte";
   import TagEditor from "./TagEditor.svelte";
   import { SUSPECT, verdictLabel } from "./quality";
@@ -291,7 +292,7 @@
   <!-- An open album has its own Back button; the tabs, search and filters belong to the lists. -->
   {#if !openAlbum}
   <div class="toolbar">
-    <div class="seg" role="tablist" aria-label={t("lib.section")}>
+    <div class="seg" role="tablist" aria-label={t("lib.section")} use:liquidPill={view}>
       {#each VIEWS as v (v)}
         <button role="tab" aria-selected={view === v} class:sel={view === v} onclick={() => ((view = v), (openAlbum = null))}>{t(`lib.${v}`)}</button>
       {/each}

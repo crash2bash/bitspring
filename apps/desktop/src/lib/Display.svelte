@@ -139,22 +139,36 @@
     return `${zone}${lit ? " lit" : ""}`;
   }
 
+  // ---- the glass look's light under the pointer ----------------------------------------------
+  // Moved by transform, at most once a frame: setting custom properties on the pane instead
+  // restyled the whole readout on every pointer move.
+  let glintBox: DOMRect | null = null;
+  let glintAt: [number, number] | null = null;
+  function glint(e: PointerEvent) {
+    if (e.pointerType !== "mouse" || document.documentElement.dataset.look !== "glass") return;
+    const pane = e.currentTarget as HTMLElement;
+    glintBox ??= pane.getBoundingClientRect();
+    const queued = glintAt !== null;
+    glintAt = [e.clientX - glintBox.left, e.clientY - glintBox.top];
+    if (queued) return;
+    requestAnimationFrame(() => {
+      if (!glintAt) return;
+      const [x, y] = glintAt;
+      glintAt = null;
+      for (const i of pane.querySelectorAll<HTMLElement>(".glint > i")) i.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    });
+  }
+
   // ---- position ------------------------------------------------------------------------------
   let scrubbing = $state<number | null>(null);
   let duration = $derived(status.duration || now?.duration || 0);
   let position = $derived(scrubbing ?? status.position);
 </script>
 
-<!-- the glass look lights the pane where the pointer is (glass.css draws it from --mx/--my) -->
-<section
-  class="display"
-  aria-label={t("display.label")}
-  onpointermove={(e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
-    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
-  }}
->
+<!-- the glass look lights the pane where the pointer is (glass.css draws the .glint layers) -->
+<section class="display" aria-label={t("display.label")} onpointerenter={() => (glintBox = null)} onpointermove={glint}>
+  <span class="glint" aria-hidden="true"><i></i></span>
+  <span class="glint rim" aria-hidden="true"><i></i></span>
   <div class="top">
     <span class="lamp {lamp.tone}" role="status"><i aria-hidden="true"></i>{lamp.text}</span>
     {#if signal}

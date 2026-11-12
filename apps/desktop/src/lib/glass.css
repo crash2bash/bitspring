@@ -79,6 +79,9 @@ html[data-look="glass"] body {
   overflow: hidden;
   pointer-events: none;
   background: #091015;
+  /* its own layer, painted once per cover: without it every repaint above (a meter, a progress
+     bar, a moving pill) re-ran the 64px blur of the cover underneath */
+  will-change: transform;
   transition:
     --halo 1.6s ease,
     --veil 0.9s ease;
@@ -107,6 +110,7 @@ html[data-look="glass"] body {
   object-fit: cover;
   filter: blur(64px) saturate(0.6) brightness(0.72);
   opacity: 0.85;
+  will-change: transform;
 }
 /* the signal's glow, rising from below, then a veil that darkens more over a bright cover */
 .ambient::after {
@@ -137,9 +141,7 @@ html[data-look="glass"] [role="menu"] {
 }
 /* sticky headers in long lists: content slides under frosted glass, not under a solid bar */
 html[data-look="glass"] .tracks th {
-  background: rgba(16, 23, 30, 0.6);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  background: rgba(14, 21, 27, 0.94);
 }
 html[data-look="glass"] select,
 html[data-look="glass"] input[type="text"],
@@ -356,7 +358,12 @@ html[data-look="glass"] .app > .mini .mini-play {
 html[data-look="glass"] .liquid-pill {
   display: block;
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  transition: opacity 0.2s ease;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.15);
   box-shadow:
@@ -364,40 +371,45 @@ html[data-look="glass"] .liquid-pill {
     0 2px 10px rgba(0, 0, 0, 0.22);
   pointer-events: none;
 }
-html[data-look="glass"] :has(> .liquid-pill) {
+html[data-look="glass"] .has-liquid-pill {
   position: relative;
 }
-html[data-look="glass"] :has(> .liquid-pill) > :not(.liquid-pill) {
+html[data-look="glass"] .has-liquid-pill > :not(.liquid-pill) {
   position: relative;
   z-index: 1;
 }
 /* the pill is the selection now: the old per-button backgrounds step aside */
-html[data-look="glass"] :has(> .liquid-pill) > .sel,
+html[data-look="glass"] .has-liquid-pill > .sel,
 html[data-look="glass"] .app > header .tabs button.sel,
 html[data-look="glass"] .app > .tabbar button.sel svg {
   background: transparent;
   box-shadow: none;
 }
 
+/* every segmented row (library sections, streaming services, enhancers, EQ) is a capsule like
+   the header's tabs, so the one pill shape fits all of them */
+html[data-look="glass"] .seg {
+  border-radius: 999px;
+  background: var(--glass-quiet);
+  border: 1px solid var(--glass-edge);
+}
+html[data-look="glass"] .seg button {
+  border-radius: 999px;
+}
+
 /* Menus and popovers grow out of the button that opened them, coming into focus as they do. */
 @keyframes glass-in {
   from {
     opacity: 0;
-    transform: scale(0.88) translateY(-6px);
-    filter: blur(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-    filter: none;
+    transform: scale(0.9) translateY(-6px);
   }
 }
 html[data-look="glass"] [role="dialog"],
 html[data-look="glass"] [role="menu"] {
   transform-origin: top center;
   animation:
-    glass-in 420ms var(--spring-soft) both,
-    glass-fade 160ms ease-out both;
+    glass-in 420ms var(--spring-soft) backwards,
+    glass-fade 160ms ease-out backwards;
 }
 @keyframes glass-fade {
   from {
@@ -465,39 +477,46 @@ html[data-look="glass"] .app .keys .play:active:not(:disabled) {
 }
 html[data-look="glass"] .app .keys .play svg,
 html[data-look="glass"] .app > .mini .mini-play svg {
-  animation: icon-pop 380ms var(--spring-bouncy) both;
+  animation: icon-pop 380ms var(--spring-bouncy) backwards;
 }
 
 /* A new screen settles in rather than cutting. */
 @keyframes screen-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.995);
-    filter: blur(4px);
   }
 }
 html[data-look="glass"] .app > main {
-  animation: screen-in 380ms var(--spring-soft) both;
+  animation: screen-in 220ms ease-out backwards;
 }
 
 /* The readout catches the light where the pointer is: a soft glow on the pane and a brighter
-   arc on its rim, fading in on hover. */
-html[data-look="glass"] .display::before,
-html[data-look="glass"] .display::after {
-  content: "";
+   arc on its rim, fading in on hover. Display.svelte moves the two lights with a transform. */
+.display .glint {
+  display: none;
+}
+html[data-look="glass"] .display .glint {
+  display: block;
   position: absolute;
   inset: -1px;
   border-radius: inherit;
+  overflow: hidden;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.45s ease;
 }
-html[data-look="glass"] .display::before {
-  background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.06), transparent 70%);
+html[data-look="glass"] .display .glint > i {
+  position: absolute;
+  left: -320px;
+  top: -320px;
+  width: 640px;
+  height: 640px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.06), transparent 70%);
+  will-change: transform;
 }
-html[data-look="glass"] .display::after {
+html[data-look="glass"] .display .glint.rim {
   padding: 1px;
-  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.45), transparent 70%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -506,13 +525,18 @@ html[data-look="glass"] .display::after {
     linear-gradient(#000 0 0) content-box exclude,
     linear-gradient(#000 0 0);
 }
-html[data-look="glass"] .display:hover::before,
-html[data-look="glass"] .display:hover::after {
+html[data-look="glass"] .display .glint.rim > i {
+  left: -220px;
+  top: -220px;
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.45), transparent 70%);
+}
+html[data-look="glass"] .display:hover .glint {
   opacity: 1;
 }
 @media (hover: none) {
-  html[data-look="glass"] .display::before,
-  html[data-look="glass"] .display::after {
+  html[data-look="glass"] .display .glint {
     display: none;
   }
 }
