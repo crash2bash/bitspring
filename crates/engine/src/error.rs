@@ -100,6 +100,8 @@ pub enum UserError {
     ServiceUnreachable { service: String, detail: String },
     /// Checking for, downloading or installing an update failed (`detail`: why).
     UpdateFailed { detail: String },
+    /// AutoEQ's catalog or one of its profiles couldn't be downloaded (`detail`: why).
+    CatalogUnavailable { detail: String },
     /// Android: the app may not install apps yet (Settings → Install unknown apps).
     InstallNotAllowed,
     /// The network player `device` didn't answer.
@@ -159,6 +161,7 @@ impl fmt::Display for UserError {
             OutputFailed { detail } => write!(f, "output error: {detail}"),
             ProfileUnreadable { detail } => write!(f, "couldn't read the profile: {detail}"),
             UpdateFailed { detail } => write!(f, "the update failed: {detail}"),
+            CatalogUnavailable { detail } => write!(f, "couldn't download from AutoEQ: {detail}"),
             InstallNotAllowed => write!(f, "allow BitSpring to install apps, then try again"),
             EqFormat => write!(f, "not an equaliser preset in any format we read (Equalizer APO, AutoEQ, GraphicEQ, EasyEffects, CSV)"),
             EqEmpty => write!(f, "the preset has no filters"),

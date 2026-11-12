@@ -663,3 +663,147 @@ mod tests {
         assert_eq!(back, vec![a.sanitized(), b.sanitized()]);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Built-in headphone profiles
+// ---------------------------------------------------------------------------------------------
+
+/// One built-in headphone profile: AutoEQ's correction for that model, and whose measurement
+/// it comes from.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct HeadphoneProfile {
+    pub name: String,
+    pub source: String,
+    /// AutoEQ's ParametricEQ.txt.
+    pub eq: String,
+}
+
+#[derive(serde::Deserialize)]
+struct HeadphoneData {
+    profiles: Vec<HeadphoneProfile>,
+}
+
+/// The built-in profiles (see data/README.md), by name.
+pub fn headphone_profiles() -> &'static [HeadphoneProfile] {
+    static DATA: std::sync::OnceLock<Vec<HeadphoneProfile>> = std::sync::OnceLock::new();
+    DATA.get_or_init(|| {
+        serde_json::from_str::<HeadphoneData>(include_str!("../../data/headphones.json")).map(|d| d.profiles).unwrap_or_default()
+    })
+}
+
+/// The preset for a built-in profile, named after the headphones.
+pub fn headphone_preset(name: &str) -> Option<EqPreset> {
+    let p = headphone_profiles().iter().find(|p| p.name == name)?;
+    import(&p.name, &p.eq).ok()?.into_iter().next().map(|mut preset| {
+        preset.name = p.name.clone();
+        preset
+    })
+}
+
+/// AutoEQ's whole catalog (every headphone it has results for, often measured by several
+/// people), packed by data/autoeq_catalog.py and served with the website, so the app fetches
+/// one file instead of thousands, and from us rather than GitHub.
+pub const AUTOEQ_CATALOG: &str = "https://hifi-player-nu.vercel.app/autoeq/catalog.json";
+
+/// One measurement in the catalog.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct CatalogEntry {
+    pub name: String,
+    /// Who measured them (crinacle, oratory1990, Rtings…).
+    pub source: String,
+    /// On what rig, when known ("GRAS 43AG-7").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rig: Option<String>,
+    /// `<preamp>;<filter>;…`, a filter as `<kind><Fc>,<gain>,<Q>` (L low shelf, P peak, H high shelf).
+    pub eq: String,
+}
+
+#[derive(serde::Deserialize)]
+struct CatalogFile {
+    version: u32,
+    profiles: Vec<CatalogEntry>,
+}
+
+/// The catalog's entries; an error when the file isn't one (or is a newer format than this
+/// build reads).
+pub fn parse_catalog(json: &str) -> anyhow::Result<Vec<CatalogEntry>> {
+    let file: CatalogFile = serde_json::from_str(json)?;
+    anyhow::ensure!(file.version == 1, "catalog format {} is newer than this app", file.version);
+    Ok(file.profiles)
+}
+
+/// A catalog entry's filters as AutoEQ's ParametricEQ.txt, which [`import`] reads.
+fn catalog_text(eq: &str) -> Option<String> {
+    let mut parts = eq.split(';');
+    let preamp: f64 = parts.next()?.parse().ok()?;
+    let mut text = format!("Preamp: {preamp} dB\n");
+    for (i, f) in parts.enumerate() {
+        let kind = match f.get(..1)? {
+            "L" => "LSC",
+            "P" => "PK",
+            "H" => "HSC",
+            _ => return None,
+        };
+        let mut v = f[1..].split(',').map(|x| x.parse::<f64>().ok().filter(|x| x.is_finite()));
+        let (fc, gain, q) = (v.next()??, v.next()??, v.next()??);
+        if v.next().is_some() {
+            return None;
+        }
+        text += &format!("Filter {}: ON {kind} Fc {fc} Hz Gain {gain} dB Q {q}\n", i + 1);
+    }
+    Some(text)
+}
+
+/// The preset for a catalog entry: named after the headphones and who measured them, since
+/// the catalog often has the same model several times.
+pub fn catalog_preset(entry: &CatalogEntry) -> anyhow::Result<EqPreset> {
+    let name = format!("{} ({})", entry.name, entry.source);
+    let text = catalog_text(&entry.eq).ok_or(crate::UserError::ProfileEmpty)?;
+    let mut preset = import(&name, &text)?.into_iter().next().ok_or(crate::UserError::ProfileEmpty)?;
+    preset.name = name;
+    Ok(preset)
+}
+
+#[cfg(test)]
+mod headphone_tests {
+    use super::*;
+
+    #[test]
+    fn every_built_in_profile_imports() {
+        let all = headphone_profiles();
+        assert!(all.len() > 100, "{}", all.len());
+        for p in all {
+            let preset = headphone_preset(&p.name).unwrap_or_else(|| panic!("{} doesn't import", p.name));
+            assert!(!preset.bands.is_empty(), "{}", p.name);
+        }
+        let lcd2 = headphone_preset("Audeze LCD-2").unwrap();
+        assert!(lcd2.preamp < -3.0, "{}", lcd2.preamp);
+    }
+
+    #[test]
+    fn a_catalog_entry_becomes_a_preset() {
+        let json = r#"{"version":1,"about":"","commit":"x","profiles":[
+            {"name":"Sennheiser HD 600","source":"crinacle","rig":"GRAS 43AG-7","eq":"-6.3;L105,6.3,0.7;P10000,4.4,0.75;H10000,-2,0.7"},
+            {"name":"Bad","source":"x","eq":"-1;X100,1,1"}]}"#;
+        let all = parse_catalog(json).unwrap();
+        assert_eq!(all[0].rig.as_deref(), Some("GRAS 43AG-7"));
+        let p = catalog_preset(&all[0]).unwrap();
+        assert_eq!(p.name, "Sennheiser HD 600 (crinacle)");
+        assert_eq!(p.bands.len(), 3);
+        assert!((p.preamp + 6.3).abs() < 1e-9, "{}", p.preamp);
+        assert!(catalog_preset(&all[1]).is_err());
+        assert!(parse_catalog(r#"{"version":2,"profiles":[]}"#).is_err());
+    }
+
+    /// Every entry of the real catalog (`HIFI_AUTOEQ_CATALOG=apps/website/public/autoeq/catalog.json`).
+    #[test]
+    #[ignore]
+    fn the_whole_catalog_imports() {
+        let all = parse_catalog(&std::fs::read_to_string(std::env::var("HIFI_AUTOEQ_CATALOG").unwrap()).unwrap()).unwrap();
+        assert!(all.len() > 8000, "{}", all.len());
+        for e in &all {
+            let p = catalog_preset(e).unwrap_or_else(|err| panic!("{} ({}): {err}", e.name, e.source));
+            assert!(p.bands.len() >= 3, "{}", e.name);
+        }
+    }
+}
