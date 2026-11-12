@@ -43,7 +43,7 @@
     text-align: start;
     min-width: 0;
     gap: 2px;
-    border-radius: 8px;
+    border-radius: var(--r-md);
     padding: 0;
   }
   .art {
@@ -51,7 +51,7 @@
     /* explicit: older WebViews (Android) don't stretch an aspect-ratio box in a column */
     width: 100%;
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     overflow: hidden;
     margin-bottom: 8px;
     display: grid;
@@ -81,11 +81,11 @@
     inset-inline-start: 8px;
     bottom: 8px;
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     font-size: var(--t-xs);
     font-weight: 600;
     background: rgba(14, 24, 28, 0.85);
-    color: var(--brass);
+    color: var(--live);
   }
   .title {
     font-weight: 600;
@@ -112,7 +112,7 @@
     color: var(--mist);
   }
   .fmt.hi {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .fmt.lossy {
     color: var(--mist-dim);

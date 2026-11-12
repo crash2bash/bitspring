@@ -5,6 +5,9 @@
   import "@fontsource/barlow-semi-condensed/500.css";
   import "@fontsource/barlow-semi-condensed/600.css";
   import "$lib/theme.css";
+  import "$lib/glass.css";
+  // Applies the saved look to <html> before the first paint.
+  import "$lib/look.svelte";
 
   let { children } = $props();
 </script>

@@ -12,6 +12,7 @@
 
   "nav.screens": "Skærme",
   "nav.player": "Afspilles nu",
+  "tab.player": "Afspilles nu",
   "nav.library": "Bibliotek",
   "nav.queue": "Kø",
 
@@ -250,6 +251,9 @@
   "settings.label": "Indstillinger",
   "settings.language": "Sprog",
   "settings.system": "System ({name})",
+  "settings.look": "Udseende",
+  "settings.lookClassic": "Klassisk",
+  "settings.lookGlass": "Glas",
   "remote.setting": "Fjernbetjening på telefonen",
   "remote.help": "Gennemse biblioteket og styr afspilningen fra en telefon eller tablet på samme netværk: scan koden med kameraet, eller åbn adressen i browseren. Alle med adressen kan styre afspilningen.",
   "remote.newAddress": "Ny adresse",

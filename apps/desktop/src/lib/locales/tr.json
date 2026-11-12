@@ -12,6 +12,7 @@
 
   "nav.screens": "Ekranlar",
   "nav.player": "Şimdi Çalıyor",
+  "tab.player": "Şimdi Çalıyor",
   "nav.library": "Kitaplık",
   "nav.queue": "Sıra",
 
@@ -250,6 +251,9 @@
   "settings.label": "Ayarlar",
   "settings.language": "Dil",
   "settings.system": "Sistem ({name})",
+  "settings.look": "Görünüm",
+  "settings.lookClassic": "Klasik",
+  "settings.lookGlass": "Cam",
   "remote.setting": "Telefondan uzaktan kumanda",
   "remote.help": "Aynı ağdaki bir telefon veya tabletten kitaplığa göz at ve çalmayı yönet: kodu kamerayla tara ya da adresi tarayıcısında aç. Adresi bilen herkes çalmayı yönetebilir.",
   "remote.newAddress": "Yeni adres",

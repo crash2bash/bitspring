@@ -66,8 +66,8 @@
       <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("q.chart")}>
         <defs>
           <linearGradient id="q-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="var(--brass)" stop-opacity="0.45" />
-            <stop offset="1" stop-color="var(--brass)" stop-opacity="0.02" />
+            <stop offset="0" stop-color="var(--porcelain)" stop-opacity="0.45" />
+            <stop offset="1" stop-color="var(--porcelain)" stop-opacity="0.02" />
           </linearGradient>
         </defs>
         {#each yTicks as d (d)}
@@ -138,7 +138,7 @@
     flex-direction: column;
     gap: 14px;
     padding: 18px 20px 16px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: var(--slate-800);
     border: 1px solid var(--slate-500);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
@@ -178,7 +178,7 @@
   .verdict {
     padding: 10px 12px;
     border-radius: var(--r-md);
-    border-inline-start: 3px solid var(--brass);
+    border-inline-start: 3px solid var(--porcelain);
     background: var(--slate-700);
   }
   .verdict.suspect {
@@ -216,7 +216,7 @@
   }
   .trace {
     fill: none;
-    stroke: var(--brass);
+    stroke: var(--porcelain);
     stroke-width: 1.3;
     stroke-linejoin: round;
   }

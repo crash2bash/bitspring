@@ -157,7 +157,7 @@
     flex-direction: column;
     gap: 12px;
     padding: 18px 20px 16px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: var(--slate-800);
     border: 1px solid var(--slate-500);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
@@ -186,7 +186,7 @@
   }
   input:focus,
   select:focus {
-    border-color: var(--brass);
+    border-color: var(--mist);
     outline: none;
   }
   .name {
@@ -226,7 +226,7 @@
   }
   .add {
     align-self: flex-start;
-    color: var(--brass);
+    color: var(--porcelain);
     font-size: var(--t-sm);
     font-weight: 600;
   }
@@ -247,7 +247,7 @@
     width: 80px;
   }
   .limit input[type="checkbox"] {
-    accent-color: var(--brass);
+    accent-color: var(--porcelain);
   }
   footer {
     display: flex;
@@ -263,8 +263,8 @@
     border: 1px solid var(--slate-500);
   }
   .primary {
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
   }
   @media (max-width: 560px) {
     .rules li {

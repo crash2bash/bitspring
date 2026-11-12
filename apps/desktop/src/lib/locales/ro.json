@@ -12,6 +12,7 @@
 
   "nav.screens": "Ecrane",
   "nav.player": "În redare",
+  "tab.player": "În redare",
   "nav.library": "Bibliotecă",
   "nav.queue": "Coadă",
 
@@ -250,6 +251,9 @@
   "settings.label": "Setări",
   "settings.language": "Limbă",
   "settings.system": "Sistem ({name})",
+  "settings.look": "Aspect",
+  "settings.lookClassic": "Clasic",
+  "settings.lookGlass": "Sticlă",
   "remote.setting": "Telecomandă pe telefon",
   "remote.help": "Răsfoiește biblioteca și controlează redarea de pe un telefon sau o tabletă din aceeași rețea: scanează codul cu camera sau deschide adresa în browserul lui. Oricine are adresa poate controla redarea.",
   "remote.newAddress": "Adresă nouă",

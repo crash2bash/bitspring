@@ -394,7 +394,7 @@
   }
   .small {
     padding: 5px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     border: 1px solid var(--slate-500);
     font-size: var(--t-xs);
     font-weight: 600;
@@ -433,7 +433,7 @@
     white-space: nowrap;
   }
   .smart {
-    color: var(--brass);
+    color: var(--porcelain);
     margin-inline-end: 6px;
   }
   .count {
@@ -457,7 +457,9 @@
     text-align: start;
   }
   .title-btn:hover {
-    color: var(--brass);
+    color: var(--porcelain);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .rename input {
     font-family: var(--font-display);
@@ -480,8 +482,8 @@
   .primary {
     padding: 8px 16px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
   }
   .primary:hover:not(:disabled) {
@@ -523,7 +525,7 @@
     width: 340px;
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
-    border-radius: 10px;
+    border-radius: var(--r-lg);
     padding: 6px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
   }
@@ -535,7 +537,7 @@
     width: 100%;
     text-align: start;
     padding: 8px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
   }
   .menu button:hover {
@@ -548,7 +550,7 @@
   input,
   textarea {
     padding: 7px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     border: 1px solid var(--slate-500);
     background: var(--slate-900);
     color: var(--porcelain);
@@ -560,7 +562,7 @@
   .paste {
     margin-bottom: 20px;
     padding: 14px 16px;
-    border-radius: 10px;
+    border-radius: var(--r-lg);
     background: var(--slate-700);
   }
   .hint {
@@ -589,7 +591,7 @@
   .note {
     margin: 0 0 16px;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     background: var(--slate-700);
   }
@@ -617,7 +619,7 @@
     color: var(--alarm);
   }
   .note {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .row-actions {
     display: inline-flex;
@@ -626,7 +628,7 @@
   .row-actions button {
     width: 22px;
     height: 22px;
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     color: var(--mist);
     line-height: 1;
   }

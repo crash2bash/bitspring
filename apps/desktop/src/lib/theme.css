@@ -1,5 +1,9 @@
 /* Design tokens. Palette: anodised hardware panel — slate housing, porcelain legends,
-   brass for an untouched signal (gold-plated contacts), violet for a processed one. */
+   brass for an untouched signal (gold-plated contacts), violet for a processed one.
+
+   Brass and violet mean the signal and nothing else. Actions, selection, focus and hover are
+   porcelain; whatever is playing right now (the play key, the current track) takes the
+   signal's colour through --live, which the page sets from the signal path. */
 :root {
   --slate-900: #121d23;
   --slate-800: #16232a;
@@ -12,7 +16,13 @@
   --brass: #c9a45c;
   --brass-glow: rgba(201, 164, 92, 0.35);
   --violet: #8c7ae6;
+  /* the colour of what is playing now: neutral until a signal path is known */
+  --live: var(--porcelain);
   --alarm: #e5625e;
+  /* Solid dark for text and strokes on light/accent fills; stays solid in every look
+     (the slate surface tokens turn translucent in the glass look). */
+  --ink: #121d23;
+  --ink-soft: #16232a;
 
   --font: "Barlow", system-ui, sans-serif;
   --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
@@ -26,11 +36,21 @@
   --t-2xl: 2.441rem;
   --t-3xl: 3.052rem;
 
+  /* Three radii by size: small marks and chips, buttons and fields, panels and popovers.
+     Pills (999px) and circles (50%) stay as they are: those are shapes, not steps. */
   --r-sm: 4px;
   --r-md: 8px;
+  --r-lg: 12px;
   --gutter: 24px;
 
   color-scheme: dark;
+}
+
+.sig-bp {
+  --live: var(--brass);
+}
+.sig-dsp {
+  --live: var(--violet);
 }
 
 * {
@@ -65,9 +85,29 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--brass);
+  outline: 2px solid var(--porcelain);
   outline-offset: 2px;
   border-radius: var(--r-sm);
+}
+
+/* Scroll bars (shown when macOS is set to always show them, and on Windows): a thin rounded
+   thumb on no track, instead of the light system bar over the content. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--slate-500);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--mist-dim);
 }
 
 .num {

@@ -12,6 +12,7 @@
 
   "nav.screens": "Экраны",
   "nav.player": "Сейчас играет",
+  "tab.player": "Плеер",
   "nav.library": "Медиатека",
   "nav.queue": "Очередь",
 
@@ -255,6 +256,9 @@
   "settings.label": "Настройки",
   "settings.language": "Язык",
   "settings.system": "Как в системе ({name})",
+  "settings.look": "Оформление",
+  "settings.lookClassic": "Классика",
+  "settings.lookGlass": "Стекло",
   "remote.setting": "Пульт на телефоне",
   "remote.help": "Листайте медиатеку и управляйте воспроизведением с телефона или планшета в той же сети: наведите на код камеру или откройте адрес в его браузере. Управлять может любой, у кого есть этот адрес.",
   "remote.newAddress": "Новый адрес",

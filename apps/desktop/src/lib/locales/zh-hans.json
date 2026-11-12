@@ -12,6 +12,7 @@
 
   "nav.screens": "页面",
   "nav.player": "正在播放",
+  "tab.player": "正在播放",
   "nav.library": "资料库",
   "nav.queue": "播放队列",
 
@@ -250,6 +251,9 @@
   "settings.label": "设置",
   "settings.language": "语言",
   "settings.system": "跟随系统（{name}）",
+  "settings.look": "外观",
+  "settings.lookClassic": "经典",
+  "settings.lookGlass": "玻璃",
   "remote.setting": "手机遥控",
   "remote.help": "在同一网络中的手机或平板上浏览音乐库并控制播放：用相机扫描二维码，或在浏览器中打开地址。任何拥有此地址的人都能控制播放。",
   "remote.newAddress": "新地址",

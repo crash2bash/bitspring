@@ -294,7 +294,7 @@
     width: 100%;
     height: 100%;
     min-height: 200px;
-    border-radius: 10px;
+    border-radius: var(--r-lg);
     background:
       radial-gradient(120% 80% at 50% 50%, rgba(140, 122, 230, 0.05), transparent 70%),
       var(--slate-900);
@@ -364,7 +364,7 @@
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     paint-order: stroke;
-    stroke: var(--slate-900);
+    stroke: var(--ink);
     stroke-width: 4px;
   }
   .readout .rdb {
@@ -381,7 +381,7 @@
     fill: transparent;
   }
   .dot {
-    fill: var(--slate-800);
+    fill: var(--ink-soft);
     stroke: var(--porcelain);
     stroke-width: 1.5;
     transition: r 80ms ease;
@@ -401,7 +401,7 @@
     stroke: var(--porcelain);
   }
   .node.sel .n {
-    fill: var(--slate-900);
+    fill: var(--ink);
   }
   .node.off .dot {
     stroke: var(--mist-dim);
@@ -411,7 +411,7 @@
     fill: var(--mist-dim);
   }
   .node:focus-visible .dot {
-    stroke: var(--brass);
+    stroke: var(--porcelain);
     stroke-width: 2.5;
   }
   .dim .line,

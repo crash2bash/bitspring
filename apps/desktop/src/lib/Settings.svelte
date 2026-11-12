@@ -2,6 +2,7 @@
   import { i18n, LOCALES, t } from "./i18n.svelte";
   import { checkUpdates, updates } from "./updates.svelte";
   import { api, isAndroid, isIOS, type RemoteStatus } from "./api";
+  import { look, LOOKS } from "./look.svelte";
 
   let open = $state(false);
   let root: HTMLElement;
@@ -51,6 +52,16 @@
           {/each}
         </select>
       </label>
+      <div class="field look">
+        <span id="look-label">{t("settings.look")}</span>
+        <div class="seg" role="radiogroup" aria-labelledby="look-label">
+          {#each LOOKS as l (l)}
+            <button role="radio" aria-checked={look.value === l} class:sel={look.value === l} onclick={() => (look.value = l)}>
+              {t(l === "glass" ? "settings.lookGlass" : "settings.lookClassic")}
+            </button>
+          {/each}
+        </div>
+      </div>
       {#if hasRemote && remote}
         <div class="field upd remote">
           <label class="toggle">
@@ -116,15 +127,49 @@
     z-index: 20;
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     padding: 14px 16px 16px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
+    /* with the phone remote's code shown it can be taller than the window: scroll inside it */
+    max-height: calc(100vh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable both-edges;
   }
   .field {
     display: flex;
     flex-direction: column;
     gap: 8px;
     font-weight: 600;
+  }
+  .look {
+    margin-top: 14px;
+  }
+  .seg {
+    display: flex;
+    padding: 3px;
+    gap: 2px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--slate-600);
+    font-weight: 500;
+    font-size: var(--t-sm);
+  }
+  .seg button {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: var(--r-md);
+    color: var(--mist);
+  }
+  .seg button:hover {
+    color: var(--porcelain);
+  }
+  .seg button.sel {
+    color: var(--porcelain);
+    background: var(--slate-600);
+  }
+  :global(html[data-look="glass"]) .seg,
+  :global(html[data-look="glass"]) .seg button {
+    border-radius: 999px;
   }
   .upd {
     margin-top: 16px;
@@ -139,7 +184,7 @@
     color: var(--mist);
   }
   .note.new {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .note.err {
     color: var(--alarm);
@@ -165,7 +210,7 @@
     cursor: pointer;
   }
   .toggle input {
-    accent-color: var(--brass);
+    accent-color: var(--porcelain);
   }
   .qr {
     align-self: center;
@@ -210,6 +255,7 @@
       right: 10px;
       top: calc(var(--safe-top, env(safe-area-inset-top)) + 58px);
       width: auto;
+      max-height: calc(100dvh - var(--safe-top, env(safe-area-inset-top)) - var(--safe-bottom, env(safe-area-inset-bottom)) - 68px);
     }
   }
 </style>

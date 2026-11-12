@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import {
     api, entryFromStream, errorText, longDuration, resolution, SERVICE_NAME, streamAlbumToLib, streamToLib,
     type SAlbum, type Service, type SPlaylist, type STrack, type StreamQuality, type StreamingStatus,
@@ -101,9 +101,21 @@
     results = (await run(() => api.streamingSearch(service, q))) ?? null;
   }
 
+  /** Where the grid was scrolled when an album or playlist opened: "Back" returns there. */
+  let gridScroll = 0;
+  function keepGridScroll() {
+    if (!open) gridScroll = body?.scrollTop ?? 0;
+  }
+  async function back() {
+    open = null;
+    await tick();
+    body?.scrollTo({ top: gridScroll });
+  }
+
   async function openAlbum(a: SAlbum) {
     const page = await run(() => api.streamingAlbum(service, a.id));
     if (page) {
+      keepGridScroll();
       open = { kind: "album", album: page.album, tracks: page.tracks };
       body?.scrollTo({ top: 0 });
     }
@@ -112,6 +124,7 @@
   async function openPlaylist(p: SPlaylist) {
     const page = await run(() => api.streamingPlaylist(service, p.id));
     if (page) {
+      keepGridScroll();
       open = { kind: "playlist", playlist: { ...p, ...page.playlist, name: page.playlist.name || p.name }, tracks: page.tracks };
       body?.scrollTo({ top: 0 });
     }
@@ -216,7 +229,7 @@
     {:else if open?.kind === "album"}
       {@const a = open.album}
       <div class="page">
-        <button class="back" onclick={() => (open = null)}>
+        <button class="back" onclick={back}>
           <svg width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M7 1L2 6l5 5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
           {t("lib.back")}
         </button>
@@ -241,7 +254,7 @@
     {:else if open?.kind === "playlist"}
       {@const p = open.playlist}
       <div class="page">
-        <button class="back" onclick={() => (open = null)}>
+        <button class="back" onclick={back}>
           <svg width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M7 1L2 6l5 5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
           {t("lib.back")}
         </button>
@@ -340,7 +353,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     color: var(--mist);
   }
@@ -356,7 +369,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--brass);
+    background: var(--porcelain);
   }
   .search-form {
     flex: 1;
@@ -376,7 +389,7 @@
     -webkit-user-select: text;
   }
   .search:focus {
-    outline: 2px solid var(--brass);
+    outline: 2px solid var(--porcelain);
     outline-offset: 0;
     border-color: transparent;
   }
@@ -400,7 +413,7 @@
     color: var(--porcelain);
     background: var(--slate-900);
     border: 1px solid var(--slate-600);
-    border-radius: 6px;
+    border-radius: var(--r-md);
     padding: 4px 6px;
   }
   .link {
@@ -450,8 +463,8 @@
   .primary {
     padding: 8px 16px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
   }
   .primary:hover:not(:disabled) {
@@ -489,7 +502,7 @@
   }
   .art {
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     overflow: hidden;
     background:
       repeating-linear-gradient(90deg, rgba(232, 237, 234, 0.05) 0 2px, transparent 2px 8px),
@@ -519,7 +532,7 @@
     font-size: var(--t-sm);
   }
   .facts.hi {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .actions {
     display: flex;
@@ -537,7 +550,7 @@
   .pl-art {
     width: 100%;
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     overflow: hidden;
     margin-bottom: 8px;
     display: grid;
@@ -573,7 +586,7 @@
   .note {
     margin: 0 0 16px;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     background: var(--slate-700);
   }
@@ -581,7 +594,7 @@
     color: var(--alarm);
   }
   .note {
-    color: var(--brass);
+    color: var(--porcelain);
   }
 
   @media (max-width: 700px), (max-height: 500px) {

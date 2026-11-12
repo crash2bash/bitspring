@@ -53,6 +53,27 @@
   let error = $state<string | null>(null);
   let note = $state<string | null>(null);
   let menu = $state<"new" | "import" | "export" | null>(null);
+
+  // A preset name too long for its field scrolls by itself (back and forth, pausing at each
+  // end) while the field isn't being edited: names like "Audeze LCD-2 (Fazor) (oratory1990)"
+  // carry the part that matters at the end.
+  let nameInput = $state<HTMLInputElement | null>(null);
+  let nameFocused = $state(false);
+  let nameOverflow = $state(0);
+  function measureName() {
+    nameOverflow = nameInput ? Math.max(0, nameInput.scrollWidth - nameInput.clientWidth) : 0;
+  }
+  $effect(() => {
+    void draft?.name;
+    if (!nameInput) return;
+    const ro = new ResizeObserver(measureName);
+    ro.observe(nameInput);
+    measureName();
+    return () => ro.disconnect();
+  });
+  let nameRtl = $derived(nameInput ? getComputedStyle(nameInput).direction === "rtl" : false);
+  /** Seconds for one round trip: ~40 px/s each way, plus the pauses at both ends. */
+  let nameDur = $derived(Math.max(6, (2 * nameOverflow) / 40 / 0.64));
   let pasting = $state(false);
   let pickingHeadphones = $state(false);
   let pasteText = $state("");
@@ -485,13 +506,24 @@
           <span class="knob" aria-hidden="true"></span>
           <span class="sr">{t("eq.switch")}</span>
         </label>
-        <input
-          class="name"
-          value={draft.name}
-          aria-label={t("eq.name")}
-          onchange={(e) => patch({ name: e.currentTarget.value.trim() || draft!.name })}
-          onkeydown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        />
+        <span class="name-wrap" class:running={nameOverflow > 0 && !nameFocused}>
+          <input
+            class="name"
+            bind:this={nameInput}
+            value={draft.name}
+            aria-label={t("eq.name")}
+            onfocus={() => (nameFocused = true)}
+            onblur={(e) => {
+              nameFocused = false;
+              e.currentTarget.scrollLeft = 0;
+            }}
+            onchange={(e) => patch({ name: e.currentTarget.value.trim() || draft!.name })}
+            onkeydown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+          {#if nameOverflow > 0 && !nameFocused}
+            <span class="name-run" aria-hidden="true" style={`--shift: ${nameRtl ? "" : "-"}${nameOverflow + 28}px; --dur: ${nameDur}s`}><span>{draft.name}</span></span>
+          {/if}
+        </span>
         <div class="head-tools">
           <button class="icon" onclick={undo} disabled={!past.length} aria-label={t("eq.undo")} title={t("eq.undo")}>
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3L2 6l3 3M2.5 6H10a4 4 0 0 1 0 8H7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -762,9 +794,13 @@
     display: flex;
     gap: 4px;
   }
+  /* one height for the text and the icon button, side by side in the header */
   .tool {
-    padding: 5px 10px;
-    border-radius: 6px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     color: var(--mist);
     border: 1px solid var(--slate-600);
@@ -775,9 +811,8 @@
   }
   .tool.add {
     width: 30px;
-    display: grid;
-    place-items: center;
-    padding: 5px 0;
+    justify-content: center;
+    padding: 0;
   }
   .p-list {
     list-style: none;
@@ -793,7 +828,7 @@
     flex-direction: column;
     gap: 1px;
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: var(--r-md);
     text-align: start;
   }
   .p-item:hover {
@@ -849,7 +884,7 @@
     z-index: 30;
     min-width: 230px;
     padding: 6px;
-    border-radius: 10px;
+    border-radius: var(--r-lg);
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
@@ -862,7 +897,7 @@
     display: block;
     width: 100%;
     padding: 7px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     text-align: start;
     white-space: nowrap;
@@ -909,11 +944,70 @@
     color: var(--porcelain);
     background: none;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     padding: 2px 6px;
     margin-inline-start: -6px;
     user-select: text;
     -webkit-user-select: text;
+  }
+  .name-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 140px;
+    display: flex;
+  }
+  .name-wrap .name {
+    min-width: 0;
+  }
+  /* the field keeps its place (and takes the click); the moving copy is drawn over it */
+  .name-wrap.running .name {
+    color: transparent;
+  }
+  .name-run {
+    position: absolute;
+    inset: 0;
+    /* the field's border and padding, so the copy starts exactly where its text does */
+    padding: 3px 7px;
+    margin-inline-start: -6px;
+    overflow: hidden;
+    pointer-events: none;
+    white-space: nowrap;
+    font-family: var(--font-display);
+    font-size: var(--t-xl);
+    font-weight: 600;
+    color: var(--porcelain);
+    /* soft edges: the text slides under them instead of being cut (it travels 28px past its
+       end, so the last letters come to rest clear of the fade) */
+    mask-image: linear-gradient(90deg, transparent, #000 7px, #000 calc(100% - 28px), transparent);
+  }
+  :global([dir="rtl"]) .name-run {
+    mask-image: linear-gradient(270deg, transparent, #000 7px, #000 calc(100% - 28px), transparent);
+  }
+  .name-run span {
+    display: inline-block;
+    animation: name-run var(--dur) ease-in-out infinite;
+  }
+  @keyframes name-run {
+    0%,
+    18% {
+      transform: none;
+    }
+    50%,
+    68% {
+      transform: translateX(var(--shift));
+    }
+    100% {
+      transform: none;
+    }
+  }
+  /* no movement for those who asked for less: the name stays clipped, as a field would */
+  @media (prefers-reduced-motion: reduce) {
+    .name-run {
+      display: none;
+    }
+    .name-wrap.running .name {
+      color: var(--porcelain);
+    }
   }
   .name:hover {
     border-color: var(--slate-600);
@@ -937,12 +1031,12 @@
     font-weight: 600;
   }
   .compare:hover:not(:disabled) {
-    border-color: var(--brass);
+    border-color: var(--mist);
   }
   .compare.on {
     background: var(--brass);
     border-color: var(--brass);
-    color: var(--slate-900);
+    color: var(--ink);
   }
   .compare:disabled,
   .icon:disabled {
@@ -954,7 +1048,7 @@
     height: 32px;
     display: grid;
     place-items: center;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     color: var(--mist);
   }
   .icon:hover:not(:disabled) {
@@ -964,7 +1058,7 @@
   .icon.danger.armed {
     width: auto;
     padding: 0 10px;
-    color: var(--slate-900);
+    color: var(--ink);
     background: var(--alarm);
   }
   .confirm {
@@ -981,7 +1075,7 @@
   }
   .seg button {
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-md);
     font-size: var(--t-sm);
     color: var(--mist);
     white-space: nowrap;
@@ -1041,7 +1135,7 @@
     position: relative;
     width: 38px;
     height: 22px;
-    border-radius: 11px;
+    border-radius: 999px;
     background: var(--slate-900);
     border: 1px solid var(--slate-500);
     transition: background 120ms ease, border-color 120ms ease;
@@ -1069,7 +1163,7 @@
     transform: translateX(-16px);
   }
   .switch input:focus-visible + .knob {
-    outline: 2px solid var(--brass);
+    outline: 2px solid var(--porcelain);
     outline-offset: 2px;
   }
 
@@ -1098,7 +1192,7 @@
   .numf {
     width: 64px;
     padding: 4px 6px;
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     border: 1px solid var(--slate-600);
     background: var(--slate-900);
     color: var(--porcelain);
@@ -1157,7 +1251,7 @@
     color: var(--porcelain);
     background: var(--slate-900);
     border: 1px solid var(--slate-600);
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     padding: 3px 6px;
   }
   .warn {
@@ -1227,7 +1321,7 @@
     height: 24px;
     display: grid;
     place-items: center;
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     color: var(--mist-dim);
   }
   .x:hover {
@@ -1297,8 +1391,8 @@
   .primary {
     padding: 8px 18px;
     border-radius: var(--r-md);
-    background: var(--brass);
-    color: var(--slate-900);
+    background: var(--porcelain);
+    color: var(--ink);
     font-weight: 600;
     font-size: var(--t-sm);
   }
@@ -1312,7 +1406,7 @@
     font-size: var(--t-sm);
   }
   .chip:hover {
-    border-color: var(--violet);
+    border-color: var(--mist);
   }
   .err {
     margin: 0;
@@ -1321,7 +1415,7 @@
   }
   .note {
     margin: 0;
-    color: var(--brass);
+    color: var(--porcelain);
     font-size: var(--t-sm);
     overflow-wrap: anywhere;
   }
@@ -1363,7 +1457,7 @@
     flex-direction: column;
     gap: 10px;
     padding: 18px 20px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: var(--slate-700);
     border: 1px solid var(--slate-500);
   }
@@ -1379,7 +1473,7 @@
     color: var(--porcelain);
     background: var(--slate-900);
     border: 1px solid var(--slate-600);
-    border-radius: 6px;
+    border-radius: var(--r-md);
     padding: 8px 10px;
     user-select: text;
     -webkit-user-select: text;

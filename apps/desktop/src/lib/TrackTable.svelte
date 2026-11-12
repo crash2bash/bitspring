@@ -204,7 +204,7 @@
     }
   }
   tr.current td {
-    color: var(--brass);
+    color: var(--live);
   }
   tr.off td {
     color: var(--mist-dim);
@@ -277,7 +277,7 @@
     color: var(--mist);
   }
   .fmt.hi {
-    color: var(--brass);
+    color: var(--porcelain);
   }
   .fmt.lossy {
     color: var(--mist-dim);
