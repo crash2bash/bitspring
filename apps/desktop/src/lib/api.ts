@@ -19,6 +19,8 @@ export interface Device {
   network: boolean;
   /** A network player's maker and model. */
   model: string | null;
+  /** A network player's protocol: "UPnP" or "Chromecast". */
+  protocol: string | null;
 }
 
 export interface Signal {
@@ -577,6 +579,11 @@ const DEVICE_KEYS: Record<string, string> = {
   Dock: "dev.dock",
   "Audio output": "dev.output",
 };
+
+/** The uid of a network player (UPnP or Chromecast), which may take a moment to be found. */
+export function isNetworkUid(uid: string): boolean {
+  return uid.startsWith("upnp:") || uid.startsWith("cast:");
+}
 
 /** A device name as shown. */
 export function deviceLabel(name: string): string {

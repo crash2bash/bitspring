@@ -174,6 +174,8 @@ struct DeviceDto {
     network: bool,
     /// A network player's maker and model ("WiiM Pro"), to tell it apart.
     model: Option<String>,
+    /// A network player's protocol ("UPnP", "Chromecast"): a device may speak both.
+    protocol: Option<String>,
 }
 
 impl From<&Output> for DeviceDto {
@@ -193,14 +195,11 @@ impl From<&Output> for DeviceDto {
                 .flatten(),
             network: d.is_network(),
             model: match d {
-                Output::Renderer(r) => {
-                    let m = if r.model.to_lowercase().starts_with(&r.manufacturer.to_lowercase()) || r.manufacturer.is_empty() {
-                        r.model.clone()
-                    } else {
-                        format!("{} {}", r.manufacturer.trim_end_matches(", Inc.").trim_end_matches(" Inc."), r.model)
-                    };
-                    Some(m.trim().to_string()).filter(|m| !m.is_empty())
-                }
+                Output::Network(t) => Some(t.model()).filter(|m| !m.is_empty()),
+                Output::Device(_) => None,
+            },
+            protocol: match d {
+                Output::Network(t) => Some(t.protocol().to_string()),
                 Output::Device(_) => None,
             },
         }
@@ -545,15 +544,15 @@ fn list_devices(search: Option<bool>) -> CmdResult<Vec<DeviceDto>> {
 #[tauri::command(async)]
 fn output_volume(uid: String) -> Option<u32> {
     match outputs::find(&uid).ok()?? {
-        Output::Renderer(r) if r.has_volume => r.volume().ok(),
+        Output::Network(t) if t.has_volume() => t.volume().ok(),
         _ => None,
     }
 }
 
 #[tauri::command(async)]
 fn set_output_volume(uid: String, volume: u32) {
-    if let Ok(Some(Output::Renderer(r))) = outputs::find(&uid) {
-        let _ = r.set_volume(volume);
+    if let Ok(Some(Output::Network(t))) = outputs::find(&uid) {
+        let _ = t.set_volume(volume);
     }
 }
 

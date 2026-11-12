@@ -168,7 +168,7 @@
   "dev.upTo": "enintään {rate} kHz",
   "dev.noBitPerfect": "ei bit-perfect",
   "dev.network": "Verkkosoittimet",
-  "dev.networkSearching": "Etsitään Sonos-, WiiM-, Bluesound- ja muita UPnP/DLNA-soittimia tästä verkosta…",
+  "dev.networkSearching": "Etsitään Sonos-, WiiM-, Bluesound-, Chromecast- ja muita UPnP/DLNA- ja Google Cast -soittimia tästä verkosta…",
   "dev.networkHelp": "Musiikki kulkee soittimelle verkon kautta FLAC-muodossa näyte näytteeltä. Bittitarkkaa ääntä varten kytke soittimen oma taajuuskorjain ja äänenvoimakkuuden tasoitus pois.",
   "dev.volume": "Äänenvoimakkuus",
   "dev.iosNote": "iPhone soittaa yhden lähdön kautta: sen, joka on nyt yhdistettynä. Yhdistä DAC USB-C:llä, niin ääni menee siihen tiedoston näytetaajuudella. Muut apit hiljenevät sillä aikaa.",

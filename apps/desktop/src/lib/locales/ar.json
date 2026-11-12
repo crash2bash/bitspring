@@ -168,7 +168,7 @@
   "dev.upTo": "حتى {rate} كيلوهرتز",
   "dev.noBitPerfect": "دون Bit-perfect",
   "dev.network": "مشغّلات الشبكة",
-  "dev.networkSearching": "جارٍ البحث عن Sonos وWiiM وBluesound وغيرها من مشغّلات UPnP/DLNA على هذه الشبكة…",
+  "dev.networkSearching": "جارٍ البحث عن Sonos وWiiM وBluesound وChromecast وغيرها من مشغّلات UPnP/DLNA وGoogle Cast على هذه الشبكة…",
   "dev.networkHelp": "تصل الموسيقى إلى المشغّل عبر شبكتك بصيغة FLAC، عيّنةً بعيّنة. للحصول على صوت مطابق بت ببت، أوقف المعادل وموازنة مستوى الصوت في المشغّل نفسه.",
   "dev.volume": "مستوى الصوت",
   "dev.iosNote": "يشغّل الـiPhone الصوت عبر مخرج واحد: المتّصل حاليًا. صِل DAC عبر USB-C، فيذهب الصوت إليه بمعدل عيّنات الملف. وتصمت التطبيقات الأخرى في أثناء ذلك.",

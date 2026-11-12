@@ -168,7 +168,7 @@
   "dev.upTo": "hasta {rate} kHz",
   "dev.noBitPerfect": "sin bit-perfect",
   "dev.network": "Reproductores en red",
-  "dev.networkSearching": "Buscando Sonos, WiiM, Bluesound y otros reproductores UPnP/DLNA en esta red…",
+  "dev.networkSearching": "Buscando Sonos, WiiM, Bluesound, Chromecast y otros reproductores UPnP/DLNA y Google Cast en esta red…",
   "dev.networkHelp": "La música llega al reproductor por tu red en FLAC, muestra a muestra. Para un sonido bit-perfect, desactiva el ecualizador y la nivelación de volumen del propio reproductor.",
   "dev.volume": "Volumen",
   "dev.iosNote": "El iPhone reproduce por una sola salida: la que esté conectada en ese momento. Conecta un DAC por USB-C y el sonido irá a él a la frecuencia del archivo. Mientras tanto, las demás apps se silencian.",

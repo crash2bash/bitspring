@@ -168,7 +168,7 @@
   "dev.upTo": "up to {rate} kHz",
   "dev.noBitPerfect": "no bit-perfect",
   "dev.network": "Network players",
-  "dev.networkSearching": "Looking for Sonos, WiiM, Bluesound and other UPnP/DLNA players on this network…",
+  "dev.networkSearching": "Looking for Sonos, WiiM, Bluesound, Chromecast and other UPnP/DLNA and Google Cast players on this network…",
   "dev.networkHelp": "The music goes to the player over your network as FLAC, sample for sample. For bit-perfect sound, keep the player's own EQ and volume leveling off.",
   "dev.volume": "Volume",
   "dev.iosNote": "iPhone plays through one output: whichever is connected now. Connect a DAC over USB-C and the sound goes to it at the file's sample rate. Other apps go quiet meanwhile.",

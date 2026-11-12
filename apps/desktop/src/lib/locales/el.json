@@ -168,7 +168,7 @@
   "dev.upTo": "έως {rate} kHz",
   "dev.noBitPerfect": "χωρίς bit-perfect",
   "dev.network": "Συσκευές αναπαραγωγής δικτύου",
-  "dev.networkSearching": "Αναζήτηση για Sonos, WiiM, Bluesound και άλλες συσκευές UPnP/DLNA σε αυτό το δίκτυο…",
+  "dev.networkSearching": "Αναζήτηση για Sonos, WiiM, Bluesound, Chromecast και άλλες συσκευές UPnP/DLNA και Google Cast σε αυτό το δίκτυο…",
   "dev.networkHelp": "Η μουσική πηγαίνει στη συσκευή μέσω του δικτύου σας σε FLAC, δείγμα προς δείγμα. Για ήχο bit-perfect, απενεργοποιήστε τον ισοσταθμιστή και την εξισορρόπηση έντασης της ίδιας της συσκευής.",
   "dev.volume": "Ένταση",
   "dev.iosNote": "Το iPhone παίζει από μία έξοδο: όποια είναι συνδεδεμένη τώρα. Συνδέστε ένα DAC μέσω USB-C και ο ήχος πηγαίνει σε αυτό στη συχνότητα του αρχείου. Στο μεταξύ οι άλλες εφαρμογές σιωπούν.",

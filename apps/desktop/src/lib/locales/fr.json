@@ -168,7 +168,7 @@
   "dev.upTo": "jusqu’à {rate} kHz",
   "dev.noBitPerfect": "pas de bit-perfect",
   "dev.network": "Lecteurs réseau",
-  "dev.networkSearching": "Recherche de Sonos, WiiM, Bluesound et autres lecteurs UPnP/DLNA sur ce réseau…",
+  "dev.networkSearching": "Recherche de Sonos, WiiM, Bluesound, Chromecast et autres lecteurs UPnP/DLNA et Google Cast sur ce réseau…",
   "dev.networkHelp": "La musique part vers le lecteur par votre réseau en FLAC, échantillon par échantillon. Pour un son bit-perfect, désactivez l’égaliseur et la normalisation du volume du lecteur.",
   "dev.volume": "Volume",
   "dev.iosNote": "L’iPhone joue sur une seule sortie : celle qui est connectée à ce moment-là. Branchez un DAC en USB-C et le son y part à la fréquence du fichier. Les autres apps se taisent pendant ce temps.",

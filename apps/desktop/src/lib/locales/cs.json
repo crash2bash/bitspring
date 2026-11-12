@@ -168,7 +168,7 @@
   "dev.upTo": "až {rate} kHz",
   "dev.noBitPerfect": "bez bit-perfect",
   "dev.network": "Síťové přehrávače",
-  "dev.networkSearching": "Hledám Sonos, WiiM, Bluesound a další přehrávače UPnP/DLNA v této síti…",
+  "dev.networkSearching": "Hledám Sonos, WiiM, Bluesound, Chromecast a další přehrávače UPnP/DLNA a Google Cast v této síti…",
   "dev.networkHelp": "Hudba jde do přehrávače po síti jako FLAC, vzorek po vzorku. Pro bitově přesný zvuk vypněte ekvalizér a vyrovnávání hlasitosti v samotném přehrávači.",
   "dev.volume": "Hlasitost",
   "dev.iosNote": "iPhone hraje přes jeden výstup: ten, který je právě připojený. Připojte DAC přes USB-C a zvuk do něj půjde ve vzorkovací frekvenci souboru. Ostatní aplikace mezitím ztichnou.",

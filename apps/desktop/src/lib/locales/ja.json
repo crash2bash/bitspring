@@ -168,7 +168,7 @@
   "dev.upTo": "最大{rate} kHz",
   "dev.noBitPerfect": "bit-perfect非対応",
   "dev.network": "ネットワークプレーヤー",
-  "dev.networkSearching": "このネットワーク上の Sonos、WiiM、Bluesound などの UPnP/DLNA プレーヤーを探しています…",
+  "dev.networkSearching": "このネットワーク上の Sonos、WiiM、Bluesound、Chromecast などの UPnP/DLNA・Google Cast プレーヤーを探しています…",
   "dev.networkHelp": "音楽はネットワーク経由で FLAC としてプレーヤーへ送られ、サンプルは一つも変わりません。ビットパーフェクトで聴くには、プレーヤー側のイコライザーと音量の自動調整をオフにしてください。",
   "dev.volume": "音量",
   "dev.iosNote": "iPhoneは、いま接続されている1つの出力からしか音を出せません。USB-CでDACをつなぐと、ファイルのサンプリングレートのままDACへ送られます。その間、ほかのAppは音が出ません。",

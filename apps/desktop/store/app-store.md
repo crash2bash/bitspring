@@ -85,7 +85,7 @@ BIT-PERFECT
 • Exclusive (hog) mode: no other app or system sound gets mixed in.
 • A clear indicator shows whether the signal is bit-perfect or being processed, and why.
 • Gapless playback for live albums, operas and DJ mixes.
-• Network players: Sonos, WiiM, Bluesound and other UPnP/DLNA streamers get your music as FLAC, sample for sample and without gaps.
+• Network players: Sonos, WiiM, Bluesound and other UPnP/DLNA streamers, and Chromecast and Google Cast devices, get your music as FLAC, sample for sample and without gaps.
 
 EVERY FORMAT YOU OWN
 • FLAC, ALAC, WAV, AIFF, CAF, MKA, MP3, AAC and Ogg Vorbis.
@@ -117,7 +117,7 @@ First release in the App Store.
 ## Notes for App Review
 
 ```
-BitSpring is a music player for the user's own audio files. It has no account and no in-app purchases. Its only network use is on the local network: it finds UPnP/DLNA network players (Sonos, WiiM and the like) and streams the user's music to them, which is why it asks for local network access.
+BitSpring is a music player for the user's own audio files. It has no account and no in-app purchases. Its only network use is on the local network: it finds UPnP/DLNA and Google Cast network players (Sonos, WiiM, Chromecast and the like) and streams the user's music to them, which is why it asks for local network access.
 
 To try it: on iPhone, add audio files with the "Add files" button in the library (any FLAC, WAV, MP3 or AAC file works) or copy them into Files → On My iPhone → BitSpring. On Mac, press "Add folder" and pick any folder with music.
 

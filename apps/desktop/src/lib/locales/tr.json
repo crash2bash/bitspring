@@ -168,7 +168,7 @@
   "dev.upTo": "{rate} kHz'e kadar",
   "dev.noBitPerfect": "bit-perfect yok",
   "dev.network": "Ağ oynatıcıları",
-  "dev.networkSearching": "Bu ağda Sonos, WiiM, Bluesound ve diğer UPnP/DLNA oynatıcıları aranıyor…",
+  "dev.networkSearching": "Bu ağda Sonos, WiiM, Bluesound, Chromecast ve diğer UPnP/DLNA ve Google Cast oynatıcıları aranıyor…",
   "dev.networkHelp": "Müzik, ağın üzerinden oynatıcıya FLAC olarak, örnek örnek gider. Bit-perfect ses için oynatıcının kendi ekolayzerini ve ses düzeyi dengelemesini kapat.",
   "dev.volume": "Ses düzeyi",
   "dev.iosNote": "iPhone tek bir çıkıştan çalar: o an hangisi bağlıysa. USB-C ile bir DAC bağla, ses dosyanın örnekleme hızında ona gitsin. Bu sırada diğer uygulamalar susar.",

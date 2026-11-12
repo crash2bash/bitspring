@@ -168,7 +168,7 @@
   "dev.upTo": "până la {rate} kHz",
   "dev.noBitPerfect": "fără bit-perfect",
   "dev.network": "Playere de rețea",
-  "dev.networkSearching": "Căutăm Sonos, WiiM, Bluesound și alte playere UPnP/DLNA în această rețea…",
+  "dev.networkSearching": "Căutăm Sonos, WiiM, Bluesound, Chromecast și alte playere UPnP/DLNA și Google Cast în această rețea…",
   "dev.networkHelp": "Muzica ajunge la player prin rețeaua ta în format FLAC, eșantion cu eșantion. Pentru sunet bit-perfect, oprește egalizatorul și nivelarea volumului din player.",
   "dev.volume": "Volum",
   "dev.iosNote": "iPhone-ul redă printr-o singură ieșire: cea conectată acum. Conectează un DAC prin USB-C și sunetul ajunge la el la frecvența fișierului. Între timp, celelalte aplicații tac.",

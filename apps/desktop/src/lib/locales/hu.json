@@ -168,7 +168,7 @@
   "dev.upTo": "legfeljebb {rate} kHz",
   "dev.noBitPerfect": "nincs bit-perfect",
   "dev.network": "Hálózati lejátszók",
-  "dev.networkSearching": "Sonos, WiiM, Bluesound és más UPnP/DLNA-lejátszók keresése ezen a hálózaton…",
+  "dev.networkSearching": "Sonos, WiiM, Bluesound, Chromecast és más UPnP/DLNA- és Google Cast-lejátszók keresése ezen a hálózaton…",
   "dev.networkHelp": "A zene a hálózaton át FLAC formátumban jut a lejátszóhoz, mintáról mintára. A bitpontos hanghoz kapcsold ki a lejátszó saját hangszínszabályzóját és hangerő-kiegyenlítését.",
   "dev.volume": "Hangerő",
   "dev.iosNote": "Az iPhone egyetlen kimeneten szól: azon, amelyik éppen csatlakoztatva van. Csatlakoztass egy DAC-ot USB-C-n, és a hang a fájl mintavételi frekvenciáján jut el hozzá. Közben a többi app elhallgat.",

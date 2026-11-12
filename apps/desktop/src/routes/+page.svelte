@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { trackSafeArea } from "$lib/safeArea";
-  import { api, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
+  import { api, isNetworkUid, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
   import { labels, labelOf, remember } from "$lib/labels.svelte";
@@ -103,11 +103,11 @@
 
   let deviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? "DAC");
 
-  async function refreshDevices(search = selected.startsWith("upnp:")) {
+  async function refreshDevices(search = isNetworkUid(selected)) {
     try {
       devices = await api.listDevices(search);
       // A network player answers a few seconds after start-up: don't give up on it.
-      if (!devices.some((d) => d.uid === selected) && !selected.startsWith("upnp:")) {
+      if (!devices.some((d) => d.uid === selected) && !isNetworkUid(selected)) {
         selected = (devices.find((d) => d.isDefault) ?? devices[0])?.uid ?? "";
       }
     } catch (e) {

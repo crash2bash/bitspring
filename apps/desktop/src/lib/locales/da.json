@@ -168,7 +168,7 @@
   "dev.upTo": "op til {rate} kHz",
   "dev.noBitPerfect": "ingen bit-perfect",
   "dev.network": "Netværksafspillere",
-  "dev.networkSearching": "Leder efter Sonos, WiiM, Bluesound og andre UPnP/DLNA-afspillere på dette netværk …",
+  "dev.networkSearching": "Leder efter Sonos, WiiM, Bluesound, Chromecast og andre UPnP/DLNA- og Google Cast-afspillere på dette netværk …",
   "dev.networkHelp": "Musikken går til afspilleren over dit netværk som FLAC, sample for sample. For bit-perfekt lyd skal du slå afspillerens egen equalizer og lydstyrkeudjævning fra.",
   "dev.volume": "Lydstyrke",
   "dev.iosNote": "iPhone spiller gennem én udgang: den, der er tilsluttet lige nu. Tilslut en DAC via USB-C, så går lyden til den i filens samplerate. Andre apps bliver stille imens.",

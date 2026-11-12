@@ -168,7 +168,7 @@
   "dev.upTo": "до {rate} кГц",
   "dev.noBitPerfect": "без bit-perfect",
   "dev.network": "Мережеві плеєри",
-  "dev.networkSearching": "Шукаємо Sonos, WiiM, Bluesound та інші плеєри UPnP/DLNA у цій мережі…",
+  "dev.networkSearching": "Шукаємо Sonos, WiiM, Bluesound, Chromecast та інші плеєри UPnP/DLNA і Google Cast у цій мережі…",
   "dev.networkHelp": "Музика йде на плеєр мережею у FLAC, семпл у семпл. Для bit-perfect звуку вимкніть у самому плеєрі еквалайзер і вирівнювання гучності.",
   "dev.volume": "Гучність",
   "dev.iosNote": "iPhone грає через один вихід — той, що підключений зараз. Підключіть DAC через USB-C, і звук піде на нього з частотою файлу. Інші програми тим часом замовкають.",

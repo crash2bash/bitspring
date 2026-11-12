@@ -100,7 +100,7 @@
             onclick={() => choose(d.uid)}
           >
             <span class="d-name">{d.isDefault ? t("dev.default", { name: deviceLabel(d.name) }) : deviceLabel(d.name)}</span>
-            <span class="d-meta">{list([d.network ? d.model : transportLabel(d.transport), maxRate(d)])}{#if !d.bitPerfectCapable}<em>{t("list.sep")}{t("dev.noBitPerfect")}</em>{/if}</span>
+            <span class="d-meta">{list(d.network ? [d.model, d.protocol, maxRate(d)] : [transportLabel(d.transport), maxRate(d)])}{#if !d.bitPerfectCapable}<em>{t("list.sep")}{t("dev.noBitPerfect")}</em>{/if}</span>
           </button>
         </li>
       {/snippet}

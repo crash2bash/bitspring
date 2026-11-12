@@ -168,7 +168,7 @@
   "dev.upTo": "最高 {rate} kHz",
   "dev.noBitPerfect": "无法 bit-perfect",
   "dev.network": "网络播放器",
-  "dev.networkSearching": "正在此网络中查找 Sonos、WiiM、Bluesound 等 UPnP/DLNA 播放器…",
+  "dev.networkSearching": "正在此网络中查找 Sonos、WiiM、Bluesound、Chromecast 等 UPnP/DLNA 和 Google Cast 播放器…",
   "dev.networkHelp": "音乐以 FLAC 格式通过网络送往播放器，每个采样都原封不动。若要比特完美的声音，请关闭播放器自身的均衡器和音量均衡。",
   "dev.volume": "音量",
   "dev.iosNote": "iPhone 只通过一个输出播放，即当前连接的那个。通过 USB-C 连接 DAC，声音就会以文件的采样率送往它。在此期间，其他 App 会静音。",

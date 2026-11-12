@@ -8,7 +8,7 @@
 	<!-- Asked once when the app first looks for network players (Sonos, WiiM…) and streams
 	     to them. -->
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>BitSpring looks for network players on your network (Sonos, WiiM, Bluesound and other UPnP/DLNA players) and streams your music to them.</string>
+	<string>BitSpring looks for network players on your network (Sonos, WiiM, Bluesound, Chromecast and other UPnP/DLNA and Google Cast players) and streams your music to them.</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
