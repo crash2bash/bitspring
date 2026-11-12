@@ -130,6 +130,11 @@
     border-radius: var(--r-lg);
     padding: 14px 16px 16px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
+    /* with the phone remote's code shown it can be taller than the window: scroll inside it */
+    max-height: calc(100vh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable both-edges;
   }
   .field {
     display: flex;
@@ -250,6 +255,7 @@
       right: 10px;
       top: calc(var(--safe-top, env(safe-area-inset-top)) + 58px);
       width: auto;
+      max-height: calc(100dvh - var(--safe-top, env(safe-area-inset-top)) - var(--safe-bottom, env(safe-area-inset-bottom)) - 68px);
     }
   }
 </style>
