@@ -16,6 +16,7 @@
   import { startUpdateChecks } from "$lib/updates.svelte";
   import { look } from "$lib/look.svelte";
   import { fade } from "svelte/transition";
+  import { liquidPill } from "$lib/liquid";
 
   // --- persisted preferences (per machine) ---
   function load<T>(key: string, fallback: T): T {
@@ -457,7 +458,7 @@
 <div class="app" class:drag-over={dragOver} class:sig-bp={signalState === "bp"} class:sig-dsp={signalState === "dsp"}>
   <header data-tauri-drag-region class:mac={isMac} class:chrome-right={isMac && i18n.system.dir === "rtl"}>
     <span class="wordmark" data-tauri-drag-region>BitSpring</span>
-    <nav class="tabs" aria-label={t("nav.screens")}>
+    <nav class="tabs" aria-label={t("nav.screens")} use:liquidPill={screen}>
       <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>{t("nav.player")}</button>
       <button class:sel={screen === "library"} aria-current={screen === "library" ? "page" : undefined} onclick={() => (screen = "library")}>{t("nav.library")}</button>
       {#if streaming?.available}
@@ -609,7 +610,7 @@
     </div>
   {/if}
 
-  <nav class="tabbar" aria-label={t("nav.screens")}>
+  <nav class="tabbar" aria-label={t("nav.screens")} use:liquidPill={{ key: screen, part: "svg" }}>
     <button class:sel={screen === "player"} aria-current={screen === "player" ? "page" : undefined} onclick={() => (screen = "player")}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6" /><circle cx="11" cy="11" r="2.2" fill="currentColor" /></svg>
       <span class="tl">{t("tab.player")}</span>

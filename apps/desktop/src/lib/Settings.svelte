@@ -3,6 +3,7 @@
   import { checkUpdates, updates } from "./updates.svelte";
   import { api, isAndroid, isIOS, type RemoteStatus } from "./api";
   import { look, LOOKS } from "./look.svelte";
+  import { liquidPill } from "./liquid";
 
   let open = $state(false);
   let root: HTMLElement;
@@ -54,7 +55,7 @@
       </label>
       <div class="field look">
         <span id="look-label">{t("settings.look")}</span>
-        <div class="seg" role="radiogroup" aria-labelledby="look-label">
+        <div class="seg" role="radiogroup" aria-labelledby="look-label" use:liquidPill={look.value}>
           {#each LOOKS as l (l)}
             <button role="radio" aria-checked={look.value === l} class:sel={look.value === l} onclick={() => (look.value = l)}>
               {t(l === "glass" ? "settings.lookGlass" : "settings.lookClassic")}

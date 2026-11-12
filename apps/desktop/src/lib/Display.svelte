@@ -145,7 +145,16 @@
   let position = $derived(scrubbing ?? status.position);
 </script>
 
-<section class="display" aria-label={t("display.label")}>
+<!-- the glass look lights the pane where the pointer is (glass.css draws it from --mx/--my) -->
+<section
+  class="display"
+  aria-label={t("display.label")}
+  onpointermove={(e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+  }}
+>
   <div class="top">
     <span class="lamp {lamp.tone}" role="status"><i aria-hidden="true"></i>{lamp.text}</span>
     {#if signal}
