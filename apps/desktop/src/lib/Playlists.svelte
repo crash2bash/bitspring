@@ -2,11 +2,12 @@
   import { onMount } from "svelte";
   import {
     api, errorText, inTauri, isAndroid, isIOS, longDuration, serviceOf, SERVICE_NAME,
-    type Imported, type LibTrack, type PlaylistDetail, type PlaylistEntry, type PlaylistSummary, type Service, type StreamingStatus,
+    type Imported, type LibTrack, type PlaylistDetail, type PlaylistEntry, type PlaylistSummary, type Service, type SmartRules, type StreamingStatus,
   } from "./api";
   import { remember } from "./labels.svelte";
   import { list, sentences, t, tn } from "./i18n.svelte";
   import TrackTable from "./TrackTable.svelte";
+  import SmartEditor from "./SmartEditor.svelte";
 
   let {
     tracks,
@@ -38,6 +39,8 @@
   let pasteName = $state("");
   let exportOpen = $state(false);
   let busy = $state(false);
+  /** The smart playlist being set up (id null: a new one). */
+  let smartEdit = $state<{ id: string | null; name: string; rules: SmartRules | null } | null>(null);
 
   const phone = isIOS || isAndroid;
   const byPath = $derived(new Map(tracks.map((t) => [t.path, t])));
@@ -125,6 +128,19 @@
     await refresh(s.id);
     newName = s.name;
     renaming = true;
+  }
+
+  async function saveSmart(name: string, rules: SmartRules) {
+    const editing = smartEdit;
+    smartEdit = null;
+    if (!editing) return;
+    if (editing.id) {
+      await api.playlistUpdate(editing.id, name, null, rules);
+      await refresh(editing.id);
+    } else {
+      const s = await api.playlistCreate(name, [], rules);
+      await refresh(s.id);
+    }
   }
 
   async function rename() {
@@ -228,6 +244,7 @@
   <aside class="side" aria-label={t("lib.playlists")}>
     <div class="side-actions">
       <button class="small" onclick={create}>{t("pl.new")}</button>
+      <button class="small" onclick={() => (smartEdit = { id: null, name: t("sp.defaultName"), rules: null })}>{t("sp.new")}</button>
       {#if !isAndroid}<button class="small" onclick={importFile} disabled={busy}>{t("pl.import")}</button>{/if}
       <button class="small" onclick={() => (pasting = !pasting)} aria-expanded={pasting}>{t("pl.paste")}</button>
     </div>
@@ -236,7 +253,7 @@
         {#each lists as p (p.id)}
           <li>
             <button class:sel={p.id === selected} onclick={() => select(p.id)}>
-              <span class="pname">{p.name}</span><span class="count num">{p.count}</span>
+              <span class="pname">{#if p.smart}<span class="smart" title={t("sp.title")} aria-label={t("sp.title")}>✦</span>{/if}{p.name}</span><span class="count num">{p.count}</span>
             </button>
           </li>
         {/each}
@@ -314,6 +331,9 @@
               <button class="ghost" onclick={() => findMissing(s)} disabled={busy}>{t("pl.findMissing", { service: SERVICE_NAME[s] })}</button>
             {/each}
           {/if}
+          {#if detail.smart}
+            <button class="ghost" onclick={() => (smartEdit = { id: detail!.id, name: detail!.name, rules: detail!.smart })}>{t("sp.edit")}</button>
+          {/if}
           <button class="link danger" onclick={remove}>{confirmDelete ? t("pl.deleteConfirm") : t("pl.delete")}</button>
         </div>
       </header>
@@ -329,15 +349,17 @@
         >
           {#snippet actions(tr)}
             {@const r = tr as Row}
+            {#if !detail?.smart}
             <span class="row-actions">
               <button onclick={() => move(r.entry, -1)} disabled={r.entry === 0 || !!query} aria-label={t("pl.up")} title={t("pl.up")}>↑</button>
               <button onclick={() => move(r.entry, 1)} disabled={r.entry === detail!.entries.length - 1 || !!query} aria-label={t("pl.down")} title={t("pl.down")}>↓</button>
               <button onclick={() => removeEntry(r.entry)} aria-label={t("pl.removeEntry", { title: r.title })} title={t("pl.removeEntry", { title: r.title })}>×</button>
             </span>
+            {/if}
           {/snippet}
         </TrackTable>
       {:else}
-        <p class="none">{streaming?.available ? t("pl.emptyStream") : t("pl.empty")}</p>
+        <p class="none">{detail.smart ? t("sp.empty") : streaming?.available ? t("pl.emptyStream") : t("pl.empty")}</p>
       {/if}
     {:else if !pasting}
       <div class="empty">
@@ -347,6 +369,10 @@
     {/if}
   </section>
 </div>
+
+{#if smartEdit}
+  <SmartEditor name={smartEdit.name} rules={smartEdit.rules} onsave={saveSmart} onclose={() => (smartEdit = null)} />
+{/if}
 
 <style>
   .playlists {
@@ -405,6 +431,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .smart {
+    color: var(--brass);
+    margin-inline-end: 6px;
   }
   .count {
     color: var(--mist-dim);

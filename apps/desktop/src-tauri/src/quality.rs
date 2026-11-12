@@ -57,6 +57,19 @@ impl Quality {
         q
     }
 
+    /// The quality check's word on a file, for smart playlists: "genuine", "suspect",
+    /// "unclear" (can't tell), "other" (lossy, DSD) or "unchecked".
+    pub fn word(&self, path: &str) -> &'static str {
+        use hifi_engine::quality::Verdict;
+        match self.cached(path).map(|r| r.verdict) {
+            None => "unchecked",
+            Some(Verdict::Genuine) => "genuine",
+            Some(Verdict::Upsampled | Verdict::FromLossy | Verdict::Padded { .. }) => "suspect",
+            Some(Verdict::Inconclusive) => "unclear",
+            Some(_) => "other",
+        }
+    }
+
     fn cached(&self, path: &str) -> Option<Report> {
         let s = stamp(path)?;
         self.cache.lock().unwrap().get(path).filter(|e| (e.rules, e.size, e.mtime) == (quality::RULES_VERSION, s.0, s.1)).map(|e| e.report.clone())

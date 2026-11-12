@@ -36,7 +36,8 @@
     open = true;
     naming = false;
     failed = null;
-    lists = await api.playlists();
+    // A smart playlist picks its own tracks.
+    lists = (await api.playlists()).filter((l) => !l.smart);
   }
 
   function close() {

@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hifi_engine::library::TrackInfo;
+use hifi_engine::smart::{self, SmartRules};
 use hifi_engine::UserError;
 use hifi_engine::playlist::{self, Entry, Found, Index};
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,10 @@ struct Playlist {
     created: u64,
     updated: u64,
     entries: Vec<PlaylistEntry>,
+    /// A smart playlist: its tracks come from these rules, picked afresh from the library
+    /// each time (`entries` stays empty).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    smart: Option<SmartRules>,
 }
 
 #[derive(Default)]
@@ -52,6 +57,7 @@ pub struct Summary {
     count: usize,
     duration: f64,
     updated: u64,
+    smart: bool,
 }
 
 #[derive(Serialize)]
@@ -69,6 +75,7 @@ pub struct PlaylistDto {
     id: String,
     name: String,
     entries: Vec<EntryDto>,
+    smart: Option<SmartRules>,
 }
 
 #[derive(Serialize)]
@@ -124,7 +131,37 @@ fn summary(p: &Playlist) -> Summary {
         count: p.entries.len(),
         duration: p.entries.iter().filter_map(|e| e.duration).sum(),
         updated: p.updated,
+        smart: p.smart.is_some(),
     }
+}
+
+/// A smart playlist's tracks now, as entries.
+fn smart_entries(app: &AppHandle, rules: &SmartRules, tracks: &[TrackInfo]) -> Vec<PlaylistEntry> {
+    let quality = app.state::<crate::quality::Quality>();
+    let word = |t: &TrackInfo| quality.word(&t.path);
+    smart::select(tracks, rules, &word, now())
+        .into_iter()
+        .map(|i| {
+            let t = &tracks[i];
+            PlaylistEntry {
+                uri: Some(t.path.clone()),
+                title: t.title.clone(),
+                artist: t.artist.clone(),
+                album: t.album.clone(),
+                duration: Some(t.duration),
+                isrc: None,
+            }
+        })
+        .collect()
+}
+
+/// A playlist with a smart one's tracks filled in.
+fn resolved(app: &AppHandle, p: &Playlist, tracks: &[TrackInfo]) -> Playlist {
+    let mut p = p.clone();
+    if let Some(rules) = &p.smart {
+        p.entries = smart_entries(app, rules, tracks);
+    }
+    p
 }
 
 fn label(e: &PlaylistEntry) -> String {
@@ -255,6 +292,7 @@ fn dto(p: &Playlist, lib: &Known) -> PlaylistDto {
             .iter()
             .map(|e| EntryDto { available: e.uri.as_deref().is_some_and(|u| available(u, lib)), entry: e.clone() })
             .collect(),
+        smart: p.smart.clone(),
     }
 }
 
@@ -287,7 +325,7 @@ fn add_imported(app: &AppHandle, store: &Playlists, parsed: Vec<playlist::Parsed
             let name = unique_name(list, p.name.as_deref().unwrap_or(fallback));
             let t = now();
             let id = new_id();
-            list.push(Playlist { id: id.clone(), name: name.clone(), created: t, updated: t, entries });
+            list.push(Playlist { id: id.clone(), name: name.clone(), created: t, updated: t, entries, smart: None });
             (id, name)
         })?;
         made.push(Imported { id, name, total, found, missing });
@@ -309,7 +347,7 @@ pub fn add_playlist(app: &AppHandle, name: &str, entries: Vec<PlaylistEntry>) ->
         let name = unique_name(list, name);
         let t = now();
         let id = new_id();
-        list.push(Playlist { id: id.clone(), name: name.clone(), created: t, updated: t, entries });
+        list.push(Playlist { id: id.clone(), name: name.clone(), created: t, updated: t, entries, smart: None });
         (id, name)
     })?;
     Ok(Imported { id, name, total, found, missing })
@@ -348,9 +386,10 @@ pub fn fill_missing(app: &AppHandle, id: &str, mut find: impl FnMut(&PlaylistEnt
 // ---------------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn playlists_list(app: AppHandle, store: State<'_, Playlists>) -> Vec<Summary> {
+pub fn playlists_list(app: AppHandle, store: State<'_, Playlists>, lib: State<'_, Library>) -> Vec<Summary> {
+    let tracks = lib.tracks();
     store.with(&app, |list| {
-        let mut v: Vec<Summary> = list.iter().map(summary).collect();
+        let mut v: Vec<Summary> = list.iter().map(|p| summary(&resolved(&app, p, &tracks))).collect();
         v.sort_by_key(|s| std::cmp::Reverse(s.updated));
         v
     })
@@ -366,16 +405,24 @@ pub fn playlist_get(app: AppHandle, store: State<'_, Playlists>, lib: State<'_, 
     if healed {
         store.change(&app, |_| ())?;
     }
-    store.with(&app, |list| list.iter().find(|p| p.id == id).map(|p| dto(p, &known(&tracks))).ok_or(UserError::PlaylistNotFound))
+    store.with(&app, |list| list.iter().find(|p| p.id == id).map(|p| dto(&resolved(&app, p, &tracks), &known(&tracks))).ok_or(UserError::PlaylistNotFound))
 }
 
 #[tauri::command]
-pub fn playlist_create(app: AppHandle, store: State<'_, Playlists>, lib: State<'_, Library>, name: String, entries: Vec<PlaylistEntry>) -> Result<Summary, UserError> {
-    let entries = enrich(entries, &lib.tracks());
+pub fn playlist_create(
+    app: AppHandle,
+    store: State<'_, Playlists>,
+    lib: State<'_, Library>,
+    name: String,
+    entries: Vec<PlaylistEntry>,
+    smart: Option<SmartRules>,
+) -> Result<Summary, UserError> {
+    let tracks = lib.tracks();
+    let entries = if smart.is_some() { Vec::new() } else { enrich(entries, &tracks) };
     store.change(&app, |list| {
         let t = now();
-        let p = Playlist { id: new_id(), name: unique_name(list, &name), created: t, updated: t, entries };
-        let s = summary(&p);
+        let p = Playlist { id: new_id(), name: unique_name(list, &name), created: t, updated: t, entries, smart };
+        let s = summary(&resolved(&app, &p, &tracks));
         list.push(p);
         s
     })
@@ -383,18 +430,30 @@ pub fn playlist_create(app: AppHandle, store: State<'_, Playlists>, lib: State<'
 
 /// Rename and/or replace the entries (reorder, remove).
 #[tauri::command]
-pub fn playlist_update(app: AppHandle, store: State<'_, Playlists>, id: String, name: Option<String>, entries: Option<Vec<PlaylistEntry>>) -> Result<Summary, UserError> {
+pub fn playlist_update(
+    app: AppHandle,
+    store: State<'_, Playlists>,
+    lib: State<'_, Library>,
+    id: String,
+    name: Option<String>,
+    entries: Option<Vec<PlaylistEntry>>,
+    smart: Option<SmartRules>,
+) -> Result<Summary, UserError> {
+    let tracks = lib.tracks();
     store.change(&app, |list| {
         let taken: Vec<Playlist> = list.iter().filter(|p| p.id != id).cloned().collect();
         let p = list.iter_mut().find(|p| p.id == id).ok_or(UserError::PlaylistNotFound)?;
         if let Some(n) = name.filter(|n| !n.trim().is_empty() && n.trim() != p.name) {
             p.name = unique_name(&taken, &n);
         }
-        if let Some(e) = entries {
+        if let Some(e) = entries.filter(|_| p.smart.is_none()) {
             p.entries = e;
         }
+        if smart.is_some() && p.smart.is_some() {
+            p.smart = smart;
+        }
         p.updated = now();
-        Ok(summary(p))
+        Ok(summary(&resolved(&app, p, &tracks)))
     })?
 }
 
@@ -403,6 +462,9 @@ pub fn playlist_add(app: AppHandle, store: State<'_, Playlists>, lib: State<'_, 
     let entries = enrich(entries, &lib.tracks());
     store.change(&app, |list| {
         let p = list.iter_mut().find(|p| p.id == id).ok_or(UserError::PlaylistNotFound)?;
+        if p.smart.is_some() {
+            return Err(UserError::PlaylistNotFound);
+        }
         p.entries.extend(entries);
         p.updated = now();
         Ok(summary(p))
@@ -450,9 +512,21 @@ pub async fn playlist_import_text(app: AppHandle, text: String, name: String) ->
 /// phone (no save dialog that hands back a real file) pass `format` alone and the file goes
 /// into the app's music folder. Returns where it was written.
 #[tauri::command]
-pub fn playlist_export(app: AppHandle, store: State<'_, Playlists>, id: String, path: Option<String>, format: Option<String>) -> Result<String, UserError> {
+pub fn playlist_export(
+    app: AppHandle,
+    store: State<'_, Playlists>,
+    lib: State<'_, Library>,
+    id: String,
+    path: Option<String>,
+    format: Option<String>,
+) -> Result<String, UserError> {
+    let tracks = lib.tracks();
     let (name, entries) = store.with(&app, |list| {
-        list.iter().find(|p| p.id == id).map(|p| (p.name.clone(), p.entries.iter().map(as_entry).collect::<Vec<_>>())).ok_or(UserError::PlaylistNotFound)
+        list.iter()
+            .find(|p| p.id == id)
+            .map(|p| resolved(&app, p, &tracks))
+            .map(|p| (p.name.clone(), p.entries.iter().map(as_entry).collect::<Vec<_>>()))
+            .ok_or(UserError::PlaylistNotFound)
     })?;
     let dest = match path {
         Some(p) => PathBuf::from(p),

@@ -148,7 +148,7 @@ let duration = 0;
 
 // --- playlists and streaming (layout work only) ---
 type MockEntry = { uri: string | null; title: string; artist: string | null; album: string | null; duration: number | null };
-const mockLists: { id: string; name: string; updated: number; entries: MockEntry[] }[] = [];
+const mockLists: { id: string; name: string; updated: number; entries: MockEntry[]; smart?: unknown }[] = [];
 let mockSignedIn: Record<string, boolean> = { qobuz: false, tidal: false };
 let mockQuality = "max";
 function mockSAlbum(i: number, svc: string) {
@@ -161,7 +161,7 @@ function mockSTrack(i: number, svc: string, album = mockSAlbum(0, svc)) {
   return { uri: `${svc}:track:${1000 + i}`, service: svc, id: String(1000 + i), title: titles[i % 6], artist: album.artist, album: album.title, albumId: album.id, albumArtist: album.artist, year: album.year, duration: 300 + i * 17, trackNumber: i + 1, discNumber: 1, cover: album.cover, isrc: null, bits: album.bits, rate: album.rate, hiRes: album.hiRes, streamable: true };
 }
 function mockSummary(p: (typeof mockLists)[number]) {
-  return { id: p.id, name: p.name, count: p.entries.length, duration: p.entries.reduce((s, e) => s + (e.duration ?? 0), 0), updated: p.updated };
+  return { id: p.id, name: p.name, count: p.entries.length, duration: p.entries.reduce((s, e) => s + (e.duration ?? 0), 0), updated: p.updated, smart: !!p.smart };
 }
 
 export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -356,17 +356,20 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return [...mockLists].sort((a, b) => b.updated - a.updated).map(mockSummary) as T;
     case "playlist_get": {
       const p = mockLists.find((l) => l.id === args.id)!;
-      return { id: p.id, name: p.name, entries: p.entries.map((e) => ({ ...e, available: !!e.uri })) } as T;
+      return { id: p.id, name: p.name, entries: p.entries.map((e) => ({ ...e, available: !!e.uri })), smart: p.smart ?? null } as T;
     }
     case "playlist_create": {
-      const p = { id: String(Date.now()), name: args.name as string, updated: Date.now(), entries: args.entries as MockEntry[] };
+      const smart = args.smart ?? undefined;
+      const entries = smart ? [0, 1, 2].map((i) => ({ uri: `/m/${i}.flac`, title: ["Kite Strings", "Harbour", "Paper Moons"][i], artist: "Ada Marlow", album: "Paper Moons", duration: 200 + i })) : (args.entries as MockEntry[]);
+      const p = { id: String(Date.now()), name: args.name as string, updated: Date.now(), entries, smart };
       mockLists.push(p);
       return mockSummary(p) as T;
     }
     case "playlist_update": {
       const p = mockLists.find((l) => l.id === args.id)!;
       if (args.name) p.name = args.name as string;
-      if (args.entries) p.entries = args.entries as MockEntry[];
+      if (args.entries && !p.smart) p.entries = args.entries as MockEntry[];
+      if (args.smart && p.smart) p.smart = args.smart;
       p.updated = Date.now();
       return mockSummary(p) as T;
     }

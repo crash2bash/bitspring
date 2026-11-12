@@ -286,12 +286,33 @@ export interface PlaylistSummary {
   count: number;
   duration: number;
   updated: number;
+  /** Its tracks come from rules over the library. */
+  smart: boolean;
+}
+
+export type SmartField =
+  | "title" | "artist" | "album" | "albumArtist" | "genre" | "format" | "quality"
+  | "year" | "sampleRate" | "bits" | "duration" | "added" | "hiRes" | "lossless";
+export type SmartOp =
+  | "contains" | "notContains" | "is" | "isNot" | "startsWith" | "greater" | "less" | "withinDays" | "isTrue" | "isFalse";
+export type SmartSort = "album" | "artist" | "title" | "year" | "added" | "duration" | "random";
+export interface SmartRule {
+  field: SmartField;
+  op: SmartOp;
+  value: string;
+}
+export interface SmartRules {
+  matchAll: boolean;
+  rules: SmartRule[];
+  sort: SmartSort;
+  limit: number | null;
 }
 
 export interface PlaylistDetail {
   id: string;
   name: string;
   entries: (PlaylistEntry & { available: boolean })[];
+  smart: SmartRules | null;
 }
 
 export interface Imported {
@@ -489,8 +510,9 @@ export const api = {
   meter: () => call<[number, number]>("meter"),
   playlists: () => call<PlaylistSummary[]>("playlists_list"),
   playlist: (id: string) => call<PlaylistDetail>("playlist_get", { id }),
-  playlistCreate: (name: string, entries: PlaylistEntry[]) => call<PlaylistSummary>("playlist_create", { name, entries }),
-  playlistUpdate: (id: string, name: string | null, entries: PlaylistEntry[] | null) => call<PlaylistSummary>("playlist_update", { id, name, entries }),
+  playlistCreate: (name: string, entries: PlaylistEntry[], smart: SmartRules | null = null) => call<PlaylistSummary>("playlist_create", { name, entries, smart }),
+  playlistUpdate: (id: string, name: string | null, entries: PlaylistEntry[] | null, smart: SmartRules | null = null) =>
+    call<PlaylistSummary>("playlist_update", { id, name, entries, smart }),
   playlistAdd: (id: string, entries: PlaylistEntry[]) => call<PlaylistSummary>("playlist_add", { id, entries }),
   playlistDelete: (id: string) => call<void>("playlist_delete", { id }),
   playlistImportFile: (path: string) => call<Imported[]>("playlist_import_file", { path }),
