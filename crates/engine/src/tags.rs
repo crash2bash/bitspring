@@ -82,20 +82,19 @@ pub fn write(path: &Path, edit: &TagEdit) -> Result<()> {
     // goes by the extension). Created new or not at all: whatever already has the name (a
     // link planted there) is never followed or written through.
     let tmp: PathBuf = path.with_file_name(format!(".bitspring-{}-{name}", &crate::net::http::random_hex()[..12]));
-    let mut copy = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(&tmp)
-        .context("couldn't make a copy to write the tags into")?;
+    let original_permissions = std::fs::metadata(path).context("couldn't read the file")?.permissions();
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).create_new(true);
+    // Only the user may read the copy until it takes the original's place (and permissions).
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut copy = options.open(&tmp).context("couldn't make a copy to write the tags into")?;
     let result = (|| {
         std::io::copy(&mut File::open(path)?, &mut copy).context("couldn't copy the file to write its tags")?;
         apply(&mut copy, edit)?;
         verify(path, &tmp)?;
-        // Keep the original's permissions; then the copy takes its place in one step.
-        if let Ok(meta) = std::fs::metadata(path) {
-            let _ = std::fs::set_permissions(&tmp, meta.permissions());
-        }
+        // The original's permissions; then the copy takes its place in one step.
+        std::fs::set_permissions(&tmp, original_permissions).context("couldn't give the copy the file's permissions")?;
         std::fs::rename(&tmp, path).context("couldn't replace the file")?;
         Ok(())
     })();
@@ -325,6 +324,18 @@ mod tests {
         assert!(format!("{err:#}").contains("track number"), "{err:#}");
         assert_eq!(std::fs::read(&p).unwrap(), bytes);
         assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_file_keeps_its_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tmpdir("perm");
+        let p = flac_file(&d);
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o640)).unwrap();
+        write(&p, &TagEdit { title: Some("X".into()), ..Default::default() }).unwrap();
+        assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o640);
         let _ = std::fs::remove_dir_all(&d);
     }
 
