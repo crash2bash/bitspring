@@ -592,6 +592,15 @@ impl Playback {
         Self::owned(&tracks, if cur != heard { cur } else { next })
     }
 
+    /// Right after a render that moved on to the next track: how many of the frames it
+    /// produced already belong to that track (the rest were the previous one's last).
+    pub(crate) fn frames_since_switch(&self) -> usize {
+        match &self.shared.ring {
+            Some(rs) => rs.played.load(Ordering::Relaxed) as usize,
+            None => self.shared.pos.load(Ordering::Relaxed),
+        }
+    }
+
     /// How many times playback has moved on to a following track by itself.
     pub fn switches(&self) -> u64 {
         self.shared.slots.switches.load(Ordering::Acquire)

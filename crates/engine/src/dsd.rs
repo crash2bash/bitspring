@@ -357,7 +357,10 @@ pub fn open_dsd(path: &Path, mode: DsdMode) -> Result<Arc<Track>> {
 
 /// [`open_dsd`], from `start_secs` on.
 pub fn open_dsd_at(path: &Path, mode: DsdMode, start_secs: f64) -> Result<Arc<Track>> {
-    let h = probe(path)?;
+    let mut h = probe(path)?;
+    if h.meta.cover.is_none() {
+        h.meta.cover = crate::decode::folder_cover(path);
+    }
     let track = match mode {
         DsdMode::Dop => Track::new_dop(h.rate, h.channels, h.meta.clone(), (h.samples / 16) as usize),
         DsdMode::Pcm => {

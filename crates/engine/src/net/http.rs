@@ -282,6 +282,9 @@ impl Server {
         let mut reader = BufReader::new(Deadline { conn: conn.try_clone()?, until: Instant::now() + HEAD_TIME });
         let (method, target, headers) = read_head(&mut reader)?;
         let path = target.split('?').next().unwrap_or("").to_string();
+        if std::env::var_os("HIFI_DEBUG_NET").is_some() {
+            eprintln!("http {method} {path} from {:?} {headers:?}", conn.peer_addr().ok());
+        }
         let resource = match self.resources.lock().unwrap().get(&path) {
             Some(Resource::Stream(s)) => Some(Ok(s.clone())),
             Some(Resource::File { mime, bytes }) => Some(Err((mime.clone(), bytes.clone()))),

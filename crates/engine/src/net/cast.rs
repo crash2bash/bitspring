@@ -126,6 +126,9 @@ impl Conn {
     }
 
     fn send(&mut self, dest: &str, namespace: &str, payload: &Value) -> Result<()> {
+        if debug() && namespace != NS_HEARTBEAT {
+            eprintln!("cast >> {dest} {namespace} {payload}");
+        }
         let body = encode(SENDER, dest, namespace, &payload.to_string());
         let mut frame = (body.len() as u32).to_be_bytes().to_vec();
         frame.extend_from_slice(&body);
@@ -160,6 +163,9 @@ impl Conn {
                     let body: Vec<u8> = self.inbox.drain(..4 + len).skip(4).collect();
                     let Some((source, namespace, text)) = decode(&body) else { continue };
                     let payload: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+                    if debug() && namespace != NS_HEARTBEAT {
+                        eprintln!("cast << {namespace} {text}");
+                    }
                     if namespace == NS_HEARTBEAT && payload["type"] == "PING" {
                         self.send(&source, NS_HEARTBEAT, &json!({"type": "PONG"}))?;
                         continue;
@@ -196,6 +202,11 @@ impl Conn {
         }
         bail!("no answer to {}", payload["type"])
     }
+}
+
+/// HIFI_DEBUG_NET=1: print every message to and from Cast devices (stderr).
+fn debug() -> bool {
+    std::env::var_os("HIFI_DEBUG_NET").is_some()
 }
 
 fn is_timeout(e: &std::io::Error) -> bool {
@@ -275,11 +286,13 @@ pub struct CastRemote {
     transport: Option<String>,
     media_session: Option<i64>,
     last: Status,
+    /// Our queue items' ids → their URLs.
+    items: HashMap<i64, String>,
 }
 
 impl CastRemote {
     pub fn new(dev: Device) -> Self {
-        Self { dev, conn: None, transport: None, media_session: None, last: Status { state: State::NoMedia, position: None } }
+        Self { dev, conn: None, transport: None, media_session: None, last: Status { state: State::NoMedia, position: None, current: None }, items: HashMap::new() }
     }
 
     fn conn(&mut self) -> Result<&mut Conn> {
@@ -332,11 +345,22 @@ impl CastRemote {
             (NS_MEDIA, Some("MEDIA_STATUS")) => {
                 let s = m.payload["status"].as_array().and_then(|a| a.first());
                 self.last = match s {
-                    None => Status { state: State::NoMedia, position: None },
+                    None => Status { state: State::NoMedia, position: None, current: None },
                     Some(s) => {
                         if let Some(id) = s["mediaSessionId"].as_i64() {
                             self.media_session = Some(id);
                         }
+                        // Learn which URL each queue item plays, and which item plays now.
+                        for item in s["items"].as_array().into_iter().flatten() {
+                            if let (Some(id), Some(url)) = (item["itemId"].as_i64(), item["media"]["contentId"].as_str()) {
+                                self.items.insert(id, url.to_string());
+                            }
+                        }
+                        let item = s["currentItemId"].as_i64();
+                        if let (Some(id), Some(url)) = (item, s["media"]["contentId"].as_str()) {
+                            self.items.insert(id, url.to_string());
+                        }
+                        let current = item.and_then(|id| self.items.get(&id).cloned()).or_else(|| s["media"]["contentId"].as_str().map(str::to_string)).or(self.last.current.clone());
                         let state = match s["playerState"].as_str() {
                             Some("PLAYING") => State::Playing,
                             Some("PAUSED") => State::Paused,
@@ -344,7 +368,7 @@ impl CastRemote {
                             Some("IDLE") => State::Stopped,
                             _ => State::Other,
                         };
-                        Status { state, position: s["currentTime"].as_f64() }
+                        Status { state, position: s["currentTime"].as_f64(), current }
                     }
                 };
             }
@@ -352,12 +376,12 @@ impl CastRemote {
                 // Our receiver app was closed (another app took over, or the TV's remote).
                 self.transport = None;
                 self.media_session = None;
-                self.last = Status { state: State::NoMedia, position: None };
+                self.last = Status { state: State::NoMedia, position: None, current: None };
             }
             (NS_CONNECTION, Some("CLOSE")) if Some(&m.source) == self.transport.as_ref() => {
                 self.transport = None;
                 self.media_session = None;
-                self.last = Status { state: State::Stopped, position: None };
+                self.last = Status { state: State::Stopped, position: None, current: None };
             }
             _ => {}
         }
@@ -381,26 +405,58 @@ fn transport_of(receiver_status: &Value) -> Option<String> {
         .and_then(|a| a["transportId"].as_str().map(str::to_string))
 }
 
+/// The media description of one stream, with what the screen shows about it.
+fn media(url: &str, mime: &str, meta: &Meta) -> Value {
+    let mut metadata = json!({"metadataType": 3, "title": meta.title});
+    if let Some(a) = &meta.artist {
+        metadata["artist"] = json!(a);
+    }
+    if let Some(a) = &meta.album {
+        metadata["albumName"] = json!(a);
+    }
+    if let Some(c) = &meta.cover {
+        metadata["images"] = json!([{"url": c}]);
+    }
+    json!({"contentId": url, "contentUrl": url, "contentType": mime, "streamType": "BUFFERED", "metadata": metadata})
+}
+
 impl Remote for CastRemote {
+    fn queue(&mut self, url: &str, mime: &str, meta: &Meta) -> Result<bool> {
+        let r = (|| {
+            let (Some(t), Some(id)) = (self.transport.clone(), self.media_session) else { return Ok(false) };
+            // Prepared ahead: the receiver loads it before the current one ends.
+            let insert = json!({"type": "QUEUE_INSERT", "mediaSessionId": id, "items": [{"media": media(url, mime, meta), "autoplay": true, "preloadTime": 10}]});
+            let c = self.conn()?;
+            let id = c.next_id;
+            c.next_id += 1;
+            let mut insert = insert;
+            insert["requestId"] = json!(id);
+            c.send(&t, NS_MEDIA, &insert)?;
+            // The answer: a MEDIA_STATUS (its items name the new one), or a refusal.
+            let end = Instant::now() + Duration::from_secs(4);
+            while Instant::now() < end {
+                let c = self.conn()?;
+                let Some(m) = c.recv(Duration::from_millis(300))? else { continue };
+                let kind = m.payload["type"].as_str().unwrap_or("").to_string();
+                self.note(&m);
+                if kind == "INVALID_REQUEST" || kind == "LOAD_FAILED" {
+                    return Ok(false);
+                }
+                if kind == "MEDIA_STATUS" && self.items.values().any(|u| u == url) {
+                    return Ok(true);
+                }
+            }
+            // No word about it: assume it was taken (the queue status may not list items).
+            Ok(true)
+        })();
+        self.guard(r)
+    }
+
     fn load(&mut self, url: &str, mime: &str, meta: &Meta, play: bool) -> Result<()> {
         let r = (|| {
             let t = self.app()?;
-            let mut metadata = json!({"metadataType": 3, "title": meta.title});
-            if let Some(a) = &meta.artist {
-                metadata["artist"] = json!(a);
-            }
-            if let Some(a) = &meta.album {
-                metadata["albumName"] = json!(a);
-            }
-            if let Some(c) = &meta.cover {
-                metadata["images"] = json!([{"url": c}]);
-            }
-            let load = json!({
-                "type": "LOAD",
-                "autoplay": play,
-                "currentTime": 0,
-                "media": {"contentId": url, "contentUrl": url, "contentType": mime, "streamType": "LIVE", "metadata": metadata},
-            });
+            self.items.clear();
+            let load = json!({"type": "LOAD", "autoplay": play, "currentTime": 0, "media": media(url, mime, meta)});
             let c = self.conn()?;
             let reply = c.request(&t, NS_MEDIA, load, Duration::from_secs(15))?;
             match reply.payload["type"].as_str() {
@@ -439,24 +495,29 @@ impl Remote for CastRemote {
                         let _ = m;
                     }
                 }
-                return Ok(self.last);
+                return Ok(self.last.clone());
             };
+            // The answer comes as a MEDIA_STATUS that may not carry our requestId (Android TV
+            // sends requestId 0): take whatever status arrives shortly after asking.
             let mut msg = json!({"type": "GET_STATUS"});
             if let Some(id) = self.media_session {
                 msg["mediaSessionId"] = json!(id);
             }
             let c = self.conn()?;
-            let reply = c.request(&t, NS_MEDIA, msg, Duration::from_secs(2))?;
-            self.note(&reply);
-            // And whatever else came in meanwhile (receiver status, closes).
+            let id = c.next_id;
+            c.next_id += 1;
+            msg["requestId"] = json!(id);
+            c.send(&t, NS_MEDIA, &msg)?;
+            let end = Instant::now() + Duration::from_millis(400);
             loop {
+                let left = end.saturating_duration_since(Instant::now());
                 let c = self.conn()?;
-                match c.recv(Duration::ZERO)? {
+                match c.recv(left)? {
                     Some(m) => self.note(&m),
                     None => break,
                 }
             }
-            Ok(self.last)
+            Ok(self.last.clone())
         })();
         self.guard(r)
     }

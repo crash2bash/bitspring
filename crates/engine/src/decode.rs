@@ -877,16 +877,17 @@ pub fn open_stream(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Opti
 }
 
 /// How a source is read: a stream once and whole; a local file in a window, from any point.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Local {
     No,
-    File { edit: Option<Mp4Edit>, start_secs: f64, range: Option<Range> },
+    /// `path`: the file, for a cover.jpg-style picture next to it when it has none inside.
+    File { path: std::path::PathBuf, edit: Option<Mp4Edit>, start_secs: f64, range: Option<Range> },
 }
 
 fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: Option<f64>, meta: TrackMeta, local: Local) -> Result<Arc<Track>> {
-    let (edit, range) = match local {
-        Local::File { edit, range, .. } => (edit, range),
-        Local::No => (None, None),
+    let (edit, range, path) = match &local {
+        Local::File { edit, range, path, .. } => (*edit, *range, Some(path.clone())),
+        Local::No => (None, None, None),
     };
     let Opened { mut format, mut decoder, track_id, mut track, mut trim } = open(source, &hint, None, edit, range)?;
     if let Local::File { start_secs, .. } = local {
@@ -909,7 +910,7 @@ fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: 
         year: meta.year.or(own.year),
         track_number: meta.track_number.or(own.track_number),
         disc_number: meta.disc_number.or(own.disc_number),
-        cover: meta.cover.or(own.cover),
+        cover: meta.cover.or(own.cover).or_else(|| path.as_deref().and_then(folder_cover)),
     };
     if track.expected.load(Ordering::Relaxed) == 0 {
         if let Some(s) = expected_secs {
@@ -928,6 +929,15 @@ fn open_stream_trimmed(source: Box<dyn MediaSource>, hint: Hint, expected_secs: 
     Ok(track)
 }
 
+/// The picture rippers leave next to the tracks (cover.jpg and the like), as cover art: for
+/// files without art inside, so network players and lock screens have something to show.
+pub(crate) fn folder_cover(track_path: &Path) -> Option<(String, Vec<u8>)> {
+    let f = crate::library::folder_image(track_path)?;
+    let bytes = std::fs::read(&f).ok().filter(|b| b.len() <= 16 << 20)?;
+    let png = f.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
+    Some((if png { "image/png" } else { "image/jpeg" }.to_string(), bytes))
+}
+
 /// Open a file and decode it progressively (see [`open_source`]).
 pub fn open_track(path: &Path) -> Result<Arc<Track>> {
     open_track_at(path, 0.0)
@@ -943,7 +953,7 @@ pub fn open_track_at(path: &Path, start_secs: f64) -> Result<Arc<Track>> {
 /// win over the file's own.
 pub fn open_range_at(path: &Path, range: Option<Range>, start_secs: f64, meta: TrackMeta) -> Result<Arc<Track>> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    open_stream_trimmed(Box::new(file), hint_for(path), None, meta, Local::File { edit: file_edit(path), start_secs, range })
+    open_stream_trimmed(Box::new(file), hint_for(path), None, meta, Local::File { path: path.to_path_buf(), edit: file_edit(path), start_secs, range })
 }
 
 /// The edit list of a local MP4/M4A file (looked for only in those).

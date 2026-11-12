@@ -47,6 +47,15 @@ impl Renderer {
             .map(drop)
     }
 
+    /// Ok(false) if the renderer has no SetNextAVTransportURI (or refuses this one).
+    pub fn set_next_uri(&self, url: &str, didl: &str) -> Result<bool> {
+        match soap(&self.av_transport, AVT, "SetNextAVTransportURI", &[("InstanceID", "0"), ("NextURI", url), ("NextURIMetaData", didl)], SOAP_TIMEOUT) {
+            Ok(_) => Ok(true),
+            Err(e) if e.chain().any(|c| c.downcast_ref::<std::io::Error>().is_some()) => Err(e),
+            Err(_) => Ok(false),
+        }
+    }
+
     pub fn play(&self) -> Result<()> {
         soap(&self.av_transport, AVT, "Play", &[("InstanceID", "0"), ("Speed", "1")], SOAP_TIMEOUT).map(drop)
     }
@@ -59,10 +68,12 @@ impl Renderer {
         soap(&self.av_transport, AVT, "Stop", &[("InstanceID", "0")], QUICK).map(drop)
     }
 
-    /// Seconds into the current URI, if the renderer says (many only count whole seconds).
-    pub fn position(&self) -> Result<Option<f64>> {
+    /// Seconds into the current URI, if the renderer says (many only count whole seconds),
+    /// and which URI that is.
+    pub fn position(&self) -> Result<(Option<f64>, Option<String>)> {
         let body = soap(&self.av_transport, AVT, "GetPositionInfo", &[("InstanceID", "0")], QUICK)?;
-        Ok(value(&body, "RelTime").and_then(|t| parse_time(&t)))
+        let uri = value(&body, "TrackURI").map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
+        Ok((value(&body, "RelTime").and_then(|t| parse_time(&t)), uri))
     }
 
     pub fn state(&self) -> Result<State> {
@@ -114,6 +125,10 @@ impl Remote for UpnpRemote {
         self.r.set_uri(url, &d)?;
         if play { self.r.play() } else { Ok(()) }
     }
+    fn queue(&mut self, url: &str, mime: &str, meta: &Meta) -> Result<bool> {
+        let d = didl(url, mime, &meta.title, meta.artist.as_deref(), meta.album.as_deref(), meta.cover.as_deref());
+        self.r.set_next_uri(url, &d)
+    }
     fn play(&mut self) -> Result<()> {
         self.r.play()
     }
@@ -124,7 +139,9 @@ impl Remote for UpnpRemote {
         self.r.stop()
     }
     fn status(&mut self) -> Result<Status> {
-        Ok(Status { state: self.r.state()?, position: self.r.position()? })
+        let state = self.r.state()?;
+        let (position, current) = self.r.position()?;
+        Ok(Status { state, position, current })
     }
 }
 

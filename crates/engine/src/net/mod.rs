@@ -43,11 +43,13 @@ pub enum State {
     Other,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Status {
     pub state: State,
     /// Seconds into the current stream, if the player says.
     pub position: Option<f64>,
+    /// Which stream that is (its URL), if the player says.
+    pub current: Option<String>,
 }
 
 /// The remote control of one network player, one protocol's half of a
@@ -56,6 +58,9 @@ pub struct Status {
 pub trait Remote: Send {
     /// Play `url` from now on (paused if not `play`).
     fn load(&mut self, url: &str, mime: &str, meta: &Meta, play: bool) -> Result<()>;
+    /// Have `url` follow the current stream, prepared ahead so it joins without a gap.
+    /// Ok(false): this player can't take a next stream ahead.
+    fn queue(&mut self, url: &str, mime: &str, meta: &Meta) -> Result<bool>;
     fn play(&mut self) -> Result<()>;
     fn pause(&mut self) -> Result<()>;
     fn stop(&mut self) -> Result<()>;
@@ -140,6 +145,16 @@ impl Target {
         match self {
             Self::Upnp(r) => r.max_bits,
             Self::Cast(_) => 24,
+        }
+    }
+
+    /// How far ahead of the player's position the stream runs, in seconds. Cast receivers
+    /// go back to buffering below about ten; UPnP players are content with a few, which keeps
+    /// the position we show closer to what is heard on players that don't report one.
+    pub fn lead(&self) -> f64 {
+        match self {
+            Self::Upnp(_) => 3.0,
+            Self::Cast(_) => 10.0,
         }
     }
 
