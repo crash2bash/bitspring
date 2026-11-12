@@ -100,10 +100,10 @@
   "privacy.title": "隱私權",
   "privacy.lead": "BitSpring 不蒐集任何關於你的資料。沒有帳號，沒有分析，沒有廣告，也沒有追蹤。",
   "privacy.device": "你的音樂、播放清單、等化器預設和設定都保留在你的裝置上。App 不會上傳其中任何內容。",
-  "privacy.network": "App 只會在你要求時才連線上網。來自本網站的版本會向 GitHub 詢問是否有更新並下載；GitHub 能看到任何下載都會顯示的資訊，也就是你的 IP 位址和 App 版本。如果你登入 Qobuz 或 TIDAL，App 只會與該服務通訊，你的登入資訊保留在你的裝置上。App Store 版本完全不會連線上網。",
+  "privacy.network": "App 只會在你要求時才連線上網。來自本網站的版本會向 GitHub 詢問是否有更新並下載；GitHub 能看到任何下載都會顯示的資訊，也就是你的 IP 位址和 App 版本。如果你登入 Qobuz 或 TIDAL，App 只會與該服務通訊，你的登入資訊保留在你的裝置上。當你在等化器中開啟耳機設定檔時，App 會從本網站下載其目錄，每月最多一次；託管網站的 Vercel 能看到你的 IP 位址。App Store 版本只會為此連線上網。",
   "privacy.site": "本網站不設定 Cookie，也不執行分析。你的瀏覽器會記住你選擇的語言，這些資訊不會離開瀏覽器。與任何網站代管服務一樣，Vercel 會保存標準的伺服器記錄。",
   "privacy.open": "BitSpring 是開放原始碼，所以任何人都可以在程式碼中驗證以上所有內容。",
   "privacy.contact": "有疑問嗎？",
   "privacy.contact_link": "在 GitHub 上提問",
-  "privacy.updated": "最後更新於 2026 年 11 月 11 日。"
+  "privacy.updated": "最後更新於 2026 年 11 月 12 日。"
 }

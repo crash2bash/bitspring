@@ -20,6 +20,7 @@
     type StoredPreset,
   } from "./api";
   import EqCurve from "./EqCurve.svelte";
+  import HeadphonePicker from "./HeadphonePicker.svelte";
   import { TEMPLATES, effectivePreamp, hasGain, hasSlope, maxBoostDb, newBand } from "./eqmath";
   import { list, num, t, tn } from "./i18n.svelte";
 
@@ -53,6 +54,7 @@
   let note = $state<string | null>(null);
   let menu = $state<"new" | "import" | "export" | null>(null);
   let pasting = $state(false);
+  let pickingHeadphones = $state(false);
   let pasteText = $state("");
   let pasteName = $state("");
   let confirmDelete = $state(false);
@@ -420,6 +422,7 @@
           <button class="tool" onclick={() => (menu = menu === "import" ? null : "import")} aria-expanded={menu === "import"}>{t("eq.import")}</button>
           {#if menu === "import"}
             <div class="menu" role="menu">
+              <button role="menuitem" onclick={() => ((menu = null), (pickingHeadphones = true))}>{t("eq.importHeadphones")}</button>
               {#if !isAndroid}<button role="menuitem" onclick={importFile}>{t("eq.importFile")}</button>{/if}
               <button role="menuitem" onclick={() => ((menu = null), (pasting = true))}>{t("eq.importPaste")}</button>
               <p class="menu-note">{t("eq.importHelp")}</p>
@@ -469,7 +472,8 @@
           {/each}
         </div>
         <div class="empty-actions">
-          {#if !isAndroid}<button class="primary" onclick={importFile}>{t("eq.importFile")}</button>{/if}
+          <button class="primary" onclick={() => (pickingHeadphones = true)}>{t("eq.importHeadphones")}</button>
+          {#if !isAndroid}<button class="ghost" onclick={importFile}>{t("eq.importFile")}</button>{/if}
           <button class="ghost" onclick={() => (pasting = true)}>{t("eq.importPaste")}</button>
         </div>
         <p class="fine">{t("eq.importHelp")}</p>
@@ -704,6 +708,10 @@
     {#if note}<p class="note" role="status">{note} <button class="link" onclick={() => (note = null)}>{t("eq.dismiss")}</button></p>{/if}
   </section>
 </div>
+
+{#if pickingHeadphones}
+  <HeadphonePicker onpicked={afterImport} onclose={() => (pickingHeadphones = false)} />
+{/if}
 
 {#if pasting}
   <div class="modal-bg" role="presentation" onclick={(e) => e.target === e.currentTarget && (pasting = false)}>

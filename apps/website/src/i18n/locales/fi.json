@@ -100,10 +100,10 @@
   "privacy.title": "Tietosuoja",
   "privacy.lead": "BitSpring ei kerää sinusta mitään. Tiliä, analytiikkaa, mainontaa tai seurantaa ei ole.",
   "privacy.device": "Musiikkisi, soittolistasi, taajuuskorjaimen esiasetuksesi ja asetuksesi pysyvät laitteellasi. Sovellus ei lähetä niistä mitään.",
-  "privacy.network": "Sovellus ottaa yhteyden verkkoon vain sen takia, mitä siltä pyydät. Tältä verkkosivustolta ladattu versio kysyy GitHubilta, onko päivitystä saatavilla, ja lataa sen; GitHub näkee sen, minkä mikä tahansa lataus paljastaa, eli IP-osoitteesi ja sovelluksen version. Jos kirjaudut Qobuziin tai TIDALiin, sovellus puhuu vain sen palvelun kanssa, ja kirjautumisesi pysyy laitteellasi. App Store -versiot eivät ota yhteyttä verkkoon lainkaan.",
+  "privacy.network": "Sovellus ottaa yhteyden verkkoon vain sen takia, mitä siltä pyydät. Tältä verkkosivustolta ladattu versio kysyy GitHubilta, onko päivitystä saatavilla, ja lataa sen; GitHub näkee sen, minkä mikä tahansa lataus paljastaa, eli IP-osoitteesi ja sovelluksen version. Jos kirjaudut Qobuziin tai TIDALiin, sovellus puhuu vain sen palvelun kanssa, ja kirjautumisesi pysyy laitteellasi. Kun avaat taajuuskorjaimen kuulokeprofiilit, sovellus lataa niiden luettelon tältä sivustolta enintään kerran kuukaudessa; sivuston isännöijä Vercel näkee IP-osoitteesi. App Store -versiot ottavat yhteyttä verkkoon vain tätä varten.",
   "privacy.site": "Tämä verkkosivusto ei aseta evästeitä eikä käytä analytiikkaa. Selaimesi muistaa valitsemasi kielen, eikä se poistu koskaan selaimesta. Kuten mikä tahansa verkkopalvelin, Vercel säilyttää tavallisia palvelinlokeja.",
   "privacy.open": "BitSpring on avointa lähdekoodia, joten kuka tahansa voi tarkistaa kaiken tämän sen koodista.",
   "privacy.contact": "Kysyttävää?",
   "privacy.contact_link": "Kysy GitHubissa",
-  "privacy.updated": "Päivitetty viimeksi 11. marraskuuta 2026."
+  "privacy.updated": "Päivitetty viimeksi 12. marraskuuta 2026."
 }

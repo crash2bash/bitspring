@@ -59,7 +59,7 @@ EVERY FORMAT YOU OWN
 • Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM
-• Parametric EQ with presets for your headphones; imports AutoEQ, Equalizer APO and EasyEffects presets.
+• Parametric EQ with ready-made corrections for thousands of headphones (AutoEQ); imports Equalizer APO and EasyEffects presets.
 • Crossfeed for a more natural stereo image on headphones.
 • High-quality upsampling.
 • For lossy files: automatic headroom against clipping.
@@ -96,7 +96,7 @@ EVERY FORMAT YOU OWN
 • Quality check: finds "hi-res" files that are upsampled CDs or were made from MP3, right on your device.
 
 ENHANCERS, ONLY WHEN YOU WANT THEM
-• Parametric EQ with presets for your headphones, in linear or minimum phase; imports AutoEQ, Equalizer APO and EasyEffects presets.
+• Parametric EQ in linear or minimum phase, with ready-made corrections for thousands of headphones and IEMs from AutoEQ: pick your model by name. It also imports Equalizer APO, EasyEffects and AutoEQ files.
 • Crossfeed for a more natural stereo image on headphones.
 • High-quality upsampling.
 • For lossy files: automatic headroom against clipping.
@@ -118,7 +118,7 @@ First release in the App Store.
 ## Notes for App Review
 
 ```
-BitSpring is a music player for the user's own audio files. It has no account and no in-app purchases. Its only network use is on the local network: it finds UPnP/DLNA and Google Cast network players (Sonos, WiiM, Chromecast and the like) and streams the user's music to them, which is why it asks for local network access. When the user turns on the phone remote in Settings, it also serves a small control page to phones on the same network (off by default, protected by a random address).
+BitSpring is a music player for the user's own audio files. It has no account and no in-app purchases. Its only internet use is the equalizer's headphone profiles: when the user opens them, it downloads a catalog of AutoEQ headphone corrections (a public JSON file) from the BitSpring website, at most once a month; nothing is sent besides the request itself. Everything else is on the local network: it finds UPnP/DLNA and Google Cast network players (Sonos, WiiM, Chromecast and the like) and streams the user's music to them, which is why it asks for local network access. When the user turns on the phone remote in Settings, it also serves a small control page to phones on the same network (off by default, protected by a random address).
 
 To try it: on iPhone, add audio files with the "Add files" button in the library (any FLAC, WAV, MP3 or AAC file works) or copy them into Files → On My iPhone → BitSpring. On Mac, press "Add folder" and pick any folder with music.
 

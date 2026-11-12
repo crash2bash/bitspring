@@ -100,10 +100,10 @@
   "privacy.title": "Integritet",
   "privacy.lead": "BitSpring samlar inte in något om dig. Det finns inget konto, ingen analys, ingen reklam och ingen spårning.",
   "privacy.device": "Din musik, dina spellistor, dina equalizerinställningar och dina inställningar stannar på din enhet. Appen laddar inte upp något av det.",
-  "privacy.network": "Appen går bara online för det du ber den om. Versionen från den här webbplatsen frågar GitHub om det finns en uppdatering och laddar ner den; GitHub ser det som varje nedladdning visar, din IP-adress och appversionen. Om du loggar in på Qobuz eller TIDAL pratar appen bara med den tjänsten, och din inloggning stannar på din enhet. App Store-versionerna går inte online alls.",
+  "privacy.network": "Appen går bara online för det du ber den om. Versionen från den här webbplatsen frågar GitHub om det finns en uppdatering och laddar ner den; GitHub ser det som varje nedladdning visar, din IP-adress och appversionen. Om du loggar in på Qobuz eller TIDAL pratar appen bara med den tjänsten, och din inloggning stannar på din enhet. När du öppnar hörlursprofilerna i equalizern hämtar appen katalogen från den här webbplatsen, högst en gång i månaden; Vercel, som är värd för den, ser din IP-adress. Det är det enda App Store-versionerna går online för.",
   "privacy.site": "Den här webbplatsen sätter inga cookies och kör ingen analys. Din webbläsare kommer ihåg det språk du valde, och det lämnar den aldrig. Som alla webbhotell sparar Vercel vanliga serverloggar.",
   "privacy.open": "BitSpring är öppen källkod, så vem som helst kan kontrollera allt detta i koden.",
   "privacy.contact": "Frågor?",
   "privacy.contact_link": "Fråga på GitHub",
-  "privacy.updated": "Senast uppdaterad den 11 november 2026."
+  "privacy.updated": "Senast uppdaterad den 12 november 2026."
 }

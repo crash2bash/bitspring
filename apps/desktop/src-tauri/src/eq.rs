@@ -286,6 +286,117 @@ pub async fn eq_import_file(app: AppHandle, path: String) -> CmdResult<EqImporte
     Ok(EqImported { ids, changed })
 }
 
+#[derive(serde::Serialize)]
+pub struct HeadphoneDto {
+    name: String,
+    source: String,
+}
+
+/// The built-in headphone profiles (AutoEQ), by name.
+#[tauri::command]
+pub fn eq_headphones() -> Vec<HeadphoneDto> {
+    eq_io::headphone_profiles().iter().map(|p| HeadphoneDto { name: p.name.clone(), source: p.source.clone() }).collect()
+}
+
+/// Add a built-in headphone profile as a preset.
+#[tauri::command]
+pub async fn eq_add_headphone(state: State<'_, AppState>, name: String) -> CmdResult<EqImported> {
+    let preset = eq_io::headphone_preset(&name).ok_or(UserError::EqNotFound)?;
+    let (ids, changed) = add_imported(&state, vec![preset])?;
+    Ok(EqImported { ids, changed })
+}
+
+// ---- AutoEQ's whole catalog ------------------------------------------------------------------
+
+/// The catalog as last read, so adding a profile doesn't re-read the file.
+static CATALOG: std::sync::Mutex<Option<std::sync::Arc<Vec<eq_io::CatalogEntry>>>> = std::sync::Mutex::new(None);
+
+/// A downloaded catalog is used for this long before it's fetched again (AutoEQ adds headphones
+/// every few weeks); an older one still serves when the download fails.
+const CATALOG_FRESH: std::time::Duration = std::time::Duration::from_secs(30 * 86_400);
+/// The file is about 2 MB; anything far bigger isn't ours.
+const CATALOG_MAX: u64 = 16 << 20;
+
+fn catalog_failed(e: impl std::fmt::Display) -> UserError {
+    UserError::CatalogUnavailable { detail: e.to_string() }
+}
+
+fn download_catalog() -> Result<String, UserError> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_secs(15)))
+        .timeout_global(Some(std::time::Duration::from_secs(120)))
+        .user_agent(concat!("BitSpring/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .into();
+    let mut resp = agent.get(eq_io::AUTOEQ_CATALOG).call().map_err(catalog_failed)?;
+    resp.body_mut().with_config().limit(CATALOG_MAX).read_to_string().map_err(catalog_failed)
+}
+
+/// The catalog: the copy kept in the app's folder while it's fresh (or `refresh` isn't asked),
+/// else downloaded anew, falling back to the old copy when that fails.
+fn load_catalog(dir: Option<PathBuf>, refresh: bool) -> Result<std::sync::Arc<Vec<eq_io::CatalogEntry>>, UserError> {
+    let path = dir.map(|d| d.join("autoeq-catalog.json"));
+    let cached = path.as_ref().and_then(|p| {
+        let age = std::fs::metadata(p).and_then(|m| m.modified()).ok()?.elapsed().unwrap_or_default();
+        let text = std::fs::read_to_string(p).ok()?;
+        Some((eq_io::parse_catalog(&text).ok()?, age < CATALOG_FRESH))
+    });
+    if let Some((all, true)) = &cached
+        && !refresh
+    {
+        return Ok(std::sync::Arc::new(all.clone()));
+    }
+    let fetched = download_catalog().and_then(|text| {
+        let all = eq_io::parse_catalog(&text).map_err(catalog_failed)?;
+        if let Some(p) = &path {
+            // Written aside and renamed, so a crash never leaves half a file.
+            let part = p.with_extension("json.part");
+            if std::fs::create_dir_all(p.parent().unwrap_or(p)).and_then(|_| std::fs::write(&part, &text)).and_then(|_| std::fs::rename(&part, p)).is_err() {
+                let _ = std::fs::remove_file(&part);
+            }
+        }
+        Ok(all)
+    });
+    match (fetched, cached) {
+        (Ok(all), _) => Ok(std::sync::Arc::new(all)),
+        (Err(_), Some((all, _))) => Ok(std::sync::Arc::new(all)),
+        (Err(e), None) => Err(e),
+    }
+}
+
+#[derive(Serialize)]
+pub struct CatalogDto {
+    name: String,
+    source: String,
+    rig: Option<String>,
+}
+
+/// AutoEQ's whole catalog (thousands of headphones), downloaded once and kept for a month;
+/// `refresh` fetches it again now.
+#[tauri::command]
+pub async fn eq_catalog(app: AppHandle, refresh: bool) -> CmdResult<Vec<CatalogDto>> {
+    let dir = app.path().app_data_dir().ok();
+    let all = tauri::async_runtime::spawn_blocking(move || load_catalog(dir, refresh)).await.map_err(catalog_failed)??;
+    *CATALOG.lock().unwrap() = Some(all.clone());
+    Ok(all.iter().map(|e| CatalogDto { name: e.name.clone(), source: e.source.clone(), rig: e.rig.clone() }).collect())
+}
+
+/// Add catalog entry `index` (as `eq_catalog` listed it) as a preset; `name` and `source` make
+/// sure it's still the one the listener picked.
+#[tauri::command]
+pub async fn eq_add_catalog(state: State<'_, AppState>, index: usize, name: String, source: String) -> CmdResult<EqImported> {
+    let entry = CATALOG
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|all| all.get(index).cloned())
+        .filter(|e| e.name == name && e.source == source)
+        .ok_or(UserError::EqNotFound)?;
+    let preset = eq_io::catalog_preset(&entry).map_err(|e| UserError::of(&e))?;
+    let (ids, changed) = add_imported(&state, vec![preset])?;
+    Ok(EqImported { ids, changed })
+}
+
 /// Read presets from pasted text (AutoEQ's web app, a forum post, another app's export).
 #[tauri::command]
 pub async fn eq_import_text(state: State<'_, AppState>, text: String, name: String) -> CmdResult<EqImported> {

@@ -78,7 +78,7 @@ export type EngineError =
         | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled"
         | "eqFormat" | "eqEmpty" | "eqNotFound" | "irEmpty" | "installNotAllowed";
     }
-  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed" | "irUnreadable" | "updateFailed"; detail: string }
+  | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed" | "irUnreadable" | "updateFailed" | "catalogUnavailable"; detail: string }
   | { code: "irChannels"; channels: number }
   | { code: "irTooLong"; seconds: number }
   | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
@@ -495,6 +495,13 @@ export const api = {
   eqBindDevice: (deviceUid: string, binding: DeviceEq | null) => call<EqChanged>("eq_bind_device", { deviceUid, binding }),
   eqImportFile: (path: string) => call<EqChanged & { ids: string[] }>("eq_import_file", { path }),
   eqImportText: (text: string, name: string) => call<EqChanged & { ids: string[] }>("eq_import_text", { text, name }),
+  /** Built-in headphone profiles (AutoEQ): name and whose measurement. */
+  eqHeadphones: () => call<{ name: string; source: string }[]>("eq_headphones"),
+  eqAddHeadphone: (name: string) => call<EqChanged & { ids: string[] }>("eq_add_headphone", { name }),
+  /** AutoEQ's whole catalog, downloaded from our site once a month (`refresh`: now). */
+  eqCatalog: (refresh: boolean) => call<{ name: string; source: string; rig: string | null }[]>("eq_catalog", { refresh }),
+  /** Catalog entry `index` as eqCatalog listed it; name and source check it's still that one. */
+  eqAddCatalog: (index: number, name: string, source: string) => call<EqChanged & { ids: string[] }>("eq_add_catalog", { index, name, source }),
   eqExport: (ids: string[], format: EqFormat, path: string | null) => call<string>("eq_export", { ids, format, path }),
   eqExportText: (ids: string[], format: EqFormat) => call<string>("eq_export_text", { ids, format }),
   channelTest: (deviceUid: string) => call<Signal>("channel_test", { deviceUid }),
@@ -706,6 +713,7 @@ export function errorText(e: unknown): string {
       case "writeFailed":
       case "irUnreadable":
       case "updateFailed":
+      case "catalogUnavailable":
         return t(`error.${err.code}`, { detail: err.detail });
       case "irChannels":
         return t("error.irChannels", { channels: num(err.channels) });

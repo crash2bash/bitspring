@@ -100,10 +100,10 @@
   "privacy.title": "Confidențialitate",
   "privacy.lead": "BitSpring nu colectează nimic despre tine. Nu există cont, analiză, publicitate sau urmărire.",
   "privacy.device": "Muzica ta, listele de redare, presetările egalizatorului și setările rămân pe dispozitivul tău. Aplicația nu încarcă nimic din ele.",
-  "privacy.network": "Aplicația se conectează la internet doar pentru ceea ce îi ceri. Versiunea de pe acest site întreabă GitHub dacă există o actualizare și o descarcă; GitHub vede ce arată orice descărcare, adresa ta IP și versiunea aplicației. Dacă te conectezi la Qobuz sau TIDAL, aplicația vorbește doar cu acel serviciu, iar autentificarea ta rămâne pe dispozitivul tău. Versiunile din App Store nu se conectează deloc la internet.",
+  "privacy.network": "Aplicația se conectează la internet doar pentru ceea ce îi ceri. Versiunea de pe acest site întreabă GitHub dacă există o actualizare și o descarcă; GitHub vede ce arată orice descărcare, adresa ta IP și versiunea aplicației. Dacă te conectezi la Qobuz sau TIDAL, aplicația vorbește doar cu acel serviciu, iar autentificarea ta rămâne pe dispozitivul tău. Când deschideți profilurile de căști din egalizator, aplicația descarcă catalogul lor de pe acest site, cel mult o dată pe lună; Vercel, care îl găzduiește, vede adresa dvs. IP. Doar pentru asta se conectează la internet versiunile din App Store.",
   "privacy.site": "Acest site nu setează cookie-uri și nu rulează analize. Browserul tău reține limba aleasă, iar aceasta nu îl părăsește niciodată. Ca orice gazdă web, Vercel păstrează jurnale standard ale serverului.",
   "privacy.open": "BitSpring este open source, deci oricine poate verifica toate acestea în codul său.",
   "privacy.contact": "Ai întrebări?",
   "privacy.contact_link": "Întreabă pe GitHub",
-  "privacy.updated": "Ultima actualizare: 11 noiembrie 2026."
+  "privacy.updated": "Ultima actualizare: 12 noiembrie 2026."
 }

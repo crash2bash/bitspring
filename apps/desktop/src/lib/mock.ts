@@ -337,6 +337,20 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       if (args.binding) eq.devices[args.deviceUid as string] = args.binding as DeviceEq;
       else delete eq.devices[args.deviceUid as string];
       return eqChanged() as T;
+    case "eq_headphones":
+      return MOCK_HEADPHONES.map(([name, source]) => ({ name, source })) as T;
+    case "eq_catalog":
+      await new Promise((r) => setTimeout(r, 600));
+      return mockCatalog() as T;
+    case "eq_add_headphone":
+    case "eq_add_catalog": {
+      const id = `p${eqSeq++}`;
+      const name = cmd === "eq_add_catalog" ? `${args.name} (${args.source})` : (args.name as string);
+      eq.presets.push({ ...structuredClone(LCD2), name, id, updated: Date.now() });
+      eq.activeId = id;
+      eq.enabled = true;
+      return { ...eqChanged(), ids: [id] } as T;
+    }
     case "eq_import_file":
     case "eq_import_text": {
       const id = `p${eqSeq++}`;
@@ -427,4 +441,27 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return 1 as T;
   }
   throw new Error(`mock: unknown command ${cmd}`);
+}
+
+const MOCK_HEADPHONES: [string, string][] = [
+  ["Audeze LCD-2", "oratory1990"],
+  ["Audeze LCD-X", "oratory1990"],
+  ["HIFIMAN Sundara", "oratory1990"],
+  ["Sennheiser HD 600", "oratory1990"],
+  ["Sennheiser HD 650", "oratory1990"],
+  ["Sennheiser HD 800 S", "oratory1990"],
+  ["Sony WH-1000XM5", "oratory1990"],
+];
+
+/** A few thousand made-up catalog rows around real names, enough to try the search. */
+function mockCatalog(): { name: string; source: string; rig: string | null }[] {
+  const out: { name: string; source: string; rig: string | null }[] = [];
+  for (const [name] of MOCK_HEADPHONES) {
+    out.push({ name, source: "oratory1990", rig: null });
+    out.push({ name, source: "crinacle", rig: "GRAS 43AG-7" });
+    out.push({ name, source: "Rtings", rig: null });
+  }
+  const brands = ["Moondrop", "Truthear", "Sennheiser", "Beyerdynamic", "AKG", "Audio-Technica", "FiiO", "Shure", "Sony", "Focal"];
+  for (let i = 0; i < 3000; i++) out.push({ name: `${brands[i % brands.length]} Model ${100 + i}`, source: i % 3 ? "crinacle" : "Super Review", rig: i % 3 ? "711" : null });
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 }

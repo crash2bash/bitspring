@@ -28,6 +28,8 @@ tauri-plugin-dialog = "2.8.4"
 anyhow = "1.0.104"
 base64 = "0.23.1"
 sys-locale = "0.3"
+# AutoEQ's headphone catalog, and Android updates (latest.json and the APK).
+ureq = "3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 block2 = "0.6"
@@ -44,8 +46,6 @@ objc2-foundation = { version = "0.3", features = ["NSData", "NSError", "NSString
 jni = "0.21"
 log = "0.4"
 ndk-context = "0.1"
-# Android updates: fetch latest.json and the APK.
-ureq = { version = "3", optional = true }
 
 
 
@@ -56,7 +56,7 @@ ureq = { version = "3", optional = true }
 [features]
 default = ["streaming", "updater"]
 streaming = ["dep:hifi-streaming"]
-updater = ["dep:tauri-plugin-updater", "dep:ureq"]
+updater = ["dep:tauri-plugin-updater"]
 
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 tauri-plugin-updater = { version = "2", optional = true }

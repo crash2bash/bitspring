@@ -100,10 +100,10 @@
   "privacy.title": "Adatvédelem",
   "privacy.lead": "A BitSpring semmit sem gyűjt rólad. Nincs fiók, nincs analitika, nincs reklám és nincs követés.",
   "privacy.device": "A zenéd, a lejátszási listáid, az equalizer-előbeállításaid és a beállításaid az eszközödön maradnak. Az alkalmazás ezek közül semmit nem tölt fel.",
-  "privacy.network": "Az alkalmazás csak azért megy online, amit kérsz tőle. A weboldalról letöltött verzió megkérdezi a GitHubot, van-e frissítés, és letölti azt; a GitHub azt látja, amit bármelyik letöltés mutat: az IP-címedet és az alkalmazás verzióját. Ha bejelentkezel a Qobuzba vagy a TIDAL-ba, az alkalmazás csak azzal a szolgáltatással kommunikál, és a bejelentkezésed az eszközödön marad. Az App Store-os verziók egyáltalán nem mennek online.",
+  "privacy.network": "Az alkalmazás csak azért megy online, amit kérsz tőle. A weboldalról letöltött verzió megkérdezi a GitHubot, van-e frissítés, és letölti azt; a GitHub azt látja, amit bármelyik letöltés mutat: az IP-címedet és az alkalmazás verzióját. Ha bejelentkezel a Qobuzba vagy a TIDAL-ba, az alkalmazás csak azzal a szolgáltatással kommunikál, és a bejelentkezésed az eszközödön marad. Amikor megnyitja a hangszínszabályzóban a fejhallgató-profilokat, az alkalmazás letölti a katalógusukat erről a webhelyről, legfeljebb havonta egyszer; a tárhelyet adó Vercel látja az IP-címét. Az App Store-os verziók csak ezért mennek online.",
   "privacy.site": "Ez a weboldal nem állít be sütiket, és nem használ analitikát. A böngésződ megjegyzi a választott nyelvet, és az soha nem hagyja el a böngészőt. Mint minden webtárhely, a Vercel is szokásos szerver-naplókat őriz.",
   "privacy.open": "A BitSpring nyílt forráskódú, így bárki ellenőrizheti mindezt a kódjában.",
   "privacy.contact": "Kérdésed van?",
   "privacy.contact_link": "Kérdezz a GitHubon",
-  "privacy.updated": "Utolsó frissítés: 2026. november 11."
+  "privacy.updated": "Utolsó frissítés: 2026. november 12."
 }
