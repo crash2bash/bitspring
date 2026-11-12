@@ -1190,9 +1190,22 @@
     }
   }
 
-  /* --- phone held sideways: clear the Dynamic Island on either side, and put the cover beside
-     the title so the transport fits without scrolling --- */
-  @media (max-height: 500px) and (min-width: 600px) {
+  /* --- the wide layout on a big phone screen (the unfolded iPhone Duo): keep clear of the
+     status bar, camera and home indicator too. On a computer every inset is 0, so nothing moves. --- */
+  @media (min-width: 701px) and (min-height: 501px) {
+    .app {
+      grid-template-rows: calc(52px + var(--safe-top, env(safe-area-inset-top))) minmax(0, 1fr) auto;
+      box-sizing: border-box;
+      padding: 0 var(--safe-right, env(safe-area-inset-right)) var(--safe-bottom, env(safe-area-inset-bottom))
+        var(--safe-left, env(safe-area-inset-left));
+    }
+    header {
+      padding-top: var(--safe-top, env(safe-area-inset-top));
+    }
+  }
+  /* --- any phone screen: keep clear of what the system puts at the sides (the Dynamic Island
+     when held sideways; the iPhone Duo's status bar and camera, which sit on the right) --- */
+  @media (max-width: 700px), (max-height: 500px) {
     header,
     .mini,
     .tabbar {
@@ -1202,6 +1215,10 @@
     .queue {
       padding-inline: max(20px, var(--safe-left, env(safe-area-inset-left))) max(20px, var(--safe-right, env(safe-area-inset-right)));
     }
+  }
+  /* --- phone held sideways: the cover beside the title, so the transport fits without
+     scrolling --- */
+  @media (max-height: 500px) and (min-width: 600px) {
     .np {
       grid-template-columns: auto minmax(0, 1fr);
       justify-items: start;
