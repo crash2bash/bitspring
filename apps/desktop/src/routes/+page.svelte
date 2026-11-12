@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { trackSafeArea } from "$lib/safeArea";
-  import { api, isNetworkUid, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus } from "$lib/api";
+  import { api, isNetworkUid, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus, type RemoteCommand } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
   import { labels, labelOf, remember } from "$lib/labels.svelte";
@@ -367,7 +367,20 @@
     }, 250);
 
     let unlisten: (() => void) | undefined;
+    let unlistenRemote: (() => void) | undefined;
     if (inTauri) {
+      // The phone remote: its commands, carried out like the window's own buttons.
+      import("@tauri-apps/api/event").then(async ({ listen }) => {
+        unlistenRemote = await listen<RemoteCommand>("remote", ({ payload: c }) => {
+          if (c.kind === "toggle") togglePause();
+          else if (c.kind === "next") next();
+          else if (c.kind === "prev") prev();
+          else if (c.kind === "seek") api.seek(c.secs);
+          else if (c.kind === "jump") playIndex(c.index);
+          else if (c.kind === "play") playPaths(c.paths, c.index);
+          else if (c.kind === "enqueue") enqueue(c.paths);
+        });
+      });
       import("@tauri-apps/api/webview").then(async ({ getCurrentWebview }) => {
         unlisten = await getCurrentWebview().onDragDropEvent((ev) => {
           const p = ev.payload;
@@ -384,6 +397,7 @@
       clearInterval(timer);
       stopUpdateChecks();
       unlisten?.();
+      unlistenRemote?.();
     };
   });
 </script>

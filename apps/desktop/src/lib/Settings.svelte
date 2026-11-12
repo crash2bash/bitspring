@@ -1,9 +1,23 @@
 <script lang="ts">
   import { i18n, LOCALES, t } from "./i18n.svelte";
   import { checkUpdates, updates } from "./updates.svelte";
+  import { api, isAndroid, isIOS, type RemoteStatus } from "./api";
 
   let open = $state(false);
   let root: HTMLElement;
+
+  // The phone remote: computers only (a phone is the remote).
+  const hasRemote = !isIOS && !isAndroid;
+  let remote = $state<RemoteStatus | null>(null);
+  $effect(() => {
+    if (open && hasRemote) api.remoteStatus().then((r) => (remote = r)).catch(() => {});
+  });
+  async function setRemote(on: boolean) {
+    remote = await api.remoteEnable(on);
+  }
+  async function newAddress() {
+    remote = await api.remoteNewAddress();
+  }
 
   function onWindowClick(e: MouseEvent) {
     if (open && root && !e.composedPath().includes(root)) open = false;
@@ -37,6 +51,23 @@
           {/each}
         </select>
       </label>
+      {#if hasRemote && remote}
+        <div class="field upd remote">
+          <label class="toggle">
+            <input type="checkbox" checked={remote.enabled} onchange={(e) => setRemote(e.currentTarget.checked)} />
+            <span>{t("remote.setting")}</span>
+          </label>
+          <p class="note">{t("remote.help")}</p>
+          {#if remote.enabled && remote.url}
+            <!-- Our own SVG, made by the app from the address. -->
+            <div class="qr" aria-hidden="true">{@html remote.qr}</div>
+            <p class="url">{remote.url}</p>
+            <button class="check" onclick={newAddress}>{t("remote.newAddress")}</button>
+            <p class="note">{t("remote.newHelp")}</p>
+          {/if}
+          {#if remote.error}<p class="note err">{t("remote.failed", { error: remote.error })}</p>{/if}
+        </div>
+      {/if}
       {#if updates.enabled}
         <div class="field upd">
           <span>{t("upd.title")}</span>
@@ -126,6 +157,35 @@
   }
   .check:disabled {
     color: var(--mist);
+  }
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .toggle input {
+    accent-color: var(--brass);
+  }
+  .qr {
+    align-self: center;
+    width: 180px;
+    padding: 8px;
+    border-radius: var(--r-md);
+    background: #fff;
+    line-height: 0;
+  }
+  .qr :global(svg) {
+    width: 100%;
+    height: auto;
+  }
+  .url {
+    margin: 0;
+    font-weight: 400;
+    font-size: var(--t-xs);
+    color: var(--porcelain);
+    user-select: all;
+    word-break: break-all;
   }
   select {
     font: inherit;

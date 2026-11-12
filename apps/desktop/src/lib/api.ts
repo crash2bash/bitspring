@@ -443,6 +443,9 @@ export interface QualityReport {
 }
 
 export const api = {
+  remoteStatus: () => call<RemoteStatus>("remote_status"),
+  remoteEnable: (enabled: boolean) => call<RemoteStatus>("remote_enable", { enabled }),
+  remoteNewAddress: () => call<RemoteStatus>("remote_new_address"),
   /** `search`: also look for network players (asks macOS for local network access once). */
   listDevices: (search = false) => call<Device[]>("list_devices", { search }),
   /** The network player's own volume (0…100), or null. */
@@ -579,6 +582,22 @@ const DEVICE_KEYS: Record<string, string> = {
   Dock: "dev.dock",
   "Audio output": "dev.output",
 };
+
+/** The phone remote (Settings): on or off, and where a phone finds it. */
+export interface RemoteStatus {
+  enabled: boolean;
+  url: string | null;
+  /** The address as a QR code (SVG markup). */
+  qr: string | null;
+  error: string | null;
+}
+
+/** A command from the phone remote, carried out by the window like its own buttons. */
+export type RemoteCommand =
+  | { kind: "toggle" | "next" | "prev" }
+  | { kind: "seek"; secs: number }
+  | { kind: "jump"; index: number }
+  | { kind: "play" | "enqueue"; paths: string[]; index: number };
 
 /** The uid of a network player (UPnP or Chromecast), which may take a moment to be found. */
 export function isNetworkUid(uid: string): boolean {

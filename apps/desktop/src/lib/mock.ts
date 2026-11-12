@@ -47,6 +47,7 @@ const mockChecks: Record<string, unknown> = {};
 let libFolders = ["/Users/me/Music"];
 
 let mockVolume = 35;
+let mockRemote = false;
 const devices: Device[] = [
   { uid: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, network: false, model: null, protocol: null },
   { uid: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, network: false, model: null, protocol: null },
@@ -168,6 +169,13 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
   switch (cmd) {
     case "list_devices":
       return devices as T;
+    case "remote_status":
+    case "remote_enable":
+    case "remote_new_address": {
+      if (cmd === "remote_enable") mockRemote = Boolean(args.enabled);
+      const url = "http://192.168.0.169:48173/?t=3f9c2a7e5b1d4c8a9e0f6b2d7c4a1e8f";
+      return { enabled: mockRemote, url: mockRemote ? url : null, qr: mockRemote ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><rect width="21" height="21" fill="#fff"/><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1z" fill="#000"/></svg>' : null, error: null } as T;
+    }
     case "output_volume":
       return (mockVolume as unknown) as T;
     case "set_output_volume":

@@ -12,6 +12,7 @@ mod eq;
 mod library;
 mod playlists;
 mod quality;
+mod remote;
 /// Qobuz and TIDAL: the real thing outside the App Store, a stand-in inside it.
 #[cfg_attr(all(feature = "streaming", not(target_os = "ios")), path = "stream_on.rs")]
 #[cfg_attr(not(all(feature = "streaming", not(target_os = "ios"))), path = "stream_off.rs")]
@@ -1196,6 +1197,7 @@ pub fn run() {
             app.manage(lib);
             app.manage(playlists::Playlists::default());
             app.manage(quality::Quality::load(app.handle()));
+            app.manage(remote::Remote::load(app.handle()));
             *app.state::<AppState>().eq.lock().unwrap() = eq::EqStore::load(app.handle());
             stream::init(app.handle());
             // Android: the main window is made here rather than from the config (see
@@ -1289,6 +1291,9 @@ pub fn run() {
             library::import_files,
             output_volume,
             set_output_volume,
+            remote::remote_status,
+            remote::remote_enable,
+            remote::remote_new_address,
             quality::quality_cached,
             quality::quality_check,
             playlists::playlists_list,

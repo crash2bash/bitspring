@@ -244,6 +244,35 @@ impl Library {
     }
 }
 
+/// What the phone remote shows of a track in the queue.
+pub struct QueuedTrack {
+    pub title: String,
+    pub artist: Option<String>,
+    pub duration: f64,
+    pub album_id: String,
+}
+
+impl Library {
+    /// Library tracks among `paths`, by path.
+    pub fn tracks_by_path(&self, paths: &[String]) -> std::collections::HashMap<String, QueuedTrack> {
+        let g = self.0.lock().unwrap();
+        let wanted: std::collections::HashSet<&str> = paths.iter().map(String::as_str).collect();
+        let mut out = std::collections::HashMap::new();
+        for (i, t) in g.tracks.iter().enumerate() {
+            if wanted.contains(t.path.as_str()) {
+                let album_id = g.albums.iter().find(|a| a.tracks.contains(&i)).map(|a| a.id.clone()).unwrap_or_default();
+                out.insert(t.path.clone(), QueuedTrack { title: t.title.clone(), artist: t.artist.clone(), duration: t.duration, album_id });
+            }
+        }
+        out
+    }
+
+    /// Every track path in the library (what the remote may ask to play).
+    pub fn known_paths(&self) -> std::collections::HashSet<String> {
+        self.0.lock().unwrap().tracks.iter().map(|t| t.path.clone()).collect()
+    }
+}
+
 #[tauri::command]
 pub fn library_status(lib: State<'_, Library>) -> LibraryStatus {
     lib.status()
