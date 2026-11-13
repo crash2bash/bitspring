@@ -100,10 +100,10 @@
   "privacy.title": "Privacy",
   "privacy.lead": "BitSpring verzamelt niets over jou. Er is geen account, geen analyse, geen reclame en geen tracking.",
   "privacy.device": "Je muziek, afspeellijsten, equalizerpresets en instellingen blijven op je apparaat. De app uploadt niets daarvan.",
-  "privacy.network": "De app gaat alleen online voor wat jij ervan vraagt. De versie van deze website vraagt GitHub of er een update is en downloadt die; GitHub ziet wat elke download laat zien, je IP-adres en de appversie. Als je inlogt bij Qobuz of TIDAL, praat de app alleen met die dienst, en je login blijft op je apparaat. Als je in de equalizer de koptelefoonprofielen opent, downloadt de app de catalogus daarvan van deze website, hooguit eens per maand; Vercel, waar de site staat, ziet je IP-adres. Alleen daarvoor gaan de App Store-versies online.",
+  "privacy.network": "De app gaat alleen online voor wat jij ervan vraagt. De versie van deze website vraagt GitHub of er een update is en downloadt die; GitHub ziet wat elke download laat zien, je IP-adres en de appversie. Als je inlogt bij Qobuz of TIDAL, praat de app alleen met die dienst, en je login blijft op je apparaat. Als je in de equalizer de koptelefoonprofielen opent, downloadt de app de catalogus daarvan van deze website, hooguit eens per maand; Vercel, waar de site staat, ziet je IP-adres. Zet je het online zoeken naar songteksten aan, dan vraagt de app LRCLIB (lrclib.net) om de tekst van een nummer dat er zelf geen heeft; LRCLIB krijgt de titel, artiest, album en lengte van het nummer en je IP-adres. Alleen voor deze twee dingen gaan de App Store-versies online.",
   "privacy.site": "Deze website plaatst geen cookies en voert geen analyse uit. Je browser onthoudt de taal die je koos, en die verlaat de browser nooit. Zoals elke webhost bewaart Vercel standaard serverlogs.",
   "privacy.open": "BitSpring is open source, dus iedereen kan dit allemaal in de code controleren.",
   "privacy.contact": "Vragen?",
   "privacy.contact_link": "Vraag het op GitHub",
-  "privacy.updated": "Laatst bijgewerkt op 12 november 2026."
+  "privacy.updated": "Laatst bijgewerkt op 13 november 2026."
 }

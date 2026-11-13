@@ -10,6 +10,7 @@ mod ios_media;
 mod bookmarks;
 mod eq;
 mod library;
+mod lyrics;
 mod playlists;
 mod quality;
 mod remote;
@@ -1311,6 +1312,7 @@ pub fn run() {
             library::library_rescan,
             library::import_files,
             library::edit_tags,
+            lyrics::lyrics,
             output_volume,
             set_output_volume,
             remote::remote_status,

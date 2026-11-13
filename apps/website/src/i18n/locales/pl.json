@@ -100,10 +100,10 @@
   "privacy.title": "Prywatność",
   "privacy.lead": "BitSpring nie zbiera o Tobie niczego. Nie ma konta, analityki, reklam ani śledzenia.",
   "privacy.device": "Twoja muzyka, playlisty, ustawienia wstępne korektora i ustawienia zostają na Twoim urządzeniu. Aplikacja nie wysyła żadnych z nich.",
-  "privacy.network": "Aplikacja łączy się z internetem tylko po to, o co ją poprosisz. Wersja z tej strony pyta GitHub, czy jest aktualizacja, i ją pobiera; GitHub widzi to, co pokazuje każde pobranie: Twój adres IP i wersję aplikacji. Jeśli zalogujesz się do Qobuz lub TIDAL, aplikacja rozmawia tylko z tą usługą, a Twoje logowanie zostaje na Twoim urządzeniu. Gdy otworzysz profile słuchawek w korektorze, aplikacja pobierze ich katalog z tej witryny, najwyżej raz w miesiącu; Vercel, który ją hostuje, widzi Twój adres IP. Tylko w tym celu wersje z App Store łączą się z internetem.",
+  "privacy.network": "Aplikacja łączy się z internetem tylko po to, o co ją poprosisz. Wersja z tej strony pyta GitHub, czy jest aktualizacja, i ją pobiera; GitHub widzi to, co pokazuje każde pobranie: Twój adres IP i wersję aplikacji. Jeśli zalogujesz się do Qobuz lub TIDAL, aplikacja rozmawia tylko z tą usługą, a Twoje logowanie zostaje na Twoim urządzeniu. Gdy otworzysz profile słuchawek w korektorze, aplikacja pobierze ich katalog z tej witryny, najwyżej raz w miesiącu; Vercel, który ją hostuje, widzi Twój adres IP. Jeśli włączysz szukanie tekstów w sieci, aplikacja poprosi LRCLIB (lrclib.net) o tekst utworu, który nie ma własnego; LRCLIB dostaje tytuł, wykonawcę, album i długość utworu oraz Twój adres IP. Tylko w tych dwóch celach wersje z App Store łączą się z internetem.",
   "privacy.site": "Ta strona nie ustawia plików cookie i nie korzysta z analityki. Twoja przeglądarka zapamiętuje wybrany przez Ciebie język i nigdy on jej nie opuszcza. Jak każdy hosting, Vercel przechowuje standardowe logi serwera.",
   "privacy.open": "BitSpring jest open source, więc każdy może sprawdzić to wszystko w jego kodzie.",
   "privacy.contact": "Pytania?",
   "privacy.contact_link": "Zapytaj na GitHubie",
-  "privacy.updated": "Ostatnia aktualizacja: 12 listopada 2026."
+  "privacy.updated": "Ostatnia aktualizacja: 13 listopada 2026."
 }

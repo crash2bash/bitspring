@@ -100,10 +100,10 @@
   "privacy.title": "Gizlilik",
   "privacy.lead": "BitSpring hakkında seni ilgilendiren hiçbir şey toplamaz. Hesap, analiz, reklam ve izleme yoktur.",
   "privacy.device": "Müziğin, çalma listelerin, ekolayzır ön ayarların ve ayarların cihazında kalır. Uygulama bunların hiçbirini yüklemez.",
-  "privacy.network": "Uygulama yalnızca senin ondan istediğin şey için internete bağlanır. Bu web sitesinden indirilen sürüm GitHub'a güncelleme olup olmadığını sorar ve indirir; GitHub her indirmenin gösterdiğini görür: IP adresini ve uygulama sürümünü. Qobuz veya TIDAL'da oturum açarsan uygulama yalnızca o hizmetle konuşur ve oturum bilgilerin cihazında kalır. Ekolayzerde kulaklık profillerini açtığınızda uygulama, kataloglarını bu siteden en fazla ayda bir indirir; siteyi barındıran Vercel IP adresinizi görür. App Store sürümleri yalnızca bunun için internete bağlanır.",
+  "privacy.network": "Uygulama yalnızca senin ondan istediğin şey için internete bağlanır. Bu web sitesinden indirilen sürüm GitHub'a güncelleme olup olmadığını sorar ve indirir; GitHub her indirmenin gösterdiğini görür: IP adresini ve uygulama sürümünü. Qobuz veya TIDAL'da oturum açarsan uygulama yalnızca o hizmetle konuşur ve oturum bilgilerin cihazında kalır. Ekolayzerde kulaklık profillerini açtığınızda uygulama, kataloglarını bu siteden en fazla ayda bir indirir; siteyi barındıran Vercel IP adresinizi görür. Şarkı sözlerini internette aramayı açarsanız uygulama, kendi sözleri olmayan bir parçanın sözlerini LRCLIB’den (lrclib.net) ister; LRCLIB parçanın adını, sanatçısını, albümünü ve süresini ve IP adresinizi alır. App Store sürümleri yalnızca bu ikisi için internete bağlanır.",
   "privacy.site": "Bu web sitesi çerez ayarlamaz ve analiz çalıştırmaz. Tarayıcın seçtiğin dili hatırlar ve bu bilgi tarayıcından asla çıkmaz. Her web barındırıcısı gibi Vercel de standart sunucu günlükleri tutar.",
   "privacy.open": "BitSpring açık kaynaklıdır, bu yüzden bunların hepsini herkes kodundan kontrol edebilir.",
   "privacy.contact": "Sorun mu var?",
   "privacy.contact_link": "GitHub'da sor",
-  "privacy.updated": "Son güncelleme: 12 Kasım 2026."
+  "privacy.updated": "Son güncelleme: 13 Kasım 2026."
 }

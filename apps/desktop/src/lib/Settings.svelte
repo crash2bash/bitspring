@@ -3,6 +3,7 @@
   import { checkUpdates, updates } from "./updates.svelte";
   import { api, isAndroid, isIOS, type RemoteStatus } from "./api";
   import { look, LOOKS } from "./look.svelte";
+  import { lyricsPrefs } from "./lyricsPrefs.svelte";
   import { liquidPill } from "./liquid";
 
   let open = $state(false);
@@ -62,6 +63,13 @@
             </button>
           {/each}
         </div>
+      </div>
+      <div class="field upd">
+        <label class="toggle">
+          <input type="checkbox" checked={lyricsPrefs.online} onchange={(e) => (lyricsPrefs.online = e.currentTarget.checked)} />
+          <span>{t("lyrics.setting")}</span>
+        </label>
+        <p class="note">{t("lyrics.settingHelp")}</p>
       </div>
       {#if hasRemote && remote}
         <div class="field upd remote">

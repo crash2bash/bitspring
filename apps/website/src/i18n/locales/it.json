@@ -100,10 +100,10 @@
   "privacy.title": "Privacy",
   "privacy.lead": "BitSpring non raccoglie nulla su di te. Non ci sono account, analisi, pubblicità né tracciamento.",
   "privacy.device": "La tua musica, le playlist, i preset dell’equalizzatore e le impostazioni restano sul tuo dispositivo. L’app non ne carica nessuno.",
-  "privacy.network": "L’app si connette a internet solo per ciò che le chiedi. La versione scaricata da questo sito chiede a GitHub se c’è un aggiornamento e lo scarica; GitHub vede ciò che mostra qualsiasi download, il tuo indirizzo IP e la versione dell’app. Se accedi a Qobuz o TIDAL, l’app parla solo con quel servizio, e il tuo accesso resta sul tuo dispositivo. Quando apri i profili delle cuffie nell’equalizzatore, l’app scarica il loro catalogo da questo sito, al massimo una volta al mese; Vercel, che lo ospita, vede il tuo indirizzo IP. È l’unico motivo per cui le versioni dell’App Store si connettono a internet.",
+  "privacy.network": "L’app si connette a internet solo per ciò che le chiedi. La versione scaricata da questo sito chiede a GitHub se c’è un aggiornamento e lo scarica; GitHub vede ciò che mostra qualsiasi download, il tuo indirizzo IP e la versione dell’app. Se accedi a Qobuz o TIDAL, l’app parla solo con quel servizio, e il tuo accesso resta sul tuo dispositivo. Quando apri i profili delle cuffie nell’equalizzatore, l’app scarica il loro catalogo da questo sito, al massimo una volta al mese; Vercel, che lo ospita, vede il tuo indirizzo IP. Se attivi la ricerca dei testi online, l’app chiede a LRCLIB (lrclib.net) il testo di un brano che non ne ha uno suo; LRCLIB riceve titolo, artista, album e durata del brano, e il tuo indirizzo IP. Sono gli unici due motivi per cui le versioni dell’App Store si connettono a internet.",
   "privacy.site": "Questo sito non imposta cookie e non usa strumenti di analisi. Il tuo browser ricorda la lingua che hai scelto, e questa non lo lascia mai. Come ogni host web, Vercel conserva i log standard del server.",
   "privacy.open": "BitSpring è open source, quindi chiunque può verificare tutto questo nel suo codice.",
   "privacy.contact": "Domande?",
   "privacy.contact_link": "Chiedi su GitHub",
-  "privacy.updated": "Ultimo aggiornamento: 12 novembre 2026."
+  "privacy.updated": "Ultimo aggiornamento: 13 novembre 2026."
 }

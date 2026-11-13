@@ -10,6 +10,7 @@ pub mod dsp;
 pub mod error;
 pub mod fpu;
 pub mod library;
+pub mod lyrics;
 pub mod lossless;
 pub mod net;
 pub mod output;

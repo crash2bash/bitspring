@@ -100,10 +100,10 @@
   "privacy.title": "Privacidade",
   "privacy.lead": "O BitSpring não coleta nada sobre você. Não há conta, análises, publicidade nem rastreamento.",
   "privacy.device": "Suas músicas, playlists, predefinições do equalizador e configurações ficam no seu dispositivo. O app não envia nenhuma delas.",
-  "privacy.network": "O app só se conecta à internet para o que você pede. A versão deste site pergunta ao GitHub se há uma atualização e a baixa; o GitHub vê o que qualquer download mostra, seu endereço IP e a versão do app. Se você entrar no Qobuz ou no TIDAL, o app fala apenas com esse serviço, e seu login fica no seu dispositivo. Quando você abre os perfis de fones no equalizador, o app baixa o catálogo deles deste site, no máximo uma vez por mês; a Vercel, que hospeda o site, vê seu endereço IP. É a única vez que as versões da App Store se conectam à internet.",
+  "privacy.network": "O app só se conecta à internet para o que você pede. A versão deste site pergunta ao GitHub se há uma atualização e a baixa; o GitHub vê o que qualquer download mostra, seu endereço IP e a versão do app. Se você entrar no Qobuz ou no TIDAL, o app fala apenas com esse serviço, e seu login fica no seu dispositivo. Quando você abre os perfis de fones no equalizador, o app baixa o catálogo deles deste site, no máximo uma vez por mês; a Vercel, que hospeda o site, vê seu endereço IP. Se você ativar a busca de letras online, o app pede ao LRCLIB (lrclib.net) a letra de uma faixa que não tem a sua; o LRCLIB recebe o título, o artista, o álbum e a duração da faixa, e seu endereço IP. São as únicas vezes que as versões da App Store se conectam à internet.",
   "privacy.site": "Este site não define cookies nem executa análises. Seu navegador lembra o idioma que você escolheu, e isso nunca sai dele. Como qualquer host da web, a Vercel mantém logs de servidor padrão.",
   "privacy.open": "O BitSpring é de código aberto, então qualquer pessoa pode conferir tudo isso no código.",
   "privacy.contact": "Dúvidas?",
   "privacy.contact_link": "Pergunte no GitHub",
-  "privacy.updated": "Última atualização em 12 de novembro de 2026."
+  "privacy.updated": "Última atualização em 13 de novembro de 2026."
 }
