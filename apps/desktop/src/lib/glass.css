@@ -397,8 +397,12 @@ html[data-look="glass"] .has-liquid-pill > :not(.liquid-pill) {
   position: relative;
   z-index: 1;
 }
-/* the pill is the selection now: the old per-button backgrounds step aside */
+/* The pill is the selection now: the old per-button backgrounds step aside. `button.sel` and
+   not just `.sel`: the rows' own `.seg button.sel` rules weigh the same as `.has-liquid-pill >
+   .sel` and come later, so they won, and the chosen button lit up at once under the pill still
+   on its way there (a second pill waiting at the end of the move). */
 html[data-look="glass"] .has-liquid-pill > .sel,
+html[data-look="glass"] .has-liquid-pill > button.sel,
 html[data-look="glass"] .app > header .tabs button.sel,
 html[data-look="glass"] .app > .tabbar button.sel svg {
   background: transparent;
