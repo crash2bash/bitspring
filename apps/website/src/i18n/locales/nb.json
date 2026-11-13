@@ -100,10 +100,10 @@
   "privacy.title": "Personvern",
   "privacy.lead": "BitSpring samler ikke inn noe om deg. Det finnes ingen konto, ingen analyse, ingen reklame og ingen sporing.",
   "privacy.device": "Musikken din, spillelistene dine, equalizer-forhåndsinnstillingene dine og innstillingene dine blir på enheten din. Appen laster ikke opp noe av det.",
-  "privacy.network": "Appen går bare på nett for det du ber den om. Versjonen fra dette nettstedet spør GitHub om det finnes en oppdatering og laster den ned; GitHub ser det enhver nedlasting viser, IP-adressen din og appversjonen. Hvis du logger inn på Qobuz eller TIDAL, snakker appen bare med den tjenesten, og påloggingen din blir på enheten din. Når du åpner hodetelefonprofilene i equalizeren, henter appen katalogen fra dette nettstedet, høyst én gang i måneden; Vercel, som er vert for det, ser IP-adressen din. Det er det eneste App Store-versjonene går på nett for.",
+  "privacy.network": "Appen går bare på nett for det du ber den om. Versjonen fra dette nettstedet spør GitHub om det finnes en oppdatering og laster den ned; GitHub ser det enhver nedlasting viser, IP-adressen din og appversjonen. Hvis du logger inn på Qobuz eller TIDAL, snakker appen bare med den tjenesten, og påloggingen din blir på enheten din. Når du åpner hodetelefonprofilene i equalizeren, henter appen katalogen fra dette nettstedet, høyst én gang i måneden; Vercel, som er vert for det, ser IP-adressen din. Hvis du slår på søk etter sangtekster på nettet, ber appen LRCLIB (lrclib.net) om teksten til et spor som ikke har sin egen; LRCLIB får sporets tittel, artist, album og lengde og IP-adressen din. Det er de eneste tingene App Store-versjonene går på nett for.",
   "privacy.site": "Dette nettstedet setter ingen informasjonskapsler og kjører ingen analyse. Nettleseren din husker språket du valgte, og det forlater den aldri. Som enhver nettvert lagrer Vercel vanlige serverlogger.",
   "privacy.open": "BitSpring er åpen kildekode, så alle kan sjekke alt dette i koden.",
   "privacy.contact": "Spørsmål?",
   "privacy.contact_link": "Spør på GitHub",
-  "privacy.updated": "Sist oppdatert 12. november 2026."
+  "privacy.updated": "Sist oppdatert 13. november 2026."
 }

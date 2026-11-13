@@ -3,7 +3,7 @@
 // Device and preset names are generic on purpose: these screens end up in screenshots, and
 // BitSpring works with any DAC and any headphones.
 import { isIOS } from "./api";
-import type { Album, Device, DeviceEq, DspSettings, EqPreset, EqState, LibTrack, NowPlaying, Signal, Status, StoredPreset } from "./api";
+import type { Album, Device, DeviceEq, DspSettings, EqPreset, EqState, LibTrack, Lyrics, NowPlaying, Signal, Status, StoredPreset } from "./api";
 
 // ---- library ----------------------------------------------------------------------------------
 /** The engine's name for untagged music (api.ts UNKNOWN_ARTIST; not imported: api.ts imports this file). */
@@ -251,6 +251,20 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return undefined as T;
     case "now_playing":
       return mockNow as T;
+    case "lyrics": {
+      // Made-up words, timed every few seconds: one track has timed lyrics, one plain, the
+      // DSD one only "online".
+      await new Promise((r) => setTimeout(r, 400));
+      const path = String(args.path);
+      const verses = [
+        "Morning light along the river", "Every window holds a song", "I keep walking where it takes me", "Never knowing for how long", "",
+        "Turn the dial and let it carry", "Over rooftops, over stone", "All the voices in the wire", "Say you're never quite alone", "",
+        "Hold the note until it settles", "Let the silence have its say", "When the last chord finds the morning", "We'll be miles and miles away",
+      ];
+      if (path.endsWith(".dsf") && !args.online) return null as T;
+      if (path.includes("Freddie")) return { lines: verses.map((text) => ({ time: null, text })), synced: false, source: "embedded" } satisfies Lyrics as T;
+      return { lines: verses.map((text, i) => ({ time: 8 + i * 4.5, text })), synced: true, source: path.endsWith(".dsf") ? "online" : "sidecar" } satisfies Lyrics as T;
+    }
     case "import_files":
       return args.paths as T;
     case "status": {

@@ -192,6 +192,20 @@ export interface NowPlaying {
   rev: number;
 }
 
+/** A line of a song's lyrics; `time` (seconds) is null for lyrics not timed to the music. */
+export interface LyricsLine {
+  time: number | null;
+  /** Empty: an instrumental break. */
+  text: string;
+}
+
+export interface Lyrics {
+  lines: LyricsLine[];
+  synced: boolean;
+  /** An .lrc file beside the track, the file's tags, or LRCLIB. */
+  source: "sidecar" | "embedded" | "online";
+}
+
 export interface Status {
   active: boolean;
   position: number;
@@ -489,6 +503,9 @@ export const api = {
     call<NowPlaying>("play_file", { path, deviceUid, exclusive, startAt, dop, index, paused }),
   setQueue: (paths: string[], index: number | null, rev: number) => call<void>("set_queue", { paths, index, rev }),
   nowPlaying: () => call<NowPlaying | null>("now_playing"),
+  /** The track's own lyrics, else (with `online`) LRCLIB's; null when there are none. */
+  lyrics: (now: Pick<NowPlaying, "path" | "title" | "artist" | "album" | "duration">, online: boolean) =>
+    call<Lyrics | null>("lyrics", { path: now.path, title: now.title, artist: now.artist, album: now.album, duration: now.duration, online }),
   importFiles: (paths: string[]) => call<string[]>("import_files", { paths }),
   setDsp: (s: DspSettings) => call<DspResult>("set_dsp", { ...s }),
   eqState: () => call<EqState>("eq_state"),

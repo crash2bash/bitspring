@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { trackSafeArea } from "$lib/safeArea";
-  import { api, isNetworkUid, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus, type RemoteCommand } from "$lib/api";
+  import { api, clock, isNetworkUid, inTauri, isMac, isIOS, isAndroid, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus, type RemoteCommand } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
   import { labels, labelOf, remember } from "$lib/labels.svelte";
@@ -10,6 +10,7 @@
   import Streaming from "$lib/Streaming.svelte";
   import DevicePicker from "$lib/DevicePicker.svelte";
   import Display from "$lib/Display.svelte";
+  import LyricsView from "$lib/Lyrics.svelte";
   import Enhancers from "$lib/Enhancers.svelte";
   import Equalizer from "$lib/Equalizer.svelte";
   import UpdateNotice from "$lib/UpdateNotice.svelte";
@@ -69,6 +70,10 @@
   let sweepKey = $state(0);
   let advancing = false;
   let screen = $state<"player" | "library" | "queue" | "streaming" | "eq">(load("screen", "player"));
+  /** The lyrics take the stage on the player screen (kept on from track to track). */
+  let lyricsOn = $state<boolean>(load("lyrics", false));
+  $effect(() => save("lyrics", lyricsOn));
+  let showLyrics = $derived(lyricsOn && !!now && !testing);
   /** Qobuz/TIDAL: null until known; `available` is false in App Store builds. */
   let streaming = $state<StreamingStatus | null>(null);
   async function refreshStreaming() {
@@ -370,6 +375,9 @@
       api.seek(Math.min(status.position + 10, status.duration));
     } else if (e.key === "ArrowLeft" && status.active) {
       api.seek(Math.max(status.position - 10, 0));
+    } else if (e.key.toLowerCase() === "l" && !e.metaKey && !e.ctrlKey && !e.altKey && now && !testing) {
+      lyricsOn = !lyricsOn;
+      screen = "player";
     }
   }
 
@@ -507,7 +515,7 @@
   </aside>
 
   {#if screen === "player" || screen === "queue"}
-  <main class="panel" class:phone-hidden={screen === "queue"}>
+  <main class="panel" class:phone-hidden={screen === "queue"} class:with-lyrics={showLyrics}>
     <div class="np">
       {#if now && !testing}
         <button class="cover" onclick={() => goToLibrary("album")} title={t("np.openAlbum")}>
@@ -545,6 +553,14 @@
       </div>
     </div>
 
+    {#if showLyrics && now}
+      <LyricsView {now} {status} onseek={(s) => api.seek(s)} />
+      <!-- phones: the readout makes way for the words; where the track is stays in view -->
+      <div class="lyr-time num" style={`--p: ${status.duration ? (status.position / status.duration) * 100 : 0}%`} aria-hidden="true">
+        <span>{clock(status.position)}</span><i></i><span>{clock(status.duration)}</span>
+      </div>
+    {/if}
+
     <Display {now} {status} {testing} error={error ?? (status.error && errorText(status.error))} {deviceName} {sweepKey} onseek={(s) => api.seek(s)} />
 
     <!-- transport keys keep their tape direction in right-to-left languages -->
@@ -561,6 +577,18 @@
       </button>
       <button class="key" onclick={next} aria-label={t("common.next")} disabled={testing || index >= queue.length - 1}>
         <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true"><path d="M16 4v14M4 4l10 7-10 7z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+      </button>
+      <button
+        class="key lyr-key"
+        class:on={showLyrics}
+        onclick={() => (lyricsOn = !lyricsOn)}
+        aria-pressed={showLyrics}
+        aria-label={t(showLyrics ? "lyrics.hide" : "lyrics.show")}
+        title={`${t(showLyrics ? "lyrics.hide" : "lyrics.show")} (L)`}
+        disabled={!now || testing}
+      >
+        <!-- a speech bubble with a quotation mark: the words of the song -->
+        <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true"><path d="M4 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-7.5L6 20v-3.5H4A1.5 1.5 0 0 1 2.5 15V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="M8 9.2h2.2v2.1c0 1-.5 1.7-1.6 2M12.4 9.2h2.2v2.1c0 1-.5 1.7-1.6 2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
       </button>
     </div>
   </main>
@@ -1058,11 +1086,18 @@
   }
 
   /* hardware keys */
+  /* prev / play / next in the middle; the lyrics key beside them doesn't move the middle */
   .keys {
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto) minmax(0, 1fr);
     align-items: center;
     gap: 18px;
+  }
+  .keys > :first-child {
+    grid-column: 2;
+  }
+  .keys > .lyr-key {
+    justify-self: start;
   }
   .key {
     width: 52px;
@@ -1339,6 +1374,188 @@
     }
     h1 {
       font-size: var(--t-xl);
+    }
+  }
+  /* --- lyrics --- */
+  .keys .key.lyr-key {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    margin-inline-start: 6px;
+    color: var(--mist);
+  }
+  .keys .key.lyr-key:hover:not(:disabled) {
+    color: var(--porcelain);
+  }
+  .keys .key.lyr-key.on {
+    color: var(--ink);
+    background: var(--porcelain);
+  }
+  .keys .key.lyr-key:disabled {
+    color: var(--slate-500);
+  }
+  /* Most windows: the title in brief, the words, where the track is, the keys. The readout
+     makes way (the header still names the output and its rate). */
+  .panel.with-lyrics {
+    gap: 16px;
+  }
+  @media (max-width: 1199px), (max-height: 599px) {
+    .panel.with-lyrics > :global(.display) {
+      display: none;
+    }
+  }
+  .panel.with-lyrics > :global(.lyrics) {
+    flex: 1 1 0;
+    min-height: 160px;
+  }
+  .panel.with-lyrics .np {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 16px;
+    align-items: center;
+  }
+  .panel.with-lyrics .np-info {
+    padding-bottom: 0;
+  }
+  .panel.with-lyrics h1 {
+    font-size: var(--t-xl);
+  }
+  .panel.with-lyrics .artist {
+    font-size: var(--t-md);
+  }
+  .panel.with-lyrics .cover-initial {
+    font-size: 2rem;
+  }
+  .lyr-time {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--t-xs);
+    color: var(--mist);
+  }
+  .lyr-time i {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--porcelain) var(--p), rgba(232, 237, 234, 0.16) var(--p));
+  }
+  :global([dir="rtl"]) .lyr-time i {
+    background: linear-gradient(270deg, var(--porcelain) var(--p), rgba(232, 237, 234, 0.16) var(--p));
+  }
+  /* A wide window: the player as it is on the left, the words beside it. */
+  @media (min-width: 1200px) and (min-height: 600px) {
+    .panel.with-lyrics {
+      display: grid;
+      grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+      column-gap: clamp(32px, 4vw, 72px);
+      row-gap: 22px;
+      overflow: hidden;
+    }
+    .panel.with-lyrics > :global(*) {
+      margin: 0;
+      max-width: none;
+    }
+    .panel.with-lyrics > .lyr-time {
+      display: none;
+    }
+    .panel.with-lyrics .np {
+      grid-column: 1;
+      grid-row: 2;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 24px;
+      align-items: end;
+    }
+    .panel.with-lyrics h1 {
+      font-size: var(--t-2xl);
+    }
+    .panel.with-lyrics .artist {
+      font-size: var(--t-lg);
+    }
+    .panel.with-lyrics .cover-initial {
+      font-size: 4rem;
+    }
+    .panel.with-lyrics > :global(.display) {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    .panel.with-lyrics > .keys {
+      grid-column: 1;
+      grid-row: 4;
+    }
+    .panel.with-lyrics > :global(.lyrics) {
+      grid-column: 2;
+      grid-row: 1 / -1;
+      max-width: 760px;
+      min-height: 0;
+    }
+  }
+  /* phones: the cover and title in a row, then the words */
+  @media (max-width: 700px), (max-height: 500px) {
+    .panel.with-lyrics {
+      overflow: hidden;
+      gap: 14px;
+    }
+    .panel.with-lyrics .np {
+      grid-template-columns: 56px minmax(0, 1fr);
+      justify-items: start;
+      text-align: start;
+      gap: 14px;
+    }
+    .panel.with-lyrics .np .cover {
+      width: 56px;
+      border-radius: var(--r-sm);
+    }
+    .panel.with-lyrics .link {
+      text-align: start;
+    }
+    .panel.with-lyrics h1 {
+      font-size: var(--t-lg);
+      margin-bottom: 0;
+    }
+    .panel.with-lyrics .artist {
+      font-size: var(--t-sm);
+    }
+    .panel.with-lyrics .album {
+      display: none;
+    }
+    .panel.with-lyrics > :global(.lyrics) {
+      order: 1;
+      min-height: 0;
+    }
+    .panel.with-lyrics > .lyr-time {
+      order: 2;
+    }
+    .panel.with-lyrics > .keys {
+      order: 3;
+    }
+  }
+  /* a phone held sideways: title and keys on the left, the words on the right */
+  @media (max-height: 500px) and (min-width: 600px) {
+    .panel.with-lyrics {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+      grid-template-rows: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+      column-gap: 28px;
+    }
+    .panel.with-lyrics > :global(*) {
+      margin: 0;
+    }
+    .panel.with-lyrics .np {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .panel.with-lyrics > .lyr-time {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    .panel.with-lyrics > .keys {
+      grid-column: 1;
+      grid-row: 4;
+    }
+    .panel.with-lyrics > :global(.lyrics) {
+      grid-column: 2;
+      grid-row: 1 / -1;
     }
   }
 </style>

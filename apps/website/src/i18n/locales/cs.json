@@ -100,10 +100,10 @@
   "privacy.title": "Soukromí",
   "privacy.lead": "BitSpring o vás nic neshromažďuje. Nemá účet, analytiku, reklamu ani sledování.",
   "privacy.device": "Vaše hudba, playlisty, předvolby ekvalizéru a nastavení zůstávají ve vašem zařízení. Aplikace nic z toho nenahrává.",
-  "privacy.network": "Aplikace se připojuje k internetu jen kvůli tomu, o co ji požádáte. Verze z tohoto webu se na GitHubu ptá, zda existuje aktualizace, a stáhne ji; GitHub vidí to, co ukazuje každé stahování, vaši IP adresu a verzi aplikace. Pokud se přihlásíte ke Qobuz nebo TIDAL, aplikace komunikuje jen s touto službou a vaše přihlášení zůstává ve vašem zařízení. Když v ekvalizéru otevřete profily sluchátek, aplikace stáhne jejich katalog z tohoto webu, nejvýše jednou za měsíc; Vercel, který web hostuje, vidí vaši IP adresu. Jen kvůli tomu se verze z App Store připojují k internetu.",
+  "privacy.network": "Aplikace se připojuje k internetu jen kvůli tomu, o co ji požádáte. Verze z tohoto webu se na GitHubu ptá, zda existuje aktualizace, a stáhne ji; GitHub vidí to, co ukazuje každé stahování, vaši IP adresu a verzi aplikace. Pokud se přihlásíte ke Qobuz nebo TIDAL, aplikace komunikuje jen s touto službou a vaše přihlášení zůstává ve vašem zařízení. Když v ekvalizéru otevřete profily sluchátek, aplikace stáhne jejich katalog z tohoto webu, nejvýše jednou za měsíc; Vercel, který web hostuje, vidí vaši IP adresu. Když zapnete hledání textů online, aplikace požádá LRCLIB (lrclib.net) o text skladby, která vlastní nemá; LRCLIB dostane název, interpreta, album a délku skladby a vaši IP adresu. Jen kvůli těmto dvěma věcem se verze z App Store připojují k internetu.",
   "privacy.site": "Tento web nenastavuje žádné cookies a nepoužívá žádnou analytiku. Váš prohlížeč si pamatuje jazyk, který jste zvolili, a ten ho nikdy neopustí. Jako každý webhosting si Vercel uchovává běžné serverové logy.",
   "privacy.open": "BitSpring je open source, takže vše výše může kdokoli ověřit v jeho kódu.",
   "privacy.contact": "Máte otázky?",
   "privacy.contact_link": "Zeptejte se na GitHubu",
-  "privacy.updated": "Naposledy aktualizováno 12. listopadu 2026."
+  "privacy.updated": "Naposledy aktualizováno 13. listopadu 2026."
 }

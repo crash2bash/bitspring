@@ -100,10 +100,10 @@
   "privacy.title": "Privacidad",
   "privacy.lead": "BitSpring no recopila nada sobre ti. No hay cuenta, ni analíticas, ni publicidad, ni seguimiento.",
   "privacy.device": "Tu música, tus listas de reproducción, tus ajustes preestablecidos del ecualizador y tus ajustes se quedan en tu dispositivo. La app no sube ninguno de ellos.",
-  "privacy.network": "La app solo se conecta a internet para lo que tú le pides. La versión de este sitio web consulta a GitHub si hay una actualización y la descarga; GitHub ve lo que muestra cualquier descarga, tu dirección IP y la versión de la app. Si inicias sesión en Qobuz o TIDAL, la app habla únicamente con ese servicio, y tu inicio de sesión se queda en tu dispositivo. Cuando abres los perfiles de auriculares en el ecualizador, la app descarga su catálogo desde este sitio, como mucho una vez al mes; Vercel, que lo aloja, ve tu dirección IP. Es lo único para lo que las versiones de la App Store se conectan a internet.",
+  "privacy.network": "La app solo se conecta a internet para lo que tú le pides. La versión de este sitio web consulta a GitHub si hay una actualización y la descarga; GitHub ve lo que muestra cualquier descarga, tu dirección IP y la versión de la app. Si inicias sesión en Qobuz o TIDAL, la app habla únicamente con ese servicio, y tu inicio de sesión se queda en tu dispositivo. Cuando abres los perfiles de auriculares en el ecualizador, la app descarga su catálogo desde este sitio, como mucho una vez al mes; Vercel, que lo aloja, ve tu dirección IP. Si activas la búsqueda de letras en línea, la app pide a LRCLIB (lrclib.net) la letra de una pista que no tiene la suya; LRCLIB recibe el título, el artista, el álbum y la duración de la pista, y tu dirección IP. Son las únicas dos cosas para las que las versiones de la App Store se conectan a internet.",
   "privacy.site": "Este sitio web no usa cookies ni analíticas. Tu navegador recuerda el idioma que elegiste, y eso nunca sale de él. Como cualquier servidor web, Vercel guarda registros estándar del servidor.",
   "privacy.open": "BitSpring es de código abierto, así que cualquiera puede comprobar todo esto en su código.",
   "privacy.contact": "¿Preguntas?",
   "privacy.contact_link": "Pregunta en GitHub",
-  "privacy.updated": "Última actualización: 12 de noviembre de 2026."
+  "privacy.updated": "Última actualización: 13 de noviembre de 2026."
 }
