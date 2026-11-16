@@ -10,5 +10,10 @@ fn main() {
     if matches!(os.as_str(), "ios" | "android" | "macos" | "windows") {
         println!("cargo:rustc-cfg=system_media");
     }
+    // Android 15+ devices with 16 KB memory pages load only libraries aligned to them, and
+    // Google Play rejects apps targeting Android 15+ without it. NDK 27 still links at 4 KB.
+    if os == "android" {
+        println!("cargo:rustc-cdylib-link-arg=-Wl,-z,max-page-size=16384");
+    }
     tauri_build::build()
 }
