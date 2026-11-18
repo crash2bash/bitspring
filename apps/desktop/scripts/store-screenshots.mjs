@@ -2,8 +2,8 @@
 // `node scripts/store-screenshots.mjs windows` (Microsoft Store) or `… mac` (Mac App Store).
 // They look like the store builds: ?store drops the streaming tab and the updater, and the user
 // agent picks the platform (Windows: no title-bar padding; Mac: room for the traffic lights).
-// Windows keeps the classic look its listing was made with, Mac shows glass (glass is now the
-// default everywhere, so the look is set explicitly). Covers are the mock's own abstract art
+// Both show glass, the default look (set explicitly, so a look picked in this browser profile
+// doesn't leak in). Covers are the mock's own abstract art
 // (src/lib/mockCovers.ts).
 //   windows: 1440×810 at 2× = 2880×1620 (16:9) into store/screenshots/windows
 //   mac:     1440×900 at 2× = 2880×1800 (16:10) into store/screenshots/mac
@@ -11,7 +11,7 @@ import { chromium } from "playwright-core";
 
 const PLATFORMS = {
   windows: {
-    look: "classic",
+    look: "glass",
     size: { width: 1440, height: 810 },
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
   },

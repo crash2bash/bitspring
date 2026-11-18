@@ -118,8 +118,10 @@ To try it: press "Add files" and pick some music files (FLAC, WAV, MP3 or AAC), 
 ### Images
 
 - Screenshots: `screenshots/windows`, four 2880 × 1620 PNGs (the Store takes 1366 × 768 and up,
-  1 to 10). Upload in name order. Retake after UI changes: `npm run dev`, then
-  `node scripts/store-screenshots.mjs windows`. They come from the mock backend dressed as the
+  1 to 10), in the glass look. The listing shows them as Bit-perfect playing, EQ, Processing,
+  Library. Retake after UI changes: `npm run dev`, then `node scripts/store-screenshots.mjs windows`.
+  To swap them in a later submission, each screenshot tile has its own file input: replacing in
+  place keeps the caption. They come from the mock backend dressed as the
   Store build (no streaming tab), and the album covers are our own abstract art
   (src/lib/mockCovers.ts): never use real album covers, they are other people's artwork.
 - Store logos (optional, for Windows 11 Store pages): 1:1 box art 1080 × 1080 and 2:3 poster
