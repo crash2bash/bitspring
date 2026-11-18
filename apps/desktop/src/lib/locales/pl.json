@@ -284,7 +284,7 @@
   "remote.newHelp": "Telefony ze starym adresem stracą dostęp.",
   "remote.failed": "Pilot się nie uruchomił: {error}",
   "remote.title": "Pilot BitSpring",
-  "remote.denied": "Ten adres już nie działa. Otwórz ten, który pokazuje BitSpring na komputerze: Ustawienia → Pilot w telefonie.",
+  "remote.denied": "Ten adres już nie działa. Otwórz ten, który pokazuje BitSpring na komputerze: ikona telefonu u góry okna.",
   "remote.offline": "Brak połączenia z BitSpring. Czy działa na komputerze i czy ten telefon jest w tej samej sieci?",
   "remote.position": "Pozycja w utworze",
 
@@ -694,5 +694,12 @@
   "settings.network": "Sieć",
   "settings.about": "O aplikacji",
   "remote.scan": "Zeskanuj kod aparatem telefonu albo otwórz adres w jego przeglądarce.",
-  "remote.where": "Od teraz kod i adres znajdziesz pod ikoną telefonu u góry okna."
+  "remote.where": "Od teraz kod i adres znajdziesz pod ikoną telefonu u góry okna.",
+  "enh.tagsOffer": "Zmierzone, jeszcze nie w tagach plików: {count}",
+  "enh.tagsWrite": "Zapisz w tagach",
+  "enh.tagsConfirm": "Zapisać zmierzoną głośność w tagach plików (ReplayGain)? Plików: {count}. Wtedy inne odtwarzacze wyrównają je tak samo. Dźwięk pozostaje dokładnie taki sam, a pliki, które mają już takie tagi, zachowują je.",
+  "enh.tagsYes": "Zapisz",
+  "enh.tagsRunning": "Zapisywanie tagów: {done} z {total}",
+  "enh.tagsDone": "Zapisano w tagach: {written}.",
+  "enh.tagsFailed": "Nie udało się zapisać: {failed}."
 }

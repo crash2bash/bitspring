@@ -81,6 +81,8 @@
   "faq.a6": "Oui. Dans Égaliseur → Importer → Profils de casques, saisissez le modèle de votre casque et BitSpring ajoute la correction AutoEQ correspondante. Les préréglages Equalizer APO et EasyEffects s’importent aussi. Tant que l’égaliseur est activé, l’indicateur affiche « Traitement » ; désactivez-le et la lecture redevient bit-perfect.",
   "faq.q7": "BitSpring peut-il lire sur Sonos, WiiM ou Chromecast ?",
   "faq.a7": "Oui. Les streamers UPnP/DLNA et les appareils Google Cast de votre réseau apparaissent dans la liste des sorties, sous « Lecteurs réseau ». BitSpring leur envoie la musique en FLAC sans perte, et les albums sont lus sans blanc entre les pistes.",
+  "faq.q8": "Peut-il égaliser le volume entre les morceaux ?",
+  "faq.a8": "Oui. Dans Améliorations → Normalisation du volume, choisissez Par morceau ou Par album. Chaque morceau reçoit un gain fixe vers −18 LUFS, et rien n’est compressé. BitSpring lit les tags ReplayGain, mesure lui-même les fichiers qui n’en ont pas et peut écrire le résultat dans leurs tags. C’est désactivé par défaut : tant que vous ne l’activez pas, le son n’est pas modifié.",
   "download.title": "Gratuit",
   "download.lede": "Pas d’abonnement, pas de pub, pas de compte. Juste un lecteur.",
   "platforms.macos": "macOS",

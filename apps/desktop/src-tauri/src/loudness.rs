@@ -5,6 +5,9 @@
 //! A file's own ReplayGain tags come first. Without them the track is measured: at once when
 //! it is opened and fits in memory whole (most do), else by the background analysis. A result
 //! counts as long as the file has the same size and modification time.
+//!
+//! What we measured can be written into the files' own tags (ReplayGain), when the user asks:
+//! other players then level them the same way, and the figures travel with the files.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -28,6 +31,26 @@ struct Entry {
     mtime: u64,
     #[serde(flatten)]
     measured: Measured,
+    /// The file's tags hold loudness values: ours, written from this entry, or the ones
+    /// another scanner left (those stay). Nothing more to write.
+    #[serde(default)]
+    tagged: bool,
+}
+
+/// Writing what was measured into the files' tags, and how far it has got.
+#[derive(Default)]
+struct Tagging {
+    running: AtomicBool,
+    stop: AtomicBool,
+    done: AtomicUsize,
+    total: AtomicUsize,
+    /// The last run of this session: files written, and files that couldn't be.
+    written: AtomicUsize,
+    failed: AtomicUsize,
+    finished: AtomicBool,
+    /// Files that couldn't be written this session (read-only, on a disc that went away):
+    /// not offered again until the next start.
+    refused: Mutex<HashSet<String>>,
 }
 
 /// The files waiting to be analysed (in order, and as a set to tell quickly what is queued).
@@ -50,6 +73,7 @@ struct Work {
     /// Files that couldn't be decoded this session: not tried again, and left out of their
     /// album's figure (they can't be played either).
     failed: Mutex<HashSet<String>>,
+    tagging: Tagging,
 }
 
 #[derive(Default, Clone)]
@@ -96,8 +120,105 @@ impl Loudness {
 
     fn store(&self, path: &str, measured: Measured) {
         let Some((size, mtime)) = stamp(path) else { return };
-        self.cache.lock().unwrap().insert(path.to_string(), Entry { rules: loudness::RULES_VERSION, size, mtime, measured });
+        self.cache.lock().unwrap().insert(path.to_string(), Entry { rules: loudness::RULES_VERSION, size, mtime, measured, tagged: false });
         self.dirty.store(true, Ordering::Release);
+    }
+
+    /// The file's tags now hold loudness values. (Writing them changed the file's size and
+    /// time: what we measured still stands, under the new ones.)
+    fn mark_tagged(&self, path: &str, measured: Measured) {
+        let Some((size, mtime)) = stamp(path) else { return };
+        self.cache.lock().unwrap().insert(path.to_string(), Entry { rules: loudness::RULES_VERSION, size, mtime, measured, tagged: true });
+        self.dirty.store(true, Ordering::Release);
+    }
+
+    /// Among `paths`: the files whose tags could take what we measured — measured by us
+    /// with something to level, of a kind we write such tags into, and not holding them yet.
+    fn untagged<'a>(&self, paths: impl Iterator<Item = &'a str>) -> Vec<String> {
+        let cache = self.cache.lock().unwrap();
+        let refused = self.work.tagging.refused.lock().unwrap();
+        paths
+            .filter(|p| cache.get(*p).is_some_and(|e| e.rules == loudness::RULES_VERSION && !e.tagged && e.measured.lufs.is_some()))
+            .filter(|p| hifi_engine::tags::can_write_gain(p) && !refused.contains(*p))
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// The album `path` belongs to as one programme, measuring here whichever of its tracks
+    /// nobody has yet. None: all of it silent.
+    fn album_measured(&self, lib: &Library, path: &str, own: &Measured) -> Option<loudness::Loudness> {
+        let mut all = Vec::new();
+        for p in lib.album_of(path) {
+            if p == path {
+                all.push(own.clone());
+            } else if let Some(m) = self.cached(&p) {
+                all.push(m);
+            } else if !self.failed(&p) {
+                // (A track that can't be decoded is left out, as it is when playing.)
+                match loudness::analyze(Path::new(&p)) {
+                    Ok(m) => {
+                        self.store(&p, m.clone());
+                        all.push(m);
+                    }
+                    Err(_) => {
+                        self.work.failed.lock().unwrap().insert(p);
+                    }
+                }
+            }
+        }
+        loudness::album(all.iter())
+    }
+
+    /// Write what we measured into the tags of the library files that lack it (see
+    /// [`Self::untagged`]), one file after another, until done or told to stop. Each write is
+    /// the tag editor's: into a copy that replaces the file only once its audio is found
+    /// identical and the values read back.
+    fn write_tags(&self, lib: &Library) {
+        let t = &self.work.tagging;
+        let paths = self.untagged(lib.tracks().iter().map(|t| t.path.as_str()));
+        t.total.store(paths.len(), Ordering::Release);
+        t.done.store(0, Ordering::Release);
+        t.written.store(0, Ordering::Release);
+        t.failed.store(0, Ordering::Release);
+        for path in paths {
+            if t.stop.load(Ordering::Acquire) {
+                break;
+            }
+            self.write_tags_of(lib, &path);
+            t.done.fetch_add(1, Ordering::AcqRel);
+        }
+        t.finished.store(true, Ordering::Release);
+    }
+
+    fn write_tags_of(&self, lib: &Library, path: &str) {
+        let t = &self.work.tagging;
+        // Changed since it was measured: it will be measured again, and offered then.
+        let Some(own) = self.cached(path) else { return };
+        let Some(track) = own.loudness() else { return };
+        let refuse = || {
+            t.failed.fetch_add(1, Ordering::AcqRel);
+            t.refused.lock().unwrap().insert(path.to_string());
+        };
+        match hifi_engine::tags::read_gain(Path::new(path)) {
+            // Another scanner's values: they stay, and they are what the track plays by.
+            Ok(tags) if !tags.is_empty() => return self.mark_tagged(path, own),
+            Ok(_) => {}
+            Err(_) => return refuse(),
+        }
+        let album = self.album_measured(lib, path, &own).unwrap_or(track);
+        let gain = hifi_engine::tags::GainTags {
+            track_db: track.gain_db,
+            track_peak: own.peak,
+            album_db: album.gain_db,
+            album_peak: album.peak.unwrap_or(own.peak),
+        };
+        match hifi_engine::tags::write_gain(Path::new(path), &gain) {
+            Ok(()) => {
+                self.mark_tagged(path, own);
+                t.written.fetch_add(1, Ordering::AcqRel);
+            }
+            Err(_) => refuse(),
+        }
     }
 
     fn failed(&self, path: &str) -> bool {
@@ -165,8 +286,16 @@ impl Loudness {
             }
         }
         let known = self.known(lib, path, track, own.as_ref(), album);
-        if dsp.level.mode == LevelMode::Album && known.album.is_none() {
-            // The rest of the album, so its tracks agree on one gain from the next one on.
+        // What goes by the album's figure and doesn't have it yet: its gain in album mode, its
+        // peak when only headroom is on (so the tracks of an album are lowered alike, and
+        // keep their relative levels).
+        let album_missing = match dsp.level.mode {
+            LevelMode::Album => known.album.is_none(),
+            LevelMode::Off => known.album.and_then(|a| a.peak).is_none(),
+            LevelMode::Track => false,
+        };
+        if album_missing {
+            // The rest of the album, so its tracks agree from the next one on.
             self.want(lib.album_of(path));
         }
         track.set_level(loudness::resolve(&dsp.level, dsp.reshapes(), &known));
@@ -263,6 +392,12 @@ pub struct LoudnessStatus {
     tracks: usize,
     /// (done, total) while the background analysis runs.
     running: Option<(usize, usize)>,
+    /// Measured files whose tags could take the result and don't hold it yet.
+    untagged: usize,
+    /// (done, total) while the tags are being written.
+    tagging: Option<(usize, usize)>,
+    /// (written, failed) of the last run of this session, once it has finished.
+    tagged: Option<(usize, usize)>,
 }
 
 #[tauri::command(async)]
@@ -275,7 +410,41 @@ pub fn loudness_status(l: State<'_, Loudness>, lib: State<'_, Library>) -> Loudn
         tracks.iter().filter(|t| cache.get(&t.path).is_some_and(|e| e.rules == loudness::RULES_VERSION) || failed.contains(&t.path)).count()
     };
     let (done, total) = (l.work.done.load(Ordering::Acquire), l.work.total.load(Ordering::Acquire));
-    LoudnessStatus { analysed, tracks: tracks.len(), running: (total > 0).then_some((done.min(total), total)) }
+    let t = &l.work.tagging;
+    let load = |n: &AtomicUsize| n.load(Ordering::Acquire);
+    LoudnessStatus {
+        analysed,
+        tracks: tracks.len(),
+        running: (total > 0).then_some((done.min(total), total)),
+        untagged: l.untagged(tracks.iter().map(|t| t.path.as_str())).len(),
+        tagging: t.running.load(Ordering::Acquire).then(|| (load(&t.done), load(&t.total))),
+        tagged: (t.finished.load(Ordering::Acquire) && !t.running.load(Ordering::Acquire)).then(|| (load(&t.written), load(&t.failed))),
+    }
+}
+
+/// Write what was measured into the tags of the library's files, in the background — or
+/// stop doing so (the file being written is finished first).
+#[tauri::command(async)]
+pub fn loudness_write_tags(app: AppHandle, l: State<'_, Loudness>, start: bool) {
+    let t = &l.work.tagging;
+    if !start {
+        return t.stop.store(true, Ordering::Release);
+    }
+    if t.running.swap(true, Ordering::AcqRel) {
+        return; // one run at a time
+    }
+    t.stop.store(false, Ordering::Release);
+    t.finished.store(false, Ordering::Release);
+    let me = l.inner().clone();
+    std::thread::spawn(move || {
+        let lib = app.state::<Library>();
+        me.write_tags(&lib);
+        me.work.tagging.running.store(false, Ordering::Release);
+        // The files changed on disc: the library takes their new size and time.
+        if me.work.tagging.written.load(Ordering::Acquire) > 0 {
+            lib.rescan_now(app.clone());
+        }
+    });
 }
 
 /// Measure every library track not measured yet, in the background — or stop doing so.
@@ -445,6 +614,111 @@ mod tests {
         l.level(&lib, &settings(LevelMode::Track), &silent, &s, WAIT);
         let level = s.level().unwrap();
         assert_eq!((level.basis, level.gain), (Basis::Track, 1.0));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Headroom alone (levelling off, processing on) goes by the album's highest peak: the
+    /// quiet track of an album with a loud one is lowered by as much as the loud one, once
+    /// the album is measured — which opening any of its tracks sets off.
+    #[test]
+    fn headroom_alone_lowers_an_album_by_its_highest_peak() {
+        let d = tmpdir("headroom");
+        let (loud, quiet) = (tone(&d, "01 loud.flac", 1.0), tone(&d, "02 quiet.flac", 0.25));
+        let tracks = [&loud, &quiet].map(|p| hifi_engine::library::scan_file(Path::new(p)).unwrap().0).to_vec();
+        let (l, lib) = (Loudness::default(), Library::of(tracks));
+        let dsp = DspSettings {
+            level: LevelSettings { mode: LevelMode::Off, headroom: true },
+            upsample: hifi_engine::dsp::Upsample::UpTo(192_000.0),
+            ..Default::default()
+        };
+        // The quiet track first: on its own it has room to spare, and nothing is known of
+        // the rest of the album yet.
+        let first = open(&quiet);
+        l.level(&lib, &dsp, &quiet, &first, WAIT);
+        assert_eq!(first.level(), None);
+        let deadline = std::time::Instant::now() + WAIT;
+        while l.cached(&loud).is_none() {
+            assert!(std::time::Instant::now() < deadline, "the rest of the album was never measured");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // From then on both are lowered by the loud one's overshoot.
+        let (a, b) = (open(&loud), open(&quiet));
+        l.level(&lib, &dsp, &loud, &a, WAIT);
+        l.level(&lib, &dsp, &quiet, &b, WAIT);
+        let (la, lb) = (a.level().expect("the loud track is lowered"), b.level().expect("and the quiet one with it"));
+        assert_eq!((la.basis, lb.basis), (Basis::Peak, Basis::Peak));
+        assert_eq!(la.gain, lb.gain);
+        assert!(la.gain < 1.0 && la.gain > 0.9, "{}", la.gain);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// "Write to tags": what we measured goes into the files, with the album's figure (its
+    /// other tracks measured on the way), the files that already carry values keep them, and
+    /// from then on the tags are what the tracks play by.
+    #[test]
+    fn measured_loudness_is_written_into_the_tags() {
+        use hifi_engine::tags;
+        let d = tmpdir("tags");
+        let (loud, quiet, theirs) = (tone(&d, "01 loud.flac", 0.5), tone(&d, "02 quiet.flac", 0.125), tone(&d, "03 theirs.flac", 0.25));
+        let foreign = tags::GainTags { track_db: -1.0, track_peak: 0.25, album_db: -2.0, album_peak: 0.5 };
+        tags::write_gain(Path::new(&theirs), &foreign).unwrap();
+        let tracks = [&loud, &quiet, &theirs].map(|p| hifi_engine::library::scan_file(Path::new(p)).unwrap().0).to_vec();
+        let (l, lib) = (Loudness::default(), Library::of(tracks));
+        let all = [loud.as_str(), quiet.as_str(), theirs.as_str()];
+        // Nothing measured: nothing to write.
+        assert!(l.untagged(all.into_iter()).is_empty());
+        l.write_tags(&lib);
+        assert!(tags::read_gain(Path::new(&loud)).unwrap().is_empty());
+        // Two of the three measured (the third as the background analysis would).
+        l.level(&lib, &settings(LevelMode::Track), &loud, &open(&loud), WAIT);
+        l.store(&theirs, loudness::analyze(Path::new(&theirs)).unwrap());
+        assert_eq!(l.untagged(all.into_iter()).len(), 2);
+        let audio = std::fs::read(&loud).unwrap().len();
+        l.write_tags(&lib);
+        let t = &l.work.tagging;
+        assert_eq!((t.written.load(Ordering::Acquire), t.failed.load(Ordering::Acquire), t.done.load(Ordering::Acquire)), (1, 0, 2));
+        // The loud track: its own gain (−6.02 LUFS to −18) and the album's, over all three.
+        let got = tags::read_gain(Path::new(&loud)).unwrap();
+        assert!((got.track_db.unwrap() + 11.98).abs() < 0.15, "{got:?}");
+        assert!((got.track_peak.unwrap() - 0.5).abs() < 0.01, "{got:?}");
+        assert!(got.album_db.unwrap() > got.track_db.unwrap() && got.album_db.unwrap() < -6.0, "{got:?}");
+        assert!((got.album_peak.unwrap() - 0.5).abs() < 0.01, "{got:?}");
+        assert!(std::fs::read(&loud).unwrap().len() > audio, "the tags are in the file");
+        // The quiet one was measured for the album's sake, and is offered next.
+        assert!(tags::read_gain(Path::new(&quiet)).unwrap().is_empty());
+        assert_eq!(l.untagged(all.into_iter()), vec![quiet.clone()]);
+        // Another scanner's values are untouched.
+        let kept = tags::read_gain(Path::new(&theirs)).unwrap();
+        assert_eq!((kept.track_db, kept.album_db), (Some(-1.0), Some(-2.0)));
+        // What we measured still counts for the rewritten file, and playing goes by its tags
+        // — the same gain as before.
+        assert!(l.cached(&loud).is_some());
+        let again = open(&loud);
+        l.level(&lib, &settings(LevelMode::Track), &loud, &again, Duration::ZERO);
+        assert!((again.level().unwrap().gain_db() + 11.98).abs() < 0.15);
+        // A second run takes the rest; then there is nothing left to offer.
+        l.write_tags(&lib);
+        assert_eq!(t.written.load(Ordering::Acquire), 1);
+        assert!(!tags::read_gain(Path::new(&quiet)).unwrap().is_empty());
+        assert!(l.untagged(all.into_iter()).is_empty());
+        // A file that can't be replaced is counted, left alone, and not offered again.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let locked = tmpdir("tags-locked");
+            let p = tone(&locked, "01 locked.flac", 0.5);
+            let lib = Library::of(vec![hifi_engine::library::scan_file(Path::new(&p)).unwrap().0]);
+            let l = Loudness::default();
+            l.store(&p, loudness::analyze(Path::new(&p)).unwrap());
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+            l.write_tags(&lib);
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let t = &l.work.tagging;
+            assert_eq!((t.written.load(Ordering::Acquire), t.failed.load(Ordering::Acquire)), (0, 1));
+            assert!(tags::read_gain(Path::new(&p)).unwrap().is_empty());
+            assert!(l.untagged([p.as_str()].into_iter()).is_empty());
+            let _ = std::fs::remove_dir_all(&locked);
+        }
         let _ = std::fs::remove_dir_all(&d);
     }
 

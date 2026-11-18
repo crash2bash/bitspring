@@ -279,7 +279,7 @@
   "remote.newHelp": "Los móviles con la dirección anterior pierden el acceso.",
   "remote.failed": "El mando no se ha iniciado: {error}",
   "remote.title": "Mando de BitSpring",
-  "remote.denied": "Esta dirección ya no funciona. Abre la que muestra BitSpring en el ordenador: Ajustes → Mando en el móvil.",
+  "remote.denied": "Esta dirección ya no funciona. Abre la que muestra BitSpring en el ordenador: el icono de teléfono, en la parte superior de la ventana.",
   "remote.offline": "Sin conexión con BitSpring. ¿Está abierto en el ordenador y este móvil está en la misma red?",
   "remote.position": "Posición en la pista",
 
@@ -689,5 +689,12 @@
   "settings.network": "Red",
   "settings.about": "Acerca de",
   "remote.scan": "Escanea el código con la cámara del teléfono o abre la dirección en su navegador.",
-  "remote.where": "A partir de ahora, el código y la dirección están bajo el icono de teléfono, en la parte superior de la ventana."
+  "remote.where": "A partir de ahora, el código y la dirección están bajo el icono de teléfono, en la parte superior de la ventana.",
+  "enh.tagsOffer": "Medidos, aún no en las etiquetas de los archivos: {count}",
+  "enh.tagsWrite": "Escribir en las etiquetas",
+  "enh.tagsConfirm": "¿Escribir el volumen medido en las etiquetas de los archivos (ReplayGain)? Archivos: {count}. Así otros reproductores los nivelarán igual. El audio queda exactamente igual, y los archivos que ya tienen esas etiquetas las conservan.",
+  "enh.tagsYes": "Escribir",
+  "enh.tagsRunning": "Escribiendo etiquetas: {done} de {total}",
+  "enh.tagsDone": "Escritos en las etiquetas: {written}.",
+  "enh.tagsFailed": "No se pudo escribir: {failed}."
 }

@@ -284,7 +284,7 @@
   "remote.newHelp": "Telefony se starou adresou ztratí přístup.",
   "remote.failed": "Ovladač se nespustil: {error}",
   "remote.title": "Ovladač BitSpring",
-  "remote.denied": "Tato adresa už nefunguje. Otevřete tu, kterou ukazuje BitSpring v počítači: Nastavení → Ovladač v telefonu.",
+  "remote.denied": "Tato adresa už nefunguje. Otevřete tu, kterou ukazuje BitSpring v počítači: ikona telefonu nahoře v okně.",
   "remote.offline": "Žádné spojení s BitSpring. Běží v počítači a je tento telefon ve stejné síti?",
   "remote.position": "Pozice ve skladbě",
 
@@ -694,5 +694,12 @@
   "settings.network": "Síť",
   "settings.about": "O aplikaci",
   "remote.scan": "Naskenujte kód fotoaparátem telefonu nebo otevřete adresu v jeho prohlížeči.",
-  "remote.where": "Od teď najdete kód i adresu pod ikonou telefonu nahoře v okně."
+  "remote.where": "Od teď najdete kód i adresu pod ikonou telefonu nahoře v okně.",
+  "enh.tagsOffer": "Změřeno, zatím ne v tazích souborů: {count}",
+  "enh.tagsWrite": "Zapsat do tagů",
+  "enh.tagsConfirm": "Zapsat změřenou hlasitost do tagů souborů (ReplayGain)? Souborů: {count}. Jiné přehrávače je pak vyrovnají stejně. Zvuk zůstává přesně stejný a soubory, které takové tagy už mají, si je ponechají.",
+  "enh.tagsYes": "Zapsat",
+  "enh.tagsRunning": "Zapisuji tagy: {done} z {total}",
+  "enh.tagsDone": "Zapsáno do tagů: {written}.",
+  "enh.tagsFailed": "Nepodařilo se zapsat: {failed}."
 }

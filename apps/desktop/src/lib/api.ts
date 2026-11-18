@@ -191,6 +191,12 @@ export interface LoudnessStatus {
   tracks: number;
   /** [done, total] while the background analysis runs. */
   running: [number, number] | null;
+  /** Measured files whose tags could take the result and don't hold it yet. */
+  untagged: number;
+  /** [done, total] while the tags are being written. */
+  tagging: [number, number] | null;
+  /** [written, failed] of the last run of this session, once it has finished. */
+  tagged: [number, number] | null;
 }
 
 export interface DspResult {
@@ -567,6 +573,8 @@ export const api = {
   loudnessStatus: () => call<LoudnessStatus>("loudness_status"),
   /** Measure every library track not measured yet, in the background (false: stop). */
   loudnessAnalyze: (start: boolean) => call<void>("loudness_analyze", { start }),
+  /** Write what was measured into the files' tags (ReplayGain), in the background (false: stop). */
+  loudnessWriteTags: (start: boolean) => call<void>("loudness_write_tags", { start }),
   meter: () => call<[number, number]>("meter"),
   playlists: () => call<PlaylistSummary[]>("playlists_list"),
   playlist: (id: string) => call<PlaylistDetail>("playlist_get", { id }),

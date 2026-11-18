@@ -279,7 +279,7 @@
   "remote.newHelp": "Les téléphones qui ont l’ancienne adresse perdent l’accès.",
   "remote.failed": "La télécommande n’a pas démarré : {error}",
   "remote.title": "Télécommande BitSpring",
-  "remote.denied": "Cette adresse ne fonctionne plus. Ouvrez celle affichée dans BitSpring sur l’ordinateur : Réglages → Télécommande sur téléphone.",
+  "remote.denied": "Cette adresse ne fonctionne plus. Ouvrez celle affichée dans BitSpring sur l’ordinateur : l’icône de téléphone en haut de la fenêtre.",
   "remote.offline": "Pas de connexion à BitSpring. Est-il ouvert sur l’ordinateur, et ce téléphone est-il sur le même réseau ?",
   "remote.position": "Position dans le morceau",
 
@@ -689,5 +689,12 @@
   "settings.network": "Réseau",
   "settings.about": "À propos",
   "remote.scan": "Scannez le code avec l’appareil photo du téléphone ou ouvrez l’adresse dans son navigateur.",
-  "remote.where": "Le code et l’adresse se trouvent désormais sous l’icône de téléphone en haut de la fenêtre."
+  "remote.where": "Le code et l’adresse se trouvent désormais sous l’icône de téléphone en haut de la fenêtre.",
+  "enh.tagsOffer": "Mesurés, pas encore dans les tags des fichiers : {count}",
+  "enh.tagsWrite": "Écrire dans les tags",
+  "enh.tagsConfirm": "Écrire le volume mesuré dans les tags des fichiers (ReplayGain) ? Fichiers : {count}. Les autres lecteurs les égaliseront alors de la même façon. L’audio reste exactement le même, et les fichiers qui ont déjà de tels tags les gardent.",
+  "enh.tagsYes": "Écrire",
+  "enh.tagsRunning": "Écriture des tags : {done} sur {total}",
+  "enh.tagsDone": "Écrits dans les tags : {written}.",
+  "enh.tagsFailed": "Écriture impossible : {failed}."
 }

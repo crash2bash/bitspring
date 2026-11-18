@@ -81,6 +81,8 @@
   "faq.a6": "Sì. In Equalizzatore → Importa → Profili delle cuffie, scrivi il modello delle tue cuffie e BitSpring aggiunge la correzione AutoEQ corrispondente. Si possono importare anche i preset di Equalizer APO ed EasyEffects. Finché l’equalizzatore è attivo, l’indicatore mostra «Elaborazione»; spegnilo e la riproduzione torna bit-perfect.",
   "faq.q7": "Può riprodurre su Sonos, WiiM o Chromecast?",
   "faq.a7": "Sì. Gli streamer UPnP/DLNA e i dispositivi Google Cast nella tua rete compaiono nell’elenco delle uscite, sotto «Lettori di rete». BitSpring invia loro la musica in FLAC senza perdita, e gli album suonano senza pause.",
+  "faq.q8": "Può uniformare il volume tra i brani?",
+  "faq.a8": "Sì. In Miglioramenti → Livellamento del volume, scegli Per brano o Per album. Ogni brano riceve un guadagno fisso verso −18 LUFS, e nulla viene compresso. BitSpring legge i tag ReplayGain, misura da sé i file che non li hanno e può scrivere il risultato nei loro tag. È disattivato per impostazione predefinita: finché non lo attivi, il suono non viene toccato.",
   "download.title": "Gratis",
   "download.lede": "Nessun abbonamento, nessuna pubblicità, nessun account. Solo un lettore.",
   "platforms.macos": "macOS",

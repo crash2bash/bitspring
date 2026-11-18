@@ -81,6 +81,8 @@
   "faq.a6": "可以。在“均衡器”→“导入”→“耳机配置文件”中输入耳机型号，BitSpring 就会为它添加 AutoEQ 的校正。Equalizer APO 和 EasyEffects 预设也能导入。均衡器开启时，指示器显示“处理中”；关闭后，播放就恢复为比特完美。",
   "faq.q7": "能在 Sonos、WiiM 或 Chromecast 上播放吗？",
   "faq.a7": "可以。你所在网络中的 UPnP/DLNA 播放设备和 Google Cast 设备会出现在输出列表的“网络播放器”下。BitSpring 以无损 FLAC 格式向它们发送音乐，专辑播放无间隙。",
+  "faq.q8": "它能让不同歌曲的音量一致吗？",
+  "faq.a8": "可以。在“音效增强”→“音量均衡”中选择“按歌曲”或“按专辑”。每首歌只应用一个朝向 −18 LUFS 的固定增益，不做任何压缩。BitSpring 会读取 ReplayGain 标签，自行测量没有标签的文件，并可把结果写入文件标签。此功能默认关闭：在你开启之前，声音不会被改动。",
   "download.title": "免费",
   "download.lede": "无订阅，无广告，无需账号。只是一个播放器。",
   "platforms.macos": "macOS",

@@ -81,6 +81,8 @@
   "faq.a6": "Ano. V části Ekvalizér → Importovat → Profily sluchátek zadejte model svých sluchátek a BitSpring pro ně přidá korekci z AutoEQ. Importovat lze i předvolby z Equalizer APO a EasyEffects. Když je ekvalizér zapnutý, indikátor ukazuje „Zpracování“; vypněte ho a přehrávání je opět bit-perfect.",
   "faq.q7": "Umí hrát na Sonos, WiiM nebo Chromecast?",
   "faq.a7": "Ano. Streamery UPnP/DLNA a zařízení Google Cast ve vaší síti se objeví v seznamu výstupů v části Síťové přehrávače. BitSpring jim posílá hudbu jako bezeztrátový FLAC a alba hrají bez mezer.",
+  "faq.q8": "Umí vyrovnat hlasitost mezi skladbami?",
+  "faq.a8": "Ano. V části Vylepšení → Vyrovnání hlasitosti zvolte Podle skladby nebo Podle alba. Každá skladba dostane jedno pevné zesílení směrem k −18 LUFS a nic se nekomprimuje. BitSpring čte tagy ReplayGain, soubory bez nich změří sám a výsledek umí zapsat do jejich tagů. Ve výchozím stavu je to vypnuté: dokud to nezapnete, zvuk zůstává nedotčený.",
   "download.title": "Zdarma",
   "download.lede": "Žádné předplatné, žádné reklamy, žádný účet. Prostě přehrávač.",
   "platforms.macos": "macOS",

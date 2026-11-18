@@ -81,6 +81,8 @@
   "faq.a6": "Da. În Egalizator → Importă → Profiluri de căști, scrie modelul căștilor tale, iar BitSpring adaugă corecția AutoEQ pentru ele. Se pot importa și presetări Equalizer APO și EasyEffects. Cât timp egalizatorul e pornit, indicatorul arată „Procesare”; oprește-l și redarea este din nou bit-perfect.",
   "faq.q7": "Poate reda pe Sonos, WiiM sau Chromecast?",
   "faq.a7": "Da. Streamerele UPnP/DLNA și dispozitivele Google Cast din rețeaua ta apar în lista de ieșiri, la Playere de rețea. BitSpring le trimite muzica în FLAC fără pierderi, iar albumele se redau fără pauze.",
+  "faq.q8": "Poate egaliza volumul între piese?",
+  "faq.a8": "Da. În Îmbunătățiri → Nivelarea volumului, alege Pe piesă sau Pe album. Fiecare piesă primește o singură amplificare fixă spre −18 LUFS și nimic nu este comprimat. BitSpring citește etichetele ReplayGain, măsoară singur fișierele care nu le au și poate scrie rezultatul în etichetele lor. Este dezactivat implicit: până nu îl activezi, sunetul rămâne neatins.",
   "download.title": "Gratuit",
   "download.lede": "Fără abonament, fără reclame, fără cont. Doar un player.",
   "platforms.macos": "macOS",

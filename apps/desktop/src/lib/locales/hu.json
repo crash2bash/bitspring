@@ -279,7 +279,7 @@
   "remote.newHelp": "A régi címet ismerő telefonok elveszítik a hozzáférést.",
   "remote.failed": "A távirányító nem indult el: {error}",
   "remote.title": "BitSpring-távirányító",
-  "remote.denied": "Ez a cím már nem működik. Nyisd meg azt, amelyet a BitSpring mutat a számítógépen: Beállítások → Távirányító a telefonon.",
+  "remote.denied": "Ez a cím már nem működik. Nyisd meg azt, amelyet a BitSpring mutat a számítógépen: telefon ikon az ablak tetején.",
   "remote.offline": "Nincs kapcsolat a BitSpringgel. Fut a számítógépen, és ez a telefon ugyanazon a hálózaton van?",
   "remote.position": "Hely a számban",
 
@@ -689,5 +689,12 @@
   "settings.network": "Hálózat",
   "settings.about": "Névjegy",
   "remote.scan": "Olvasd be a kódot a telefon kamerájával, vagy nyisd meg a címet a böngészőjében.",
-  "remote.where": "Ezentúl a kód és a cím az ablak tetején, a telefon ikon alatt található."
+  "remote.where": "Ezentúl a kód és a cím az ablak tetején, a telefon ikon alatt található.",
+  "enh.tagsOffer": "Megmérve, de még nincs a fájlok címkéiben: {count}",
+  "enh.tagsWrite": "Írás a címkékbe",
+  "enh.tagsConfirm": "Beírjuk a mért hangerőt a fájlok címkéibe (ReplayGain)? Fájlok: {count}. Így más lejátszók is ugyanúgy egyenlítik ki őket. A hang pontosan ugyanaz marad, és azok a fájlok, amelyekben már vannak ilyen címkék, megtartják őket.",
+  "enh.tagsYes": "Írás",
+  "enh.tagsRunning": "Címkék írása: {done}/{total}",
+  "enh.tagsDone": "Címkékbe írva: {written}.",
+  "enh.tagsFailed": "Nem sikerült írni: {failed}."
 }

@@ -279,7 +279,7 @@
   "remote.newHelp": "Celulares com o endereço antigo perdem o acesso.",
   "remote.failed": "O controle não iniciou: {error}",
   "remote.title": "Controle do BitSpring",
-  "remote.denied": "Este endereço não funciona mais. Abra o que aparece no BitSpring no computador: Configurações → Controle pelo celular.",
+  "remote.denied": "Este endereço não funciona mais. Abra o que aparece no BitSpring no computador: o ícone de telefone, no alto da janela.",
   "remote.offline": "Sem conexão com o BitSpring. Ele está aberto no computador e este celular está na mesma rede?",
   "remote.position": "Posição na faixa",
 
@@ -689,5 +689,12 @@
   "settings.network": "Rede",
   "settings.about": "Sobre",
   "remote.scan": "Aponte a câmera do telefone para o código ou abra o endereço no navegador dele.",
-  "remote.where": "A partir de agora, o código e o endereço ficam no ícone de telefone, no alto da janela."
+  "remote.where": "A partir de agora, o código e o endereço ficam no ícone de telefone, no alto da janela.",
+  "enh.tagsOffer": "Medidos, ainda fora das tags dos arquivos: {count}",
+  "enh.tagsWrite": "Gravar nas tags",
+  "enh.tagsConfirm": "Gravar o volume medido nas tags dos arquivos (ReplayGain)? Arquivos: {count}. Assim outros players vão nivelá-los do mesmo jeito. O áudio continua exatamente igual, e os arquivos que já têm essas tags ficam com elas.",
+  "enh.tagsYes": "Gravar",
+  "enh.tagsRunning": "Gravando tags: {done} de {total}",
+  "enh.tagsDone": "Gravados nas tags: {written}.",
+  "enh.tagsFailed": "Não foi possível gravar: {failed}."
 }

@@ -279,7 +279,7 @@
   "remote.newHelp": "이전 주소를 가진 기기는 접근할 수 없게 됩니다.",
   "remote.failed": "리모컨을 시작하지 못했습니다: {error}",
   "remote.title": "BitSpring 리모컨",
-  "remote.denied": "이 주소는 더 이상 작동하지 않습니다. 컴퓨터의 BitSpring에 표시된 주소를 여세요: 설정 → 휴대폰 리모컨.",
+  "remote.denied": "이 주소는 더 이상 작동하지 않습니다. 컴퓨터의 BitSpring에 표시된 주소를 여세요: 창 위쪽의 휴대폰 아이콘.",
   "remote.offline": "BitSpring에 연결할 수 없습니다. 컴퓨터에서 실행 중이고 이 휴대폰이 같은 네트워크에 있나요?",
   "remote.position": "트랙 내 위치",
 
@@ -689,5 +689,12 @@
   "settings.network": "네트워크",
   "settings.about": "정보",
   "remote.scan": "휴대폰 카메라로 코드를 스캔하거나 휴대폰 브라우저에서 주소를 여세요.",
-  "remote.where": "앞으로 코드와 주소는 창 위쪽의 휴대폰 아이콘에 있습니다."
+  "remote.where": "앞으로 코드와 주소는 창 위쪽의 휴대폰 아이콘에 있습니다.",
+  "enh.tagsOffer": "측정됨, 아직 파일 태그에 없음: {count}",
+  "enh.tagsWrite": "태그에 기록",
+  "enh.tagsConfirm": "측정한 음량을 파일 태그(ReplayGain)에 기록할까요? 파일: {count}. 그러면 다른 플레이어도 같은 방식으로 음량을 맞춥니다. 오디오는 그대로 유지되며, 이미 이런 태그가 있는 파일은 그대로 둡니다.",
+  "enh.tagsYes": "기록",
+  "enh.tagsRunning": "태그 기록 중: {done}/{total}",
+  "enh.tagsDone": "태그에 기록됨: {written}.",
+  "enh.tagsFailed": "기록하지 못함: {failed}."
 }

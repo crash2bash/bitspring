@@ -72,6 +72,9 @@ let dsp: DspSettings = { upsampleKhz: null, crossfeed: null, convolution: null, 
 /** The pretend library analysis: when it started (null: not running) and how much was done before. */
 let measuring: number | null = null;
 let measured = 0;
+let tagging: number | null = null;
+let tagged = 0;
+let tagLast: [number, number] | null = null;
 /** What volume levelling does to the pretend track. */
 function mockLevel(): Pick<Signal, "levelDb" | "levelBasis" | "levelLimited"> {
   if (dsp.level) return { levelDb: dsp.level === "album" ? -6.1 : -7.3, levelBasis: dsp.level, levelLimited: false };
@@ -240,10 +243,23 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         if (now >= total) {
           measured = total;
           measuring = null;
-        } else return { analysed: now, tracks: total, running: [now - measured, total - measured] } as T;
+        } else return { analysed: now, tracks: total, running: [now - measured, total - measured], untagged: 0, tagging: null, tagged: null } as T;
       }
-      return { analysed: measured, tracks: total, running: null } as T;
+      // Writing the tags takes about 6 s; three files pretend to be read-only.
+      if (tagging !== null) {
+        const todo = measured - tagged;
+        const now = Math.min(todo, Math.floor(((performance.now() - tagging) / 6000) * todo));
+        if (now < todo) return { analysed: measured, tracks: total, running: null, untagged: todo, tagging: [now, todo], tagged: null } as T;
+        tagLast = [Math.max(0, todo - 3), Math.min(3, todo)];
+        tagged = measured;
+        tagging = null;
+      }
+      return { analysed: measured, tracks: total, running: null, untagged: measured - tagged, tagging: null, tagged: tagLast } as T;
     }
+    case "loudness_write_tags":
+      if (args.start) tagging = performance.now();
+      else tagging = null;
+      return undefined as T;
     case "loudness_analyze":
       if (args.start) measuring = performance.now();
       else if (measuring !== null) {

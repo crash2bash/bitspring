@@ -279,7 +279,7 @@
   "remote.newHelp": "Telefoons met het oude adres verliezen de toegang.",
   "remote.failed": "De afstandsbediening is niet gestart: {error}",
   "remote.title": "BitSpring-afstandsbediening",
-  "remote.denied": "Dit adres werkt niet meer. Open het adres dat BitSpring op de computer toont: Instellingen → Afstandsbediening op telefoon.",
+  "remote.denied": "Dit adres werkt niet meer. Open het adres dat BitSpring op de computer toont: het telefoonpictogram boven in het venster.",
   "remote.offline": "Geen verbinding met BitSpring. Draait het op de computer, en zit deze telefoon op hetzelfde netwerk?",
   "remote.position": "Positie in het nummer",
 
@@ -689,5 +689,12 @@
   "settings.network": "Netwerk",
   "settings.about": "Over",
   "remote.scan": "Scan de code met de camera van de telefoon of open het adres in de browser ervan.",
-  "remote.where": "Vanaf nu vind je de code en het adres onder het telefoonpictogram boven in het venster."
+  "remote.where": "Vanaf nu vind je de code en het adres onder het telefoonpictogram boven in het venster.",
+  "enh.tagsOffer": "Gemeten, nog niet in de tags van de bestanden: {count}",
+  "enh.tagsWrite": "In de tags schrijven",
+  "enh.tagsConfirm": "De gemeten luidheid in de tags van de bestanden schrijven (ReplayGain)? Bestanden: {count}. Andere spelers maken ze dan op dezelfde manier even luid. Het geluid blijft precies zoals het is, en bestanden die zulke tags al hebben, houden ze.",
+  "enh.tagsYes": "Schrijven",
+  "enh.tagsRunning": "Tags worden geschreven: {done} van {total}",
+  "enh.tagsDone": "In de tags geschreven: {written}.",
+  "enh.tagsFailed": "Niet geschreven: {failed}."
 }

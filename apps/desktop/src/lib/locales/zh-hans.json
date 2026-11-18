@@ -279,7 +279,7 @@
   "remote.newHelp": "使用旧地址的手机将失去访问权限。",
   "remote.failed": "遥控未能启动：{error}",
   "remote.title": "BitSpring 遥控",
-  "remote.denied": "此地址已失效。请打开电脑上 BitSpring 显示的地址：设置 → 手机遥控。",
+  "remote.denied": "此地址已失效。请打开电脑上 BitSpring 显示的地址：窗口顶部的手机图标。",
   "remote.offline": "无法连接 BitSpring。它是否在电脑上运行，这部手机是否在同一网络中？",
   "remote.position": "曲目中的位置",
 
@@ -689,5 +689,12 @@
   "settings.network": "网络",
   "settings.about": "关于",
   "remote.scan": "用手机相机扫描二维码，或在手机浏览器中打开这个地址。",
-  "remote.where": "之后，二维码和地址都在窗口顶部的手机图标下。"
+  "remote.where": "之后，二维码和地址都在窗口顶部的手机图标下。",
+  "enh.tagsOffer": "已测量但尚未写入文件标签：{count}",
+  "enh.tagsWrite": "写入标签",
+  "enh.tagsConfirm": "要把测得的响度写入文件标签（ReplayGain）吗？文件数：{count}。这样其他播放器也会按同样的方式平衡音量。音频完全不变，已有此类标签的文件保持原样。",
+  "enh.tagsYes": "写入",
+  "enh.tagsRunning": "正在写入标签：{done}/{total}",
+  "enh.tagsDone": "已写入标签：{written}。",
+  "enh.tagsFailed": "未能写入：{failed}。"
 }

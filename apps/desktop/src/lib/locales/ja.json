@@ -279,7 +279,7 @@
   "remote.newHelp": "古いアドレスを使っている端末はアクセスできなくなります。",
   "remote.failed": "リモコンを開始できませんでした：{error}",
   "remote.title": "BitSpring リモコン",
-  "remote.denied": "このアドレスは使えなくなりました。コンピュータの BitSpring に表示されているアドレスを開いてください：設定 → スマホでリモコン。",
+  "remote.denied": "このアドレスは使えなくなりました。コンピュータの BitSpring に表示されているアドレスを開いてください：ウインドウ上部のスマートフォンのアイコン。",
   "remote.offline": "BitSpring に接続できません。コンピュータで起動していて、このスマホが同じネットワークにつながっていますか？",
   "remote.position": "曲内の位置",
 
@@ -689,5 +689,12 @@
   "settings.network": "ネットワーク",
   "settings.about": "このアプリについて",
   "remote.scan": "スマートフォンのカメラでコードを読み取るか、そのブラウザでアドレスを開いてください。",
-  "remote.where": "今後、コードとアドレスはウインドウ上部のスマートフォンのアイコンから表示できます。"
+  "remote.where": "今後、コードとアドレスはウインドウ上部のスマートフォンのアイコンから表示できます。",
+  "enh.tagsOffer": "測定済みでファイルのタグに未記録：{count}",
+  "enh.tagsWrite": "タグに書き込む",
+  "enh.tagsConfirm": "測定した音量をファイルのタグ（ReplayGain）に書き込みますか？ファイル数：{count}。ほかのプレーヤーでも同じようにそろえられます。音声はまったく変わりません。すでにこのタグがあるファイルはそのままです。",
+  "enh.tagsYes": "書き込む",
+  "enh.tagsRunning": "タグを書き込み中：{done}/{total}",
+  "enh.tagsDone": "タグに書き込み済み：{written}。",
+  "enh.tagsFailed": "書き込めなかったファイル：{failed}。"
 }

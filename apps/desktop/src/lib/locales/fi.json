@@ -279,7 +279,7 @@
   "remote.newHelp": "Puhelimet, joilla on vanha osoite, menettävät pääsyn.",
   "remote.failed": "Kaukosäädin ei käynnistynyt: {error}",
   "remote.title": "BitSpring-kaukosäädin",
-  "remote.denied": "Tämä osoite ei enää toimi. Avaa osoite, jonka BitSpring näyttää tietokoneella: Asetukset → Puhelin kaukosäätimenä.",
+  "remote.denied": "Tämä osoite ei enää toimi. Avaa osoite, jonka BitSpring näyttää tietokoneella: ikkunan yläreunan puhelinkuvake.",
   "remote.offline": "Ei yhteyttä BitSpringiin. Onko se käynnissä tietokoneella, ja onko tämä puhelin samassa verkossa?",
   "remote.position": "Kohta kappaleessa",
 
@@ -689,5 +689,12 @@
   "settings.network": "Verkko",
   "settings.about": "Tietoja",
   "remote.scan": "Skannaa koodi puhelimen kameralla tai avaa osoite sen selaimessa.",
-  "remote.where": "Tästä eteenpäin koodi ja osoite löytyvät ikkunan yläreunan puhelinkuvakkeesta."
+  "remote.where": "Tästä eteenpäin koodi ja osoite löytyvät ikkunan yläreunan puhelinkuvakkeesta.",
+  "enh.tagsOffer": "Mitattu, ei vielä tiedostojen tunnisteissa: {count}",
+  "enh.tagsWrite": "Kirjoita tunnisteisiin",
+  "enh.tagsConfirm": "Kirjoitetaanko mitattu äänekkyys tiedostojen tunnisteisiin (ReplayGain)? Tiedostoja: {count}. Silloin muutkin soittimet tasaavat ne samalla tavalla. Ääni pysyy täsmälleen ennallaan, ja tiedostot, joissa tällaiset tunnisteet jo ovat, pitävät ne.",
+  "enh.tagsYes": "Kirjoita",
+  "enh.tagsRunning": "Kirjoitetaan tunnisteita: {done}/{total}",
+  "enh.tagsDone": "Kirjoitettu tunnisteisiin: {written}.",
+  "enh.tagsFailed": "Kirjoitus ei onnistunut: {failed}."
 }

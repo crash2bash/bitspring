@@ -81,6 +81,8 @@
   "faq.a6": "Tak. W sekcji Korektor → Importuj → Profile słuchawek wpisz model swoich słuchawek, a BitSpring doda dla nich korekcję z AutoEQ. Można też importować presety z Equalizer APO i EasyEffects. Gdy korektor jest włączony, wskaźnik pokazuje „Przetwarzanie”; wyłącz go, a odtwarzanie znów będzie bit-perfect.",
   "faq.q7": "Czy BitSpring gra na Sonos, WiiM lub Chromecast?",
   "faq.a7": "Tak. Streamery UPnP/DLNA i urządzenia Google Cast w Twojej sieci pojawiają się na liście wyjść w sekcji Odtwarzacze sieciowe. BitSpring wysyła do nich muzykę jako bezstratny FLAC, a albumy grają bez przerw.",
+  "faq.q8": "Czy może wyrównać głośność między utworami?",
+  "faq.a8": "Tak. W sekcji Ulepszenia → Wyrównywanie głośności wybierz Według utworu lub Według albumu. Każdy utwór dostaje jedno stałe wzmocnienie w stronę −18 LUFS i nic nie jest kompresowane. BitSpring czyta tagi ReplayGain, sam mierzy pliki, które ich nie mają, i może zapisać wynik w ich tagach. Domyślnie jest to wyłączone: dopóki tego nie włączysz, dźwięk pozostaje nietknięty.",
   "download.title": "Bezpłatnie",
   "download.lede": "Bez subskrypcji, bez reklam, bez konta. Po prostu odtwarzacz.",
   "platforms.macos": "macOS",

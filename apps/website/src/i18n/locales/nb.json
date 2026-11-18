@@ -81,6 +81,8 @@
   "faq.a6": "Ja. Under Equalizer → Importer → Hodetelefonprofiler skriver du inn modellen på hodetelefonene dine, og BitSpring legger til AutoEQ-korreksjonen for dem. Forhåndsinnstillinger fra Equalizer APO og EasyEffects kan også importeres. Mens EQ-en er på, viser indikatoren «Behandling»; slå den av, så er avspillingen bit-perfect igjen.",
   "faq.q7": "Kan den spille på Sonos, WiiM eller Chromecast?",
   "faq.a7": "Ja. UPnP/DLNA-strømmere og Google Cast-enheter på nettverket ditt vises i listen over utganger under Nettverksspillere. BitSpring sender dem musikken som tapsfri FLAC, og album spilles uten pauser.",
+  "faq.q8": "Kan den jevne ut volumet mellom spor?",
+  "faq.a8": "Ja. Under Forbedringer → Volumutjevning velger du Per spor eller Per album. Hvert spor får én fast forsterkning mot −18 LUFS, og ingenting komprimeres. BitSpring leser ReplayGain-tagger, måler selv filene som ikke har dem, og kan skrive resultatet inn i taggene deres. Det er av som standard: Til du slår det på, blir lyden ikke rørt.",
   "download.title": "Gratis",
   "download.lede": "Ingen abonnement, ingen reklame, ingen konto. Bare en spiller.",
   "platforms.macos": "macOS",

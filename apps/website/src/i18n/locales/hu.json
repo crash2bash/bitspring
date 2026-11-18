@@ -81,6 +81,8 @@
   "faq.a6": "Igen. A Hangszínszabályzó → Importálás → Fejhallgató-profilok alatt írd be a fejhallgatód típusát, és a BitSpring hozzáadja az AutoEQ rá vonatkozó korrekcióját. Az Equalizer APO és az EasyEffects előbeállításai is importálhatók. Amíg a hangszínszabályzó be van kapcsolva, a jelző „Feldolgozás” feliratot mutat; kapcsold ki, és a lejátszás újra bit-perfect.",
   "faq.q7": "Működik Sonosszal, WiiM-mel vagy Chromecasttal?",
   "faq.a7": "Igen. A hálózatodon lévő UPnP/DLNA streamerek és Google Cast-eszközök a kimenetek listájában, a Hálózati lejátszók alatt jelennek meg. A BitSpring veszteségmentes FLAC-ként küldi nekik a zenét, és az albumok szünet nélkül szólnak.",
+  "faq.q8": "Ki tudja egyenlíteni a számok közötti hangerőt?",
+  "faq.a8": "Igen. A Hangfeldolgozás → Hangerő-kiegyenlítés alatt válaszd a Számonként vagy az Albumonként lehetőséget. Minden szám egyetlen rögzített erősítést kap a −18 LUFS szint felé, és semmi sincs tömörítve. A BitSpring beolvassa a ReplayGain címkéket, maga méri meg azokat a fájlokat, amelyekben nincsenek, és az eredményt be tudja írni a címkéikbe. Alapból ki van kapcsolva: amíg be nem kapcsolod, a hanghoz nem nyúl.",
   "download.title": "Ingyenes",
   "download.lede": "Nincs előfizetés, nincs reklám, nincs fiók. Csak egy lejátszó.",
   "platforms.macos": "macOS",

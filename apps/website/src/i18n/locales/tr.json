@@ -81,6 +81,8 @@
   "faq.a6": "Evet. Ekolayzır → İçe aktar → Kulaklık profilleri bölümünde kulaklığının modelini yaz, BitSpring onun için AutoEQ düzeltmesini ekler. Equalizer APO ve EasyEffects ön ayarları da içe aktarılabilir. EQ açıkken gösterge “İşleme” gösterir; kapattığında çalma yeniden bit-perfect olur.",
   "faq.q7": "Sonos, WiiM veya Chromecast'te çalabilir mi?",
   "faq.a7": "Evet. Ağındaki UPnP/DLNA oynatıcıları ve Google Cast cihazları, çıkış listesinde Ağ oynatıcıları altında görünür. BitSpring müziği onlara kayıpsız FLAC olarak gönderir ve albümler boşluksuz çalar.",
+  "faq.q8": "Parçalar arasındaki ses düzeyini eşitleyebilir mi?",
+  "faq.a8": "Evet. İyileştirmeler → Ses düzeyi eşitleme bölümünde Parçaya göre veya Albüme göre seçeneğini seç. Her parça −18 LUFS'a doğru tek bir sabit kazanç alır ve hiçbir şey sıkıştırılmaz. BitSpring ReplayGain etiketlerini okur, bu etiketleri olmayan dosyaları kendisi ölçer ve sonucu etiketlerine yazabilir. Varsayılan olarak kapalıdır: sen açana kadar sese dokunulmaz.",
   "download.title": "Ücretsiz",
   "download.lede": "Abonelik yok, reklam yok, hesap yok. Sadece bir çalar.",
   "platforms.macos": "macOS",

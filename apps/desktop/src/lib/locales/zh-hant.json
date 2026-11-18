@@ -279,7 +279,7 @@
   "remote.newHelp": "使用舊網址的手機將失去存取權。",
   "remote.failed": "遙控未能啟動：{error}",
   "remote.title": "BitSpring 遙控",
-  "remote.denied": "此網址已失效。請開啟電腦上 BitSpring 顯示的網址：設定 → 手機遙控。",
+  "remote.denied": "此網址已失效。請開啟電腦上 BitSpring 顯示的網址：視窗頂部的手機圖示。",
   "remote.offline": "無法連線 BitSpring。它是否在電腦上執行，這支手機是否在同一網路中？",
   "remote.position": "曲目中的位置",
 
@@ -689,5 +689,12 @@
   "settings.network": "網路",
   "settings.about": "關於",
   "remote.scan": "用手機相機掃描 QR 碼，或在手機瀏覽器中打開這個位址。",
-  "remote.where": "之後，QR 碼和位址都在視窗頂部的手機圖示下。"
+  "remote.where": "之後，QR 碼和位址都在視窗頂部的手機圖示下。",
+  "enh.tagsOffer": "已測量但尚未寫入檔案標籤：{count}",
+  "enh.tagsWrite": "寫入標籤",
+  "enh.tagsConfirm": "要把測得的響度寫入檔案標籤（ReplayGain）嗎？檔案數：{count}。這樣其他播放器也會以同樣的方式平衡音量。音訊完全不變，已有此類標籤的檔案維持原樣。",
+  "enh.tagsYes": "寫入",
+  "enh.tagsRunning": "正在寫入標籤：{done}/{total}",
+  "enh.tagsDone": "已寫入標籤：{written}。",
+  "enh.tagsFailed": "未能寫入：{failed}。"
 }

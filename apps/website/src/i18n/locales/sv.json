@@ -81,6 +81,8 @@
   "faq.a6": "Ja. Under Equalizer → Importera → Hörlursprofiler skriver du in hörlurarnas modell, så lägger BitSpring till AutoEQ:s korrigering för dem. Förinställningar från Equalizer APO och EasyEffects går också att importera. Så länge EQ:n är på visar indikatorn ”Bearbetning”; stäng av den så är uppspelningen bit-perfect igen.",
   "faq.q7": "Kan den spela på Sonos, WiiM eller Chromecast?",
   "faq.a7": "Ja. UPnP/DLNA-streamers och Google Cast-enheter i ditt nätverk dyker upp i listan över utgångar, under ”Nätverksspelare”. BitSpring skickar musiken till dem som förlustfri FLAC, och album spelas utan glapp.",
+  "faq.q8": "Kan den jämna ut volymen mellan låtar?",
+  "faq.a8": "Ja. Under Förbättringar → Volymutjämning väljer du Per låt eller Per album. Varje låt får en fast förstärkning mot −18 LUFS, och ingenting komprimeras. BitSpring läser ReplayGain-taggar, mäter själv de filer som saknar dem och kan skriva resultatet till deras taggar. Det är avstängt som standard: tills du slår på det lämnas ljudet orört.",
   "download.title": "Gratis",
   "download.lede": "Ingen prenumeration, ingen reklam, inget konto. Bara en spelare.",
   "platforms.macos": "macOS",

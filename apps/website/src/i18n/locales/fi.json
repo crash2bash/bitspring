@@ -81,6 +81,8 @@
   "faq.a6": "Voit. Kirjoita kohdassa Taajuuskorjain → Tuo → Kuulokeprofiilit kuulokkeidesi malli, niin BitSpring lisää niille AutoEQ:n korjauksen. Myös Equalizer APO- ja EasyEffects-esiasetuksia voi tuoda. Kun taajuuskorjain on päällä, ilmaisin näyttää ”Käsittely”; kytke se pois, niin toisto on taas bit-perfect.",
   "faq.q7": "Toimiiko se Sonosin, WiiMin tai Chromecastin kanssa?",
   "faq.a7": "Toimii. Verkossasi olevat UPnP/DLNA-striimerit ja Google Cast -laitteet näkyvät lähtöjen luettelossa kohdassa Verkkosoittimet. BitSpring lähettää niille musiikin häviöttömänä FLACina, ja albumit soivat ilman taukoja.",
+  "faq.q8": "Voiko se tasata kappaleiden äänenvoimakkuuden?",
+  "faq.a8": "Voi. Valitse kohdassa Parannukset → Äänenvoimakkuuden tasaus joko Kappaleittain tai Albumeittain. Jokainen kappale saa yhden kiinteän vahvistuksen kohti tasoa −18 LUFS, eikä mitään kompressoida. BitSpring lukee ReplayGain-tunnisteet, mittaa itse tiedostot, joissa niitä ei ole, ja voi kirjoittaa tuloksen niiden tunnisteisiin. Oletuksena tämä on pois päältä: ääneen ei kosketa ennen kuin otat sen käyttöön.",
   "download.title": "Ilmainen",
   "download.lede": "Ei tilausta, ei mainoksia, ei tiliä. Pelkkä soitin.",
   "platforms.macos": "macOS",

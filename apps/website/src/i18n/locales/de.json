@@ -81,6 +81,8 @@
   "faq.a6": "Ja. Gib unter Equalizer → Importieren → Kopfhörerprofile das Modell deines Kopfhörers ein, und BitSpring fügt die passende AutoEQ-Korrektur hinzu. Presets von Equalizer APO und EasyEffects lassen sich ebenfalls importieren. Solange der EQ an ist, zeigt die Anzeige „Verarbeitung“; schaltest du ihn aus, ist die Wiedergabe wieder Bit-perfect.",
   "faq.q7": "Kann BitSpring auf Sonos, WiiM oder Chromecast abspielen?",
   "faq.a7": "Ja. UPnP/DLNA-Streamer und Google-Cast-Geräte in deinem Netzwerk erscheinen in der Liste der Ausgänge unter „Netzwerk-Player“. BitSpring schickt ihnen die Musik verlustfrei als FLAC, und Alben laufen ohne Lücken.",
+  "faq.q8": "Kann er die Lautstärke zwischen Titeln angleichen?",
+  "faq.a8": "Ja. Wähle unter Klangoptionen → Lautstärkeanpassung „Pro Titel“ oder „Pro Album“. Jeder Titel bekommt eine feste Verstärkung in Richtung −18 LUFS, komprimiert wird nichts. BitSpring liest ReplayGain-Tags, misst Dateien ohne solche Tags selbst und kann das Ergebnis in ihre Tags schreiben. Standardmäßig ist das aus: Bis du es einschaltest, bleibt der Klang unangetastet.",
   "download.title": "Kostenlos",
   "download.lede": "Kein Abo, keine Werbung, kein Konto. Einfach ein Player.",
   "platforms.macos": "macOS",

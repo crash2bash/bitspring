@@ -279,7 +279,7 @@
   "remote.newHelp": "Telefoanele cu adresa veche pierd accesul.",
   "remote.failed": "Telecomanda nu a pornit: {error}",
   "remote.title": "Telecomandă BitSpring",
-  "remote.denied": "Această adresă nu mai funcționează. Deschide-o pe cea afișată de BitSpring pe computer: Setări → Telecomandă pe telefon.",
+  "remote.denied": "Această adresă nu mai funcționează. Deschide-o pe cea afișată de BitSpring pe computer: pictograma telefonului, în partea de sus a ferestrei.",
   "remote.offline": "Nu există conexiune cu BitSpring. Rulează pe computer, iar telefonul este în aceeași rețea?",
   "remote.position": "Poziția în piesă",
 
@@ -689,5 +689,12 @@
   "settings.network": "Rețea",
   "settings.about": "Despre",
   "remote.scan": "Scanează codul cu camera telefonului sau deschide adresa în browserul lui.",
-  "remote.where": "De acum, codul și adresa se află sub pictograma telefonului, în partea de sus a ferestrei."
+  "remote.where": "De acum, codul și adresa se află sub pictograma telefonului, în partea de sus a ferestrei.",
+  "enh.tagsOffer": "Măsurate, încă nu în etichetele fișierelor: {count}",
+  "enh.tagsWrite": "Scrie în etichete",
+  "enh.tagsConfirm": "Scrii volumul măsurat în etichetele fișierelor (ReplayGain)? Fișiere: {count}. Astfel și alte playere le vor egaliza la fel. Sunetul rămâne exact la fel, iar fișierele care au deja astfel de etichete le păstrează.",
+  "enh.tagsYes": "Scrie",
+  "enh.tagsRunning": "Se scriu etichetele: {done} din {total}",
+  "enh.tagsDone": "Scrise în etichete: {written}.",
+  "enh.tagsFailed": "Nu s-au putut scrie: {failed}."
 }

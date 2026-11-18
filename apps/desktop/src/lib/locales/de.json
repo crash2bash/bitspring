@@ -279,7 +279,7 @@
   "remote.newHelp": "Geräte mit der alten Adresse verlieren den Zugriff.",
   "remote.failed": "Die Fernbedienung ist nicht gestartet: {error}",
   "remote.title": "BitSpring-Fernbedienung",
-  "remote.denied": "Diese Adresse gilt nicht mehr. Öffne die, die BitSpring auf dem Computer anzeigt: Einstellungen → Fernbedienung per Handy.",
+  "remote.denied": "Diese Adresse gilt nicht mehr. Öffne die, die BitSpring auf dem Computer anzeigt: das Telefonsymbol oben im Fenster.",
   "remote.offline": "Keine Verbindung zu BitSpring. Läuft es auf dem Computer, und ist dieses Handy im selben Netzwerk?",
   "remote.position": "Position im Titel",
 
@@ -689,5 +689,12 @@
   "settings.network": "Netzwerk",
   "settings.about": "Über die App",
   "remote.scan": "Scanne den Code mit der Kamera des Telefons oder öffne die Adresse in dessen Browser.",
-  "remote.where": "Ab jetzt findest du Code und Adresse unter dem Telefonsymbol oben im Fenster."
+  "remote.where": "Ab jetzt findest du Code und Adresse unter dem Telefonsymbol oben im Fenster.",
+  "enh.tagsOffer": "Gemessen, noch nicht in den Tags der Dateien: {count}",
+  "enh.tagsWrite": "In die Tags schreiben",
+  "enh.tagsConfirm": "Die gemessene Lautheit in die Tags der Dateien schreiben (ReplayGain)? Dateien: {count}. Andere Player gleichen sie dann genauso an. Der Klang bleibt genau, wie er ist, und Dateien, die solche Tags schon haben, behalten sie.",
+  "enh.tagsYes": "Schreiben",
+  "enh.tagsRunning": "Tags werden geschrieben: {done} von {total}",
+  "enh.tagsDone": "In die Tags geschrieben: {written}.",
+  "enh.tagsFailed": "Nicht geschrieben: {failed}."
 }

@@ -50,7 +50,7 @@
       } catch {
         loudness = null;
       }
-      if (!gone) timer = setTimeout(ask, loudness?.running ? 700 : 4000);
+      if (!gone) timer = setTimeout(ask, loudness?.running || loudness?.tagging ? 700 : 4000);
     };
     ask();
     return () => {
@@ -61,6 +61,14 @@
 
   async function analyze(start: boolean) {
     await api.loudnessAnalyze(start);
+    loudness = await api.loudnessStatus();
+  }
+
+  // Writing into the user's files is asked about first.
+  let confirmTags = $state(false);
+  async function writeTags(start: boolean) {
+    confirmTags = false;
+    await api.loudnessWriteTags(start);
     loudness = await api.loudnessStatus();
   }
 
@@ -151,6 +159,33 @@
               {/if}
             {/if}
           </div>
+          {#if loudness.tagging}
+            <div class="measure">
+              <span>{t("enh.tagsRunning", { done: num(loudness.tagging[0]), total: num(loudness.tagging[1]) })}</span>
+              <button onclick={() => writeTags(false)}>{t("enh.levelStop")}</button>
+            </div>
+          {:else}
+            {#if loudness.tagged}
+              <p class="measure">
+                {t("enh.tagsDone", { written: num(loudness.tagged[0]) })}
+                {#if loudness.tagged[1] > 0}{t("enh.tagsFailed", { failed: num(loudness.tagged[1]) })}{/if}
+              </p>
+            {/if}
+            {#if loudness.untagged > 0 && !loudness.running}
+              {#if confirmTags}
+                <div class="measure ask">
+                  <p>{t("enh.tagsConfirm", { count: num(loudness.untagged) })}</p>
+                  <button onclick={() => writeTags(true)}>{t("enh.tagsYes")}</button>
+                  <button onclick={() => (confirmTags = false)}>{t("pl.cancel")}</button>
+                </div>
+              {:else}
+                <div class="measure">
+                  <span>{t("enh.tagsOffer", { count: num(loudness.untagged) })}</span>
+                  <button onclick={() => (confirmTags = true)}>{t("enh.tagsWrite")}</button>
+                </div>
+              {/if}
+            {/if}
+          {/if}
         {/if}
       </fieldset>
 
@@ -348,6 +383,21 @@
   }
   .measure button:hover {
     color: var(--violet);
+  }
+  /* The question before writing into files: its text on a line of its own, the two
+     answers under it, side by side. */
+  .measure.ask {
+    justify-content: flex-start;
+    gap: 6px 16px;
+    color: var(--porcelain);
+  }
+  .measure.ask p {
+    flex-basis: 100%;
+    margin: 0;
+    line-height: 1.45;
+  }
+  p.measure {
+    display: block;
   }
   .toggle input {
     position: absolute;

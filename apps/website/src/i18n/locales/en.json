@@ -81,6 +81,8 @@
   "faq.a6": "Yes. In Equalizer → Import → Headphone profiles, type your headphones' model and BitSpring adds AutoEQ's correction for them. Equalizer APO and EasyEffects presets import too. While the EQ is on, the indicator says “Processing”; switch it off and playback is bit-perfect again.",
   "faq.q7": "Can it play on Sonos, WiiM or Chromecast?",
   "faq.a7": "Yes. UPnP/DLNA streamers and Google Cast devices on your network appear in the output list under Network players. BitSpring sends them the music as lossless FLAC, and albums play without gaps.",
+  "faq.q8": "Can it even out the volume between tracks?",
+  "faq.a8": "Yes. In Enhancers → Volume levelling, choose By track or By album. Every track gets one fixed gain towards −18 LUFS, and nothing is compressed. BitSpring reads ReplayGain tags, measures the files that have none, and can write the result into their tags. It is off by default: until you turn it on, the sound is left untouched.",
   "download.title": "Free",
   "download.lede": "No subscription, no ads, no account. Just a player.",
   "platforms.macos": "macOS",

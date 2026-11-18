@@ -279,7 +279,7 @@
   "remote.newHelp": "Telefoner med den gamle adresse mister adgangen.",
   "remote.failed": "Fjernbetjeningen startede ikke: {error}",
   "remote.title": "BitSpring-fjernbetjening",
-  "remote.denied": "Denne adresse virker ikke længere. Åbn den, BitSpring viser på computeren: Indstillinger → Fjernbetjening på telefonen.",
+  "remote.denied": "Denne adresse virker ikke længere. Åbn den, BitSpring viser på computeren: telefonikonet øverst i vinduet.",
   "remote.offline": "Ingen forbindelse til BitSpring. Kører det på computeren, og er telefonen på samme netværk?",
   "remote.position": "Position i nummeret",
 
@@ -689,5 +689,12 @@
   "settings.network": "Netværk",
   "settings.about": "Om",
   "remote.scan": "Scan koden med telefonens kamera, eller åbn adressen i dens browser.",
-  "remote.where": "Fremover ligger koden og adressen under telefonikonet øverst i vinduet."
+  "remote.where": "Fremover ligger koden og adressen under telefonikonet øverst i vinduet.",
+  "enh.tagsOffer": "Målt, endnu ikke i filernes tags: {count}",
+  "enh.tagsWrite": "Skriv til tags",
+  "enh.tagsConfirm": "Skriv den målte lydstyrke ind i filernes tags (ReplayGain)? Filer: {count}. Så udligner andre afspillere dem på samme måde. Lyden forbliver præcis, som den er, og filer, der allerede har sådanne tags, beholder dem.",
+  "enh.tagsYes": "Skriv",
+  "enh.tagsRunning": "Skriver tags: {done} af {total}",
+  "enh.tagsDone": "Skrevet til tags: {written}.",
+  "enh.tagsFailed": "Kunne ikke skrives: {failed}."
 }

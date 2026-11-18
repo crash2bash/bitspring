@@ -279,7 +279,7 @@
   "remote.newHelp": "I telefoni con il vecchio indirizzo perdono l'accesso.",
   "remote.failed": "Il telecomando non è partito: {error}",
   "remote.title": "Telecomando BitSpring",
-  "remote.denied": "Questo indirizzo non funziona più. Apri quello mostrato da BitSpring sul computer: Impostazioni → Telecomando sul telefono.",
+  "remote.denied": "Questo indirizzo non funziona più. Apri quello mostrato da BitSpring sul computer: l’icona del telefono, in alto nella finestra.",
   "remote.offline": "Nessuna connessione con BitSpring. È aperto sul computer e questo telefono è sulla stessa rete?",
   "remote.position": "Posizione nel brano",
 
@@ -689,5 +689,12 @@
   "settings.network": "Rete",
   "settings.about": "Informazioni",
   "remote.scan": "Inquadra il codice con la fotocamera del telefono o apri l’indirizzo nel suo browser.",
-  "remote.where": "D’ora in poi il codice e l’indirizzo sono sotto l’icona del telefono, in alto nella finestra."
+  "remote.where": "D’ora in poi il codice e l’indirizzo sono sotto l’icona del telefono, in alto nella finestra.",
+  "enh.tagsOffer": "Misurati, non ancora nei tag dei file: {count}",
+  "enh.tagsWrite": "Scrivi nei tag",
+  "enh.tagsConfirm": "Scrivere il volume misurato nei tag dei file (ReplayGain)? File: {count}. Così anche gli altri player li livelleranno allo stesso modo. L'audio resta esattamente com'è, e i file che hanno già questi tag li mantengono.",
+  "enh.tagsYes": "Scrivi",
+  "enh.tagsRunning": "Scrittura dei tag: {done} di {total}",
+  "enh.tagsDone": "Scritti nei tag: {written}.",
+  "enh.tagsFailed": "Scrittura non riuscita: {failed}."
 }

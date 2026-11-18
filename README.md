@@ -37,6 +37,9 @@ them, and off means bit-perfect again.
 - **Sound shaping when you ask for it:** parametric EQ with AutoEQ headphone profiles and Equalizer
   APO / EasyEffects import, crossfeed, and upsampling to 192, 384 or 768 kHz. Turn any of them on
   and the indicator switches from *Bit-perfect* to *Processing* and lists what is being done.
+- **Volume levelling** by track or by album: one fixed gain per track towards −18 LUFS, nothing
+  compressed. The player reads ReplayGain tags, measures the files that have none (EBU R128), and
+  can write the result into their tags. Off by default.
 - **Quality check** looks at a file's spectrum and tells you when "hi-res" is really a CD or an MP3
   inside a bigger file.
 - **Nothing to sign up for:** no account, no ads, no in-app purchases, nothing collected.

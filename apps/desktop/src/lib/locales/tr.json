@@ -279,7 +279,7 @@
   "remote.newHelp": "Eski adresi bilen telefonlar erişimi kaybeder.",
   "remote.failed": "Uzaktan kumanda başlamadı: {error}",
   "remote.title": "BitSpring uzaktan kumanda",
-  "remote.denied": "Bu adres artık çalışmıyor. BitSpring'in bilgisayarda gösterdiği adresi aç: Ayarlar → Telefondan uzaktan kumanda.",
+  "remote.denied": "Bu adres artık çalışmıyor. BitSpring'in bilgisayarda gösterdiği adresi aç: pencerenin üst kısmındaki telefon simgesi.",
   "remote.offline": "BitSpring'e bağlantı yok. Bilgisayarda açık mı ve bu telefon aynı ağda mı?",
   "remote.position": "Parçadaki konum",
 
@@ -689,5 +689,12 @@
   "settings.network": "Ağ",
   "settings.about": "Hakkında",
   "remote.scan": "Kodu telefonun kamerasıyla tara ya da adresi telefonun tarayıcısında aç.",
-  "remote.where": "Bundan sonra kod ve adres, pencerenin üst kısmındaki telefon simgesinin altında."
+  "remote.where": "Bundan sonra kod ve adres, pencerenin üst kısmındaki telefon simgesinin altında.",
+  "enh.tagsOffer": "Ölçüldü, henüz dosyaların etiketlerinde değil: {count}",
+  "enh.tagsWrite": "Etiketlere yaz",
+  "enh.tagsConfirm": "Ölçülen ses yüksekliği dosyaların etiketlerine yazılsın mı (ReplayGain)? Dosya: {count}. Böylece başka oynatıcılar da onları aynı şekilde dengeler. Ses tamamen aynı kalır; bu etiketleri zaten taşıyan dosyalara dokunulmaz.",
+  "enh.tagsYes": "Yaz",
+  "enh.tagsRunning": "Etiketler yazılıyor: {done}/{total}",
+  "enh.tagsDone": "Etiketlere yazıldı: {written}.",
+  "enh.tagsFailed": "Yazılamadı: {failed}."
 }

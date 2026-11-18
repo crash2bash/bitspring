@@ -77,6 +77,123 @@ pub fn write(path: &Path, edit: &TagEdit) -> Result<()> {
     if !can_edit(&path.to_string_lossy()) {
         bail!("tags of this kind of file can't be edited");
     }
+    rewrite(path, &Change::Fields(&|tag| apply_to(tag, edit)), &|_| Ok(()))
+}
+
+/// ReplayGain values to keep in a file's tags, so every player levels it the same way.
+/// Gains are towards −18 LUFS (ReplayGain 2.0), peaks linear with 1.0 = full scale.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GainTags {
+    pub track_db: f64,
+    pub track_peak: f64,
+    pub album_db: f64,
+    pub album_peak: f64,
+}
+
+/// Files we write ReplayGain tags into: those whose tags we edit, less Opus (its gain lives
+/// in R128 tags and the stream header, which we leave to its own tools) and less WAV and
+/// AIFF (the player doesn't read such tags from their chunks).
+pub fn can_write_gain(path: &str) -> bool {
+    let ext = Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    can_edit(path) && !matches!(ext.as_str(), "opus" | "wav" | "aif" | "aiff") && !crate::lossless::is_lossless_extra(Path::new(path))
+}
+
+/// The ReplayGain / R128 values in a file's tags, as the player reads them when it opens it.
+pub fn read_gain(path: &Path) -> Result<crate::dsp::loudness::TagGain> {
+    let mss = MediaSourceStream::new(Box::new(File::open(path)?), Default::default());
+    let mut hint = Hint::new();
+    if let Some(e) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(e);
+    }
+    let mut format = symphonia::default::get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default()).context("unreadable audio")?;
+    Ok(crate::decode::read_meta(&mut *format).gain)
+}
+
+/// Store `gain` in the tags of the file at `path`, as safely as any tag edit — and only if
+/// the player then reads the same values back: a file it can't is left as it was.
+pub fn write_gain(path: &Path, gain: &GainTags) -> Result<()> {
+    if !can_write_gain(&path.to_string_lossy()) {
+        bail!("loudness can't be stored in the tags of this kind of file");
+    }
+    let db = |v: f64| format!("{v:.2} dB");
+    let peak = |v: f64| format!("{v:.6}");
+    let values = [
+        ("REPLAYGAIN_TRACK_GAIN", db(gain.track_db)),
+        ("REPLAYGAIN_TRACK_PEAK", peak(gain.track_peak)),
+        ("REPLAYGAIN_ALBUM_GAIN", db(gain.album_db)),
+        ("REPLAYGAIN_ALBUM_PEAK", peak(gain.album_peak)),
+    ];
+    let check = |copy: &Path| {
+        let read = read_gain(copy)?;
+        let same = |a: Option<f64>, b: f64, step: f64| a.is_some_and(|a| (a - b).abs() <= step);
+        let ok = same(read.track_db, gain.track_db, 0.006)
+            && same(read.track_peak, gain.track_peak, 1e-6)
+            && same(read.album_db, gain.album_db, 0.006)
+            && same(read.album_peak, gain.album_peak, 1e-6);
+        if !ok {
+            bail!("the loudness tags didn't read back from this file; it was left as it was");
+        }
+        Ok(())
+    };
+    rewrite(path, &Change::Gain(&values), &check)
+}
+
+/// What a write does to a file's tags.
+enum Change<'a> {
+    /// Edit the fields the tag editor shows, on every tag the file has.
+    Fields(&'a dyn Fn(&mut Tag) -> Result<()>),
+    /// Set these four ReplayGain fields (name, value) and touch nothing else: this runs over
+    /// whole libraries, so not even the spelling of another field's name may change.
+    Gain(&'a [(&'static str, String); 4]),
+}
+
+/// A tag in its own form that can hold the ReplayGain fields. (The kinds that can't — ID3v1,
+/// RIFF INFO, AIFF text — keep the default: nothing.)
+trait GainFields {
+    fn set_gain(&mut self, _values: &[(&'static str, String); 4]) {}
+}
+
+impl GainFields for lofty::ogg::tag::VorbisComments {
+    fn set_gain(&mut self, values: &[(&'static str, String); 4]) {
+        for (name, value) in values {
+            // (Names of Vorbis comments don't tell upper case from lower.)
+            self.remove(name).for_each(drop);
+            self.push(name.to_string(), value.clone());
+        }
+    }
+}
+
+impl GainFields for lofty::id3::v2::Id3v2Tag {
+    fn set_gain(&mut self, values: &[(&'static str, String); 4]) {
+        use lofty::id3::v2::Frame;
+        for (name, value) in values {
+            self.retain(|f| !matches!(f, Frame::UserText(t) if t.description.eq_ignore_ascii_case(name)));
+            self.insert_user_text(name.to_string(), value.clone());
+        }
+    }
+}
+
+impl GainFields for lofty::mp4::Ilst {
+    fn set_gain(&mut self, values: &[(&'static str, String); 4]) {
+        use lofty::mp4::{Atom, AtomData, AtomIdent};
+        const MEAN: &str = "com.apple.iTunes";
+        for (name, value) in values {
+            self.retain(|a| !matches!(a.ident(), AtomIdent::Freeform { mean, name: have } if mean == MEAN && have.eq_ignore_ascii_case(name)));
+            // Lower case, as other taggers write them in MP4 files.
+            let ident = AtomIdent::Freeform { mean: MEAN.into(), name: name.to_ascii_lowercase().into() };
+            self.insert(Atom::new(ident, AtomData::UTF8(value.clone())));
+        }
+    }
+}
+
+impl GainFields for lofty::id3::v1::Id3v1Tag {}
+impl GainFields for lofty::ape::ApeTag {}
+impl GainFields for lofty::iff::wav::RiffInfoList {}
+impl GainFields for lofty::iff::aiff::AiffTextChunks {}
+
+/// Change the tags of the file at `path`, the safe way: in a copy that takes the original's
+/// place only once its audio is found identical and `check` accepts it.
+fn rewrite(path: &Path, change: &Change, check: &dyn Fn(&Path) -> Result<()>) -> Result<()> {
     let name = path.file_name().ok_or_else(|| anyhow!("not a file"))?.to_string_lossy().into_owned();
     // Hidden, with a random part, and the original's extension (the decoder that checks it
     // goes by the extension). Created new or not at all: whatever already has the name (a
@@ -91,8 +208,9 @@ pub fn write(path: &Path, edit: &TagEdit) -> Result<()> {
     let mut copy = options.open(&tmp).context("couldn't make a copy to write the tags into")?;
     let result = (|| {
         std::io::copy(&mut File::open(path)?, &mut copy).context("couldn't copy the file to write its tags")?;
-        apply(&mut copy, edit)?;
+        apply(&mut copy, change)?;
         verify(path, &tmp)?;
+        check(&tmp)?;
         // The original's permissions; then the copy takes its place in one step.
         std::fs::set_permissions(&tmp, original_permissions).context("couldn't give the copy the file's permissions")?;
         std::fs::rename(&tmp, path).context("couldn't replace the file")?;
@@ -104,23 +222,104 @@ pub fn write(path: &Path, edit: &TagEdit) -> Result<()> {
     result
 }
 
-fn apply(handle: &mut File, edit: &TagEdit) -> Result<()> {
+/// Make `change` to every tag the file in `handle` has (a WAV may carry RIFF INFO and ID3:
+/// other players read either), making the kind the format usually carries if it has none,
+/// and write the result back.
+///
+/// Each tag is read in its own form, and an edit lifts out of it only the fields the editor
+/// knows: the ones the library has no name for (a UPC, a web address, the credits) stay
+/// where they are. Reading a file's tags in the library's common form instead drops them.
+fn apply(handle: &mut File, change: &Change) -> Result<()> {
+    use lofty::config::ParseOptions;
+    use lofty::file::{AudioFile, FileType};
+    use lofty::tag::{MergeTag, SplitTag};
     use std::io::{Seek, SeekFrom};
-    handle.seek(SeekFrom::Start(0))?;
-    let mut file = lofty::read_from(handle).context("couldn't read the file's tags")?;
-    if file.primary_tag_mut().is_none() {
-        let kind = file.primary_tag_type();
-        file.insert_tag(Tag::new(kind));
-    }
-    // Every tag the file has (a WAV may carry RIFF INFO and ID3): other players read either.
-    let kinds: Vec<_> = file.tags().iter().map(|t| t.tag_type()).collect();
-    for kind in kinds {
-        if let Some(tag) = file.tag_mut(kind) {
-            apply_to(tag, edit)?;
+
+    fn edited<T>(mut tag: T, change: &Change) -> Result<T>
+    where
+        T: SplitTag + GainFields,
+        T::Remainder: MergeTag<Merged = T>,
+    {
+        match change {
+            Change::Fields(edit) => {
+                let (rest, mut common) = tag.split_tag();
+                edit(&mut common)?;
+                // Two spellings of one field ("ALBUM ARTIST" and "ALBUMARTIST") come out
+                // under one name: once is enough when they say the same.
+                let mut seen: Vec<(ItemKey, lofty::tag::ItemValue)> = Vec::new();
+                common.retain(|item| {
+                    let this = (item.key(), item.value().clone());
+                    let new = !seen.contains(&this);
+                    if new {
+                        seen.push(this);
+                    }
+                    new
+                });
+                Ok(rest.merge_tag(common))
+            }
+            Change::Gain(values) => {
+                tag.set_gain(values);
+                Ok(tag)
+            }
         }
     }
+    // An ID3v2.3 tag stays version 2.3 (older players and Windows read no other).
+    fn options(id3: Option<&lofty::id3::v2::Id3v2Tag>) -> WriteOptions {
+        let old = id3.is_some_and(|t| t.original_version() != lofty::id3::v2::Id3v2Version::V4);
+        WriteOptions::default().use_id3v23(old)
+    }
+
     handle.seek(SeekFrom::Start(0))?;
-    file.save_to(handle, WriteOptions::default()).context("couldn't write the tags")?;
+    let kind = lofty::probe::Probe::new(std::io::BufReader::new(&mut *handle))
+        .guess_file_type()
+        .context("couldn't read the file")?
+        .file_type()
+        .ok_or_else(|| anyhow!("couldn't tell what kind of file this is"))?;
+    handle.seek(SeekFrom::Start(0))?;
+    // For the loudness values the tags are taken as they are written: no tidying on the way
+    // in ("09" stays "09", "9/12" stays one field).
+    let parse = ParseOptions::new().implicit_conversions(!matches!(change, Change::Gain(_)));
+    // `$first`: the tag made when the file has none; `$more`: the others, edited if there.
+    macro_rules! through {
+        ($file:ty, $options:expr, $first:ident / $set_first:ident $(, $more:ident / $set_more:ident)*) => {{
+            let mut file = <$file>::read_from(handle, parse).context("couldn't read the file's tags")?;
+            let options: fn(&$file) -> WriteOptions = $options;
+            let options = options(&file);
+            let first = file.$first().unwrap_or_default();
+            file.$set_first(edited(first, change)?);
+            $(
+                if let Some(tag) = file.$more() {
+                    file.$set_more(edited(tag, change)?);
+                }
+            )*
+            handle.seek(SeekFrom::Start(0))?;
+            file.save_to(handle, options).context("couldn't write the tags")?;
+        }};
+    }
+    // Ogg files always have their comment header.
+    macro_rules! through_ogg {
+        ($file:ty) => {{
+            let mut file = <$file>::read_from(handle, parse).context("couldn't read the file's tags")?;
+            let tag = file.remove_vorbis_comments();
+            file.set_vorbis_comments(edited(tag, change)?);
+            handle.seek(SeekFrom::Start(0))?;
+            file.save_to(handle, WriteOptions::default()).context("couldn't write the tags")?;
+        }};
+    }
+    match kind {
+        FileType::Flac => through!(lofty::flac::FlacFile, |_| WriteOptions::default(), remove_vorbis_comments / set_vorbis_comments),
+        FileType::Mpeg => through!(lofty::mpeg::MpegFile, |f| options(f.id3v2()), remove_id3v2 / set_id3v2, remove_id3v1 / set_id3v1, remove_ape / set_ape),
+        FileType::Mp4 => through!(lofty::mp4::Mp4File, |_| WriteOptions::default(), remove_ilst / set_ilst),
+        FileType::Aac => through!(lofty::aac::AacFile, |f| options(f.id3v2()), remove_id3v2 / set_id3v2, remove_id3v1 / set_id3v1),
+        FileType::Wav => through!(lofty::iff::wav::WavFile, |f| options(f.id3v2()), remove_id3v2 / set_id3v2, remove_riff_info / set_riff_info),
+        FileType::Aiff => through!(lofty::iff::aiff::AiffFile, |f| options(f.id3v2()), remove_id3v2 / set_id3v2, remove_text_chunks / set_text_chunks),
+        FileType::Ape => through!(lofty::ape::ApeFile, |f| options(f.id3v2()), remove_ape / set_ape, remove_id3v1 / set_id3v1, remove_id3v2 / set_id3v2),
+        FileType::WavPack => through!(lofty::wavpack::WavPackFile, |_| WriteOptions::default(), remove_ape / set_ape, remove_id3v1 / set_id3v1),
+        FileType::Vorbis => through_ogg!(lofty::ogg::VorbisFile),
+        FileType::Opus => through_ogg!(lofty::ogg::OpusFile),
+        FileType::Speex => through_ogg!(lofty::ogg::SpeexFile),
+        _ => bail!("tags of this kind of file can't be edited"),
+    }
     handle.sync_all()?;
     Ok(())
 }
@@ -338,6 +537,77 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    /// Measured loudness goes into the tags the way a scanner would leave it, the audio
+    /// stays as it was, and the player reads the values back.
+    #[test]
+    fn loudness_tags_are_written_and_read_back() {
+        let d = tmpdir("gainwrite");
+        let p = flac_file(&d);
+        write(&p, &TagEdit { title: Some("Hands Open".into()), ..Default::default() }).unwrap();
+        let before = audio_fingerprint(&p).unwrap();
+        let gain = GainTags { track_db: -7.254, track_peak: 1.023_456_7, album_db: -6.1, album_peak: 1.023_456_7 };
+        write_gain(&p, &gain).unwrap();
+        assert_eq!(audio_fingerprint(&p).unwrap(), before);
+        let read = read_gain(&p).unwrap();
+        assert_eq!((read.track_db, read.track_peak), (Some(-7.25), Some(1.023457)));
+        assert_eq!((read.album_db, read.album_peak), (Some(-6.1), Some(1.023457)));
+        // What a track opened for playing gets, and the other tags are still there.
+        assert_eq!(crate::decode::open_track(&p).unwrap().meta.gain, read);
+        assert_eq!(crate::library::scan_file(&p).unwrap().0.title, "Hands Open");
+        // Written again (the file was measured anew): the values are replaced, not doubled.
+        write_gain(&p, &GainTags { track_db: -3.0, ..gain }).unwrap();
+        assert_eq!(read_gain(&p).unwrap().track_db, Some(-3.0));
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1);
+        // Where the values wouldn't serve: refused before anything is touched.
+        assert!(can_write_gain("/m/a.flac") && can_write_gain("/m/a.mp3") && can_write_gain("/m/a.m4a"));
+        assert!(!can_write_gain("/m/a.opus") && !can_write_gain("/m/a.wav") && !can_write_gain("/m/a.dsf") && !can_write_gain("/m/a.ape"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A file's tags hold more than the editor shows — a barcode, a web address, the credits,
+    /// whatever its shop or ripper put there. Neither an edit nor the loudness values may
+    /// cost the file any of it.
+    #[test]
+    fn fields_the_editor_does_not_know_stay_in_the_file() {
+        use lofty::file::AudioFile;
+        let d = tmpdir("keep");
+        let p = flac_file(&d);
+        let other = [
+            ("UPC", "0075679659873"),
+            ("URL", "https://example.com/album"),
+            ("INVOLVEDPEOPLE", "Jeremy Lister, Backing Vocal"),
+            ("ITUNESADVISORY", "0"),
+            ("MEDIATYPE", "album"),
+            ("MY OWN FIELD", "kept"),
+            ("COMMENT", "first"),
+            ("COMMENT", "second"),
+        ];
+        let read = |p: &Path| lofty::flac::FlacFile::read_from(&mut File::open(p).unwrap(), lofty::config::ParseOptions::new()).unwrap();
+        let mut file = read(&p);
+        let mut tag = lofty::ogg::tag::VorbisComments::default();
+        tag.push("TITLE".into(), "Back Door".into());
+        for (k, v) in other {
+            tag.push(k.into(), v.into());
+        }
+        file.set_vorbis_comments(tag);
+        file.save_to_path(&p, WriteOptions::default()).unwrap();
+        let before = audio_fingerprint(&p).unwrap();
+
+        write(&p, &TagEdit { title: Some("Front Door".into()), year: Some("2025".into()), ..Default::default() }).unwrap();
+        write_gain(&p, &GainTags { track_db: -7.25, track_peak: 0.98, album_db: -6.1, album_peak: 1.0 }).unwrap();
+
+        let after = read(&p);
+        let tag = after.vorbis_comments().unwrap();
+        for (k, v) in other {
+            assert!(tag.get_all(k).any(|have| have == v), "{k}={v} was lost; the file has {:?}", tag.items().collect::<Vec<_>>());
+        }
+        assert_eq!(tag.get("TITLE"), Some("Front Door"));
+        assert_eq!(tag.get("REPLAYGAIN_TRACK_GAIN"), Some("-7.25 dB"));
+        assert_eq!(tag.items().len(), other.len() + 1 + 1 + 4, "{:?}", tag.items().collect::<Vec<_>>());
+        assert_eq!(audio_fingerprint(&p).unwrap(), before);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn a_failed_write_leaves_the_file_alone() {
         let d = tmpdir("fail");
@@ -374,6 +644,24 @@ mod tests {
 mod formats {
     use super::*;
 
+    /// Only the loudness values, into every file in $BITSPRING_TAG_SAMPLES that takes them
+    /// (to compare the rest of their tags before and after with another tool).
+    #[test]
+    #[ignore]
+    fn loudness_only() {
+        let dir = std::env::var("BITSPRING_TAG_SAMPLES").expect("BITSPRING_TAG_SAMPLES");
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if !can_write_gain(&p.to_string_lossy()) {
+                continue;
+            }
+            let before = audio_fingerprint(&p).unwrap();
+            write_gain(&p, &GainTags { track_db: -7.25, track_peak: 0.988553, album_db: -6.1, album_peak: 1.0 }).unwrap_or_else(|e| panic!("{}: {e:#}", p.display()));
+            assert_eq!(audio_fingerprint(&p).unwrap(), before, "{}", p.display());
+            eprintln!("ok {}", p.display());
+        }
+    }
+
     /// Files in $BITSPRING_TAG_SAMPLES (made with ffmpeg in every format we write): tags change,
     /// audio doesn't. Ignored by default (needs the samples).
     #[test]
@@ -391,6 +679,14 @@ mod formats {
             assert_eq!(info.album.as_deref(), Some("Album"), "{}", p.display());
             assert_eq!(info.track_number, Some(4), "{}", p.display());
             assert_eq!(info.year.as_deref(), Some("1999"), "{}", p.display());
+            if can_write_gain(&p.to_string_lossy()) {
+                let gain = GainTags { track_db: -7.25, track_peak: 0.988553, album_db: -6.1, album_peak: 1.0 };
+                write_gain(&p, &gain).unwrap_or_else(|e| panic!("{}: {e:#}", p.display()));
+                assert_eq!(audio_fingerprint(&p).unwrap(), before, "{}", p.display());
+                let read = crate::decode::open_track(&p).unwrap().meta.gain;
+                assert_eq!((read.track_db, read.track_peak, read.album_db, read.album_peak), (Some(-7.25), Some(0.988553), Some(-6.1), Some(1.0)), "{}", p.display());
+                assert_eq!(crate::library::scan_file(&p).unwrap().0.title, "Новое название", "{}", p.display());
+            }
             eprintln!("ok {}", p.display());
         }
     }

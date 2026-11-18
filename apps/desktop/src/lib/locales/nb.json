@@ -279,7 +279,7 @@
   "remote.newHelp": "Telefoner med den gamle adressen mister tilgangen.",
   "remote.failed": "Fjernkontrollen startet ikke: {error}",
   "remote.title": "BitSpring-fjernkontroll",
-  "remote.denied": "Denne adressen virker ikke lenger. Åpne den BitSpring viser på datamaskinen: Innstillinger → Fjernkontroll på telefonen.",
+  "remote.denied": "Denne adressen virker ikke lenger. Åpne den BitSpring viser på datamaskinen: telefonikonet øverst i vinduet.",
   "remote.offline": "Ingen forbindelse med BitSpring. Kjører det på datamaskinen, og er telefonen på samme nettverk?",
   "remote.position": "Posisjon i sporet",
 
@@ -689,5 +689,12 @@
   "settings.network": "Nettverk",
   "settings.about": "Om",
   "remote.scan": "Skann koden med telefonens kamera, eller åpne adressen i nettleseren på den.",
-  "remote.where": "Fra nå av ligger koden og adressen under telefonikonet øverst i vinduet."
+  "remote.where": "Fra nå av ligger koden og adressen under telefonikonet øverst i vinduet.",
+  "enh.tagsOffer": "Målt, ennå ikke i filenes tagger: {count}",
+  "enh.tagsWrite": "Skriv til tagger",
+  "enh.tagsConfirm": "Skrive den målte lydstyrken inn i filenes tagger (ReplayGain)? Filer: {count}. Da jevner andre spillere dem ut på samme måte. Lyden forblir nøyaktig som den er, og filer som allerede har slike tagger, beholder dem.",
+  "enh.tagsYes": "Skriv",
+  "enh.tagsRunning": "Skriver tagger: {done} av {total}",
+  "enh.tagsDone": "Skrevet til tagger: {written}.",
+  "enh.tagsFailed": "Kunne ikke skrives: {failed}."
 }

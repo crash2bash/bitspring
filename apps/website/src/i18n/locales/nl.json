@@ -81,6 +81,8 @@
   "faq.a6": "Ja. Typ in Equalizer → Importeren → Koptelefoonprofielen het model van je koptelefoon, en BitSpring voegt de bijbehorende AutoEQ-correctie toe. Presets van Equalizer APO en EasyEffects kun je ook importeren. Zolang de EQ aan staat, toont de indicator “Verwerking”; zet hem uit en het afspelen is weer bit-perfect.",
   "faq.q7": "Kan het afspelen op Sonos, WiiM of Chromecast?",
   "faq.a7": "Ja. UPnP/DLNA-streamers en Google Cast-apparaten in je netwerk verschijnen in de uitvoerlijst, onder “Netwerkspelers”. BitSpring stuurt ze de muziek verliesvrij als FLAC, en albums spelen zonder pauzes.",
+  "faq.q8": "Kan hij het volume tussen nummers gelijktrekken?",
+  "faq.a8": "Ja. Kies in Verbeteringen → Volumenivellering voor Per nummer of Per album. Elk nummer krijgt één vaste versterking richting −18 LUFS, en er wordt niets gecomprimeerd. BitSpring leest ReplayGain-tags, meet zelf de bestanden die ze niet hebben en kan het resultaat in hun tags schrijven. Het staat standaard uit: tot je het aanzet, blijft het geluid onaangeroerd.",
   "download.title": "Gratis",
   "download.lede": "Geen abonnement, geen advertenties, geen account. Gewoon een speler.",
   "platforms.macos": "macOS",
