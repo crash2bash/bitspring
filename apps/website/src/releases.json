@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.19.0",
+    "name": "BitSpring 0.19.0",
+    "date": "2026-11-18T15:13:01Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.19.0",
+    "notes": "- **Volume levelling.** Enhancers → Volume levelling brings every track, or every album, to the same loudness (−18 LUFS) with one fixed gain per track; nothing is compressed. BitSpring uses the file's ReplayGain or R128 tags and measures the tracks that have none (EBU R128); \"Measure the whole library\" does that ahead of time. It is off by default. While it is on, the sound is not bit-perfect and DSD plays as PCM.\n- **Headroom for peaks.** Upsampling, the equalizer, convolution and crossfeed rebuild the waveform, and on loud masters it can peak above 0 dBFS between the samples. BitSpring now measures the track's true peak and lowers the level by exactly the overshoot, usually less than 1 dB. It is on by default, has its own switch in Enhancers, and does nothing while those four are off.\n- **No click at pause, seek and stop.** The sound fades over 10 ms when you pause, seek, stop or change tracks. A track playing through, and the join between two tracks, are never touched; DSD sent as DoP and network players are left as they were. The switch is in Settings → Playback.\n- **Settings are a screen of their own.** The gear at the top of the window opens Playback, Appearance, Network and About on one page instead of a small panel. The update check is now under About.\n- **The phone remote has its own button.** Once the remote is on, its QR code and address are under the phone icon at the top of the window, and they are shown large the moment you switch it on.\n- **Error reports that stay on your device.** If BitSpring crashes, the next launch tells you so and shows a report: the app version, your system and the place in the code — no file names, paths or tags. The app sends it nowhere; you can copy it or open a GitHub issue with it yourself.\n- **Enhancers say what switches bit-perfect off.** The line at the bottom names the settings that are changing the sound right now.\n- **Smaller fixes.** Lists to pick from look the same on every screen, the equalizer scrolls as one page, and the tabs at the top keep their width when you open the settings."
+  },
+  {
     "version": "0.18.5",
     "name": "BitSpring 0.18.5",
     "date": "2026-11-17T20:04:55Z",
