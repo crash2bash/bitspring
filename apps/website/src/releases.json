@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.19.1",
+    "name": "BitSpring 0.19.1",
+    "date": "2026-11-18T16:26:54Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.19.1",
+    "notes": "- **Editing tags no longer costs a file the fields BitSpring doesn't show.** Until now, saving a tag edit rewrote the file's tags with only the fields the editor's library has names for, so extras such as a barcode (UPC), a web address or the credits were dropped from that file. They now stay where they are, and an ID3v2.3 tag stays version 2.3. The audio was never affected. Files edited with earlier versions don't get the dropped fields back.\n- **Measured loudness can be written into the files' tags.** Enhancers → Volume levelling → Write to tags stores what BitSpring measured as ReplayGain values (FLAC, MP3, AAC and ALAC, Ogg Vorbis), so other players level the files the same way. It asks first, touches nothing else in the file, and leaves files that already have such tags alone.\n- **Headroom for peaks goes by the album.** With volume levelling off, the tracks of one album are now lowered by the album's highest peak rather than each by its own, so they keep their relative levels. Opening any track of an album measures the rest of it.\n- **The phone remote's \"address no longer works\" message points at the phone icon** at the top of the window, where the address has been since 0.19.0."
+  },
+  {
     "version": "0.19.0",
     "name": "BitSpring 0.19.0",
     "date": "2026-11-18T15:13:01Z",
