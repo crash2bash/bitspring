@@ -60,7 +60,7 @@ them, and off means bit-perfect again.
 | Platform | Get it |
 | --- | --- |
 | **Mac**, Apple Silicon and Intel | [BitSpring-mac.dmg](https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-mac.dmg) |
-| **Windows** 10 and 11 | [BitSpring-windows-setup.exe](https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-windows-setup.exe) |
+| **Windows** 10 and 11 | [Microsoft Store](https://apps.microsoft.com/detail/9NDVJBXLSHVM) (no Qobuz or TIDAL) or [BitSpring-windows-setup.exe](https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-windows-setup.exe) |
 | **Linux**, any distribution | [AppImage](https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-linux.AppImage) (updates itself) or [.deb](https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-linux.deb) for Ubuntu, Debian and Mint |
 | **Android** 9 and later | [BitSpring-android.apk](https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-android.apk) |
 | **iPhone** and iPad | Coming to the App Store |
