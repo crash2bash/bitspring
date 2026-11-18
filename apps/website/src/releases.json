@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.19.2",
+    "name": "BitSpring 0.19.2",
+    "date": "2026-11-18T20:16:23Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.19.2",
+    "notes": "- **Android: add your own music folders.** The library is no longer only the Music folder. Open Library, tap the album count at the top right, then Add folder, and pick a folder in the system's file picker: anywhere in the phone's storage, on a memory card or on a USB drive. No new permission is asked for.\n- **Skip folders you don't want in the library**, on every platform. A skipped folder stays out with everything inside it, which suits ringtones, call recordings and podcasts. Choose it from a list of the folders that hold your tracks, with track counts. Playlists keep the tracks they already have.\n- **\"Don't show this folder\" on an album's page.** If something that isn't music turns up among the albums, open it and drop its folder from the library right there.\n- **The folders panel shows more.** Each folder has its track count, the folders skipped inside it sit right under it, and on a phone the folders are grouped by storage. The × on a skipped folder brings it back.\n- **A folder added or removed while the library was being scanned is no longer lost.** The change used to be ignored until the next rescan."
+  },
+  {
     "version": "0.19.1",
     "name": "BitSpring 0.19.1",
     "date": "2026-11-18T16:26:54Z",
