@@ -30,7 +30,7 @@ export function isAvailable(p: Platform): boolean {
     case "ios":
       return !!LINKS.iosAppStore;
     case "windows":
-      return !!LINKS.windowsFile;
+      return !!(LINKS.windowsStore || LINKS.windowsFile);
     case "android":
       return !!LINKS.android;
     case "linux":

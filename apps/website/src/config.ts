@@ -25,7 +25,7 @@ export const LINKS: {
   macAppStore: null,
   macFile: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-mac.dmg",
   iosAppStore: null,
-  windowsStore: null,
+  windowsStore: "https://apps.microsoft.com/detail/9NDVJBXLSHVM",
   windowsFile: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-windows-setup.exe",
   android: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-android.apk",
   linuxFile: "https://github.com/crash2bash/bitspring/releases/latest/download/BitSpring-linux.AppImage",

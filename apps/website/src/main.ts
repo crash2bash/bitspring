@@ -24,7 +24,7 @@ const $$ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = doc
 
 // ---- download buttons ------------------------------------------------------------------------
 // The main button offers the build for the visitor's device: an iPhone goes straight to the
-// App Store, Windows gets the installer, a Mac goes to the download page to choose between the
+// App Store, Windows gets the installer (the Store is one click further, on the download page), a Mac goes to the download page to choose between the
 // App Store and a .dmg, Linux to choose between the AppImage and a .deb. "Other platforms" always leads to that page.
 
 const platform: Platform = detectPlatform();
@@ -65,6 +65,14 @@ for (const li of $$<HTMLElement>("[data-platform]")) {
 }
 const androidStatus = document.querySelector('[data-platform="android"] [data-status]');
 if (androidStatus && LINKS.android) androidStatus.textContent = /play\.google\./.test(LINKS.android) ? "Google Play" : "APK";
+// Mac and Windows: name the store and/or the file, whichever are actually out.
+const both = (store: string | null, storeName: string, file: string | null, fileName: string) =>
+  [store && storeName, file && fileName].filter(Boolean).join(" · ");
+const macStatus = document.querySelector('[data-platform="mac"] [data-status]');
+if (macStatus && isAvailable("mac")) macStatus.textContent = both(LINKS.macAppStore, "Mac App Store", LINKS.macFile, ".dmg");
+const winStatus = document.querySelector('[data-platform="windows"] [data-status]');
+if (winStatus && isAvailable("windows"))
+  winStatus.textContent = both(LINKS.windowsStore, "Microsoft Store", LINKS.windowsFile, ".exe");
 
 // ---- smooth scroll -------------------------------------------------------------------------
 // Lenis interpolates wheel input, which is what makes notched Windows mice glide like a trackpad.
