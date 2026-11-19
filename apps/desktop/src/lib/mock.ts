@@ -195,6 +195,22 @@ type MockEntry = { uri: string | null; title: string; artist: string | null; alb
 const mockLists: { id: string; name: string; updated: number; entries: MockEntry[]; smart?: unknown }[] = [];
 let mockSignedIn: Record<string, boolean> = { qobuz: false, tidal: false };
 let mockQuality = "max";
+// Scrobbling: ?store shows a build made without the Last.fm key.
+let mockScrobbleUsers: Record<string, string | null> = { lastfm: null, listenbrainz: null };
+let mockScrobbleConnecting = false;
+function mockScrobble() {
+  return (["lastfm", "listenbrainz"] as const).map((service) => ({
+    service,
+    name: service === "lastfm" ? "Last.fm" : "ListenBrainz",
+    available: service !== "lastfm" || !storeBuild,
+    user: mockScrobbleUsers[service],
+    rejected: false,
+    waiting: mockScrobbleUsers[service] && service === "listenbrainz" ? 3 : 0,
+    offline: !!mockScrobbleUsers[service] && service === "listenbrainz",
+    connecting: service === "lastfm" && mockScrobbleConnecting,
+    failed: null,
+  }));
+}
 function mockSAlbum(i: number, svc: string) {
   const t = ["Kind of Blue", "A Love Supreme", "Blue Train", "Mingus Ah Um", "Time Out", "Moanin'"][i % 6];
   const a = ["Miles Davis", "John Coltrane", "John Coltrane", "Charles Mingus", "Dave Brubeck", "Art Blakey"][i % 6];
@@ -460,7 +476,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         active: duration > 0, position: Math.min(now(), duration), duration, paused,
         finished: now() >= duration && duration > 0, peakDb: processing ? -3.4 : null, underruns: 0,
         buffering: false, buffered: duration, error: null,
-        queueIndex: mockIndex, nowRev: mockRev, advanceError: null, systemVolume: isIOS ? 0.8 : null,
+        queueIndex: mockIndex, nowRev: mockRev, advanceError: null, systemVolume: isIOS ? 0.8 : null, playsRev: 1,
       };
       return s as T;
     }
@@ -612,6 +628,36 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     }
     case "playlist_export":
       return "/Users/me/Downloads/playlist.m3u8" as T;
+    case "plays": {
+      // A library that has been lived in: most tracks played, some often, some long ago.
+      const day = 86_400;
+      const at = Math.floor(Date.now() / 1000);
+      const out: Record<string, { count: number; last: number }> = {};
+      libTracks.forEach((tr, i) => {
+        const count = [12, 3, 0, 1, 27, 5, 0, 2][i % 8];
+        if (count) out[tr.path] = { count, last: at - [0.1, 2, 0, 40, 1, 400, 0, 9][i % 8] * day };
+      });
+      return out as T;
+    }
+    case "scrobble_status":
+      return mockScrobble() as T;
+    case "scrobble_connect_token":
+      if ((args.token as string).trim().length < 8) throw { code: "tokenRefused", service: "ListenBrainz" };
+      mockScrobbleUsers = { ...mockScrobbleUsers, listenbrainz: "listener" };
+      return mockScrobble() as T;
+    case "scrobble_sign_in":
+      mockScrobbleConnecting = true;
+      setTimeout(() => {
+        if (mockScrobbleConnecting) mockScrobbleUsers = { ...mockScrobbleUsers, lastfm: "listener" };
+        mockScrobbleConnecting = false;
+      }, 4000);
+      return mockScrobble() as T;
+    case "scrobble_cancel":
+      mockScrobbleConnecting = false;
+      return mockScrobble() as T;
+    case "scrobble_disconnect":
+      mockScrobbleUsers = { ...mockScrobbleUsers, [args.service as string]: null };
+      return mockScrobble() as T;
     case "streaming_status":
       return { available: !isIOS && !storeBuild, quality: mockQuality, accounts: ["qobuz", "tidal"].map((s) => ({ service: s, signedIn: mockSignedIn[s], user: mockSignedIn[s] ? "me@example.com" : null, note: null })) } as T;
     case "streaming_set_quality":

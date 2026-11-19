@@ -15,5 +15,9 @@ fn main() {
     if os == "android" {
         println!("cargo:rustc-cdylib-link-arg=-Wl,-z,max-page-size=16384");
     }
+    // The app's Last.fm API key and secret (src/scrobble.rs) come from the environment of the
+    // build, never from the repository; without them the build has no Last.fm.
+    println!("cargo:rerun-if-env-changed=BITSPRING_LASTFM_KEY");
+    println!("cargo:rerun-if-env-changed=BITSPRING_LASTFM_SECRET");
     tauri_build::build()
 }

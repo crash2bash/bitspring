@@ -1,11 +1,12 @@
 <script lang="ts" module>
-  export type SortKey = "number" | "title" | "artist" | "album" | "year" | "duration" | "format" | "dr";
+  export type SortKey = "number" | "title" | "artist" | "album" | "year" | "duration" | "format" | "dr" | "plays" | "lastPlayed";
 </script>
 
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { clock, khz, resolution, type Dynamics, type LibTrack } from "./api";
-  import { collator as makeCollator, t } from "./i18n.svelte";
+  import { ago, collator as makeCollator, dateTime, num, t } from "./i18n.svelte";
+  import { plays } from "./plays.svelte";
 
   let {
     tracks,
@@ -44,6 +45,9 @@
   const drOf = (t: LibTrack) => dynamics[t.path]?.dr ?? null;
 
   const collator = $derived(makeCollator());
+  /** How often and when a track was listened to (never: zeros). */
+  const NEVER = { count: 0, last: 0 };
+  const played = (t: LibTrack) => plays.map[t.path] ?? NEVER;
   const artistOf = (t: LibTrack) => t.albumArtist ?? t.artist ?? "";
   /** Empty values (untagged files) sort last, whichever direction. */
   const filledFirst = (a: string, b: string) => Number(!a) - Number(!b);
@@ -67,6 +71,8 @@
       duration: (a, b) => a.duration - b.duration,
       format: (a, b) => (a.bits ?? 0) - (b.bits ?? 0) || a.sampleRate - b.sampleRate,
       dr: (a, b) => (drOf(a) ?? 0) - (drOf(b) ?? 0),
+      plays: (a, b) => played(a).count - played(b).count || played(a).last - played(b).last,
+      lastPlayed: (a, b) => played(a).last - played(b).last,
     };
     const value: Partial<Record<SortKey, (t: LibTrack) => string>> = {
       artist: artistOf,
@@ -93,7 +99,8 @@
     if (sortKey === k) sortAsc = !sortAsc;
     else {
       sortKey = k;
-      sortAsc = k !== "duration" && k !== "format";
+      // Numbers start from the top: longest, best, most played, most recent.
+      sortAsc = !["duration", "format", "plays", "lastPlayed"].includes(k);
     }
   }
 </script>
@@ -104,11 +111,11 @@
       {#each columns as c (c)}
         <th class={c} title={c === "dr" ? t("dyn.help") : undefined} aria-sort={sortable && sortKey === c ? (sortAsc ? "ascending" : "descending") : undefined}>
           {#if sortable}
-            <button onclick={() => sortBy(c)}>
+            <button onclick={() => sortBy(c)} title={c === "plays" ? t("col.playsHelp") : undefined}>
               {t(`col.${c}`)}{#if sortKey === c}<span class="arrow" aria-hidden="true">{sortAsc ? "▲" : "▼"}</span>{/if}
             </button>
           {:else}
-            <span class="th">{t(`col.${c}`)}</span>
+            <span class="th" title={c === "plays" ? t("col.playsHelp") : undefined}>{t(`col.${c}`)}</span>
           {/if}
         </th>
       {/each}
@@ -151,6 +158,13 @@
               <span class="fmt" class:hi={tr.hiRes} class:lossy={!tr.lossless}>
                 {tr.format}{tr.lossless && tr.sampleRate ? (tr.bits ? ` ${resolution(tr.bits, tr.sampleRate)}` : ` ${khz(tr.sampleRate)} ${t("unit.khz")}`) : ""}
               </span>
+            {:else if c === "plays"}
+              <!-- Never listened to: an empty cell says it best. -->
+              {@const p = played(tr)}
+              {#if p.count}<span class="num" title={dateTime(p.last)}>{num(p.count)}</span>{/if}
+            {:else if c === "lastPlayed"}
+              {@const p = played(tr)}
+              {#if p.count}<span title={dateTime(p.last)}>{ago(p.last)}</span>{/if}
             {/if}
           </td>
         {/each}
@@ -185,6 +199,10 @@
     text-align: inherit;
     padding: 8px 10px;
     color: inherit;
+    /* a long word in some language is cut, not wrapped onto a second line */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   th button:hover {
     color: var(--porcelain);
@@ -268,6 +286,21 @@
   .none {
     color: var(--mist-dim);
   }
+  .plays {
+    width: 104px;
+    text-align: end;
+  }
+  th.plays button,
+  th.plays .th {
+    text-align: end;
+  }
+  .lastPlayed {
+    width: 144px;
+  }
+  td.plays,
+  td.lastPlayed {
+    color: var(--mist);
+  }
   td.title {
     font-weight: 500;
   }
@@ -315,13 +348,23 @@
     color: var(--mist-dim);
   }
 
+  /* not a wide window: the count stays (with the date on hover), the date column goes, so
+     titles keep their room */
+  @media (max-width: 1360px) {
+    .lastPlayed {
+      display: none;
+    }
+  }
+
   /* phone: number, title, length — the rest is on the album page */
   @media (max-width: 700px), (max-height: 500px) {
     .artist,
     .album,
     .year,
     .dr,
-    .format {
+    .format,
+    .plays,
+    .lastPlayed {
       display: none;
     }
     td {

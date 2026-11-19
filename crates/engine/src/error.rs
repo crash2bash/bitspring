@@ -99,6 +99,8 @@ pub enum UserError {
     SignInExpired { service: String },
     /// The sign-in window was closed before signing in.
     SignInCancelled,
+    /// `service` (ListenBrainz) doesn't know the token the user pasted.
+    TokenRefused { service: String },
     /// `service` gives only a 30-second preview of this track (the plan doesn't cover it).
     StreamPreview { service: String },
     /// `service` gives this track only encrypted, which the player doesn't decode.
@@ -201,6 +203,7 @@ impl fmt::Display for UserError {
             SignInNeeded { service } => write!(f, "sign in to {service}"),
             SignInExpired { service } => write!(f, "the {service} sign-in has expired; sign in again"),
             SignInCancelled => write!(f, "sign-in cancelled"),
+            TokenRefused { service } => write!(f, "{service} doesn't accept this token"),
             StreamPreview { service } => write!(f, "{service} gives only a 30-second preview of this track: your plan doesn't cover it"),
             StreamEncrypted { service } => write!(f, "{service} gives this track only encrypted, which the player doesn't play"),
             StreamRestricted { service } => write!(f, "{service} doesn't offer this track in your country or plan"),

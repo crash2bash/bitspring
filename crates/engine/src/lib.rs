@@ -17,6 +17,7 @@ pub mod net;
 pub mod output;
 pub mod player;
 pub mod playlist;
+pub mod plays;
 pub mod quality;
 pub mod rate;
 pub mod ripcheck;

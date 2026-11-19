@@ -1,6 +1,6 @@
 [package]
 name = "hifi-desktop"
-version = "0.21.0"
+version = "0.22.0"
 description = "Bit-perfect music player"
 edition = "2024"
 license = "MIT"
@@ -31,6 +31,9 @@ sys-locale = "0.3"
 # AutoEQ's headphone catalog, and Android updates (latest.json and the APK).
 ureq = "3"
 tauri-plugin-opener = "2"
+# Last.fm signs its requests with an MD5 (the version the streaming crate already uses).
+md-5 = "0.11.0"
+log = "0.4"
 
 # Now Playing and its remote commands (iPhone lock screen, Mac media keys), and on the Mac
 # security-scoped bookmarks: the sandboxed Mac App Store build keeps its music folders.
@@ -46,7 +49,6 @@ windows = { version = "0.62", features = ["Foundation", "Media", "Storage_Stream
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
-log = "0.4"
 ndk-context = "0.1"
 
 

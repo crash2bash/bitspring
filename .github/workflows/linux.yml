@@ -53,6 +53,11 @@ jobs:
 
       # No updater signature here (the key stays off CI); release builds are signed locally.
       - name: Build
+        # The app's Last.fm key (repository secrets; see src-tauri/src/scrobble.rs). Without
+        # them the build simply has no Last.fm.
+        env:
+          BITSPRING_LASTFM_KEY: ${{ secrets.BITSPRING_LASTFM_KEY }}
+          BITSPRING_LASTFM_SECRET: ${{ secrets.BITSPRING_LASTFM_SECRET }}
         run: npx tauri build --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - uses: actions/upload-artifact@v4

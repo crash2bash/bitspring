@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { i18n, LOCALES, t } from "./i18n.svelte";
+  import { i18n, LOCALES, t, tn } from "./i18n.svelte";
   import { checkUpdates, updates } from "./updates.svelte";
-  import { inTauri } from "./api";
+  import { errorText, inTauri } from "./api";
   import { hasRemote, loadRemote, newAddress, remote, setRemote } from "./remote.svelte";
   import { look, LOOKS } from "./look.svelte";
   import { lyricsPrefs } from "./lyricsPrefs.svelte";
+  import { cancelSignIn, connectToken, disconnect, loadScrobble, scrobble, signIn } from "./scrobble.svelte";
   import { liquidPill } from "./liquid";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -37,6 +38,27 @@
       remote.fresh = false;
     };
   });
+
+  // Scrobbling accounts: kept fresh while the settings are open, so a sign-in approved in the
+  // browser, or listens that went out, show without a click.
+  const LISTENBRAINZ_TOKEN = "https://listenbrainz.org/settings/";
+  let token = $state("");
+  $effect(() => {
+    loadScrobble();
+    const timer = setInterval(loadScrobble, 2000);
+    return () => clearInterval(timer);
+  });
+  function openTokenPage(e: MouseEvent) {
+    if (!inTauri) return;
+    e.preventDefault();
+    openUrl(LISTENBRAINZ_TOKEN).catch(() => {});
+  }
+  async function submitToken(e: SubmitEvent) {
+    e.preventDefault();
+    if (!token.trim()) return;
+    await connectToken("listenbrainz", token);
+    if (!scrobble.error.listenbrainz) token = "";
+  }
 
   function onKey(e: KeyboardEvent) {
     if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -112,6 +134,71 @@
             <span class="knob" aria-hidden="true"></span>
           </span>
         </div>
+        {#if scrobble.services.some((s) => s.available)}
+          <div class="row">
+            <div class="what">
+              <span>{t("scrobble.setting")}</span>
+              <p class="help">{t("scrobble.help")}</p>
+            </div>
+          </div>
+          <!-- One row per service, each saying where it stands: nothing connected, waiting
+               for the browser, or whose profile the listens go to. -->
+          <ul class="accounts">
+            {#each scrobble.services.filter((s) => s.available) as s (s.service)}
+              {@const busy = scrobble.busy === s.service}
+              <li class="row">
+                <div class="what">
+                  <span>{s.name}</span>
+                  {#if s.user}
+                    <p class="help">{t("scrobble.connectedAs", { user: s.user })}</p>
+                    {#if s.rejected}
+                      <p class="help err">{t("scrobble.rejected", { service: s.name })}</p>
+                    {:else}
+                      {#if s.waiting}<p class="help">{tn("scrobble.waiting", s.waiting)}</p>{/if}
+                      {#if s.offline}<p class="help">{t("scrobble.offline", { service: s.name })}</p>{/if}
+                    {/if}
+                  {:else if s.connecting}
+                    <p class="help where">{t("scrobble.approve", { service: s.name })}</p>
+                  {:else if s.service === "listenbrainz"}
+                    <p class="help">
+                      {t("scrobble.tokenHelp")}
+                      <a href={LISTENBRAINZ_TOKEN} onclick={openTokenPage}>listenbrainz.org/settings</a>
+                    </p>
+                    <form class="token" onsubmit={submitToken}>
+                      <input
+                        type="password"
+                        bind:value={token}
+                        placeholder={t("scrobble.token")}
+                        aria-label={t("scrobble.token")}
+                        autocomplete="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                      />
+                      <button class="quiet" type="submit" disabled={busy || !token.trim()}>{t("scrobble.connect")}</button>
+                    </form>
+                  {:else}
+                    <p class="help">{t("scrobble.browserHelp", { service: s.name })}</p>
+                  {/if}
+                  {#if scrobble.error[s.service]}
+                    <p class="help err">{scrobble.error[s.service]}</p>
+                  {:else if s.failed && !s.user && !s.connecting}
+                    <p class="help err">{errorText(s.failed)}</p>
+                  {/if}
+                </div>
+                {#if s.user}
+                  {#if s.rejected && s.service !== "listenbrainz"}
+                    <button class="quiet" onclick={() => signIn(s.service)} disabled={busy}>{t("scrobble.connect")}</button>
+                  {/if}
+                  <button class="quiet" onclick={() => disconnect(s.service)} disabled={busy}>{t("scrobble.disconnect")}</button>
+                {:else if s.connecting}
+                  <button class="quiet" onclick={() => cancelSignIn(s.service)}>{t("pl.cancel")}</button>
+                {:else if s.service !== "listenbrainz"}
+                  <button class="quiet" onclick={() => signIn(s.service)} disabled={busy}>{t("scrobble.connect")}</button>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
         {#if hasRemote && remote.status}
           {@const r = remote.status}
           <div class="row">
@@ -409,6 +496,50 @@
   }
   .quiet:disabled {
     color: var(--mist);
+  }
+
+  /* The scrobbling accounts belong to the row above them: closer to it, and to each other,
+     than rows of their own would be. */
+  .accounts {
+    list-style: none;
+    margin: -6px 0 0;
+    /* a rule down their side: these are the services of the setting above */
+    padding: 2px 0 2px 14px;
+    padding-inline: 14px 0;
+    border-inline-start: 1px solid var(--slate-600);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .accounts .row {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .token {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .token input {
+    flex: 1;
+    min-width: 0;
+    max-width: var(--control);
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--slate-600);
+    background: var(--slate-800);
+    color: var(--porcelain);
+    font: inherit;
+    font-size: var(--t-sm);
+  }
+  .token input:focus {
+    border-color: var(--mist);
+    outline: none;
+  }
+  :global(html[data-look="glass"]) .token input {
+    border-radius: 999px;
+    padding: 0 14px;
   }
 
   /* The phone remote's way in: the code to scan, and the same address in words. */

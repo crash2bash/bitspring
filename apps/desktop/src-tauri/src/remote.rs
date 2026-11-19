@@ -211,7 +211,7 @@ fn handle(app: &AppHandle, token: &str, conn: &mut TcpStream, stop: &AtomicBool)
     let state = app.state::<AppState>();
     match (req.method.as_str(), req.path.as_str()) {
         ("GET", "/api/state") => {
-            let status = crate::status(app.state::<AppState>());
+            let status = crate::status(app.state::<AppState>(), app.state::<std::sync::Arc<crate::stats::Plays>>());
             let (paths, index, shuffle, repeat) = {
                 let q = state.queue.lock().unwrap();
                 (q.paths.clone(), q.index, q.shuffle, q.repeat)

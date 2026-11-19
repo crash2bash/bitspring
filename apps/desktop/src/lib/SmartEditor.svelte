@@ -9,7 +9,7 @@
     onclose,
   }: { name: string; rules: SmartRules | null; onsave: (name: string, rules: SmartRules) => void; onclose: () => void } = $props();
 
-  type Kind = "text" | "number" | "days" | "flag" | "quality";
+  type Kind = "text" | "number" | "days" | "played" | "flag" | "quality";
   const FIELDS: [SmartField, Kind][] = [
     ["genre", "text"],
     ["artist", "text"],
@@ -18,6 +18,8 @@
     ["title", "text"],
     ["year", "number"],
     ["added", "days"],
+    ["plays", "number"],
+    ["lastPlayed", "played"],
     ["hiRes", "flag"],
     ["lossless", "flag"],
     ["format", "text"],
@@ -33,11 +35,13 @@
     text: ["contains", "notContains", "is", "isNot", "startsWith"],
     number: ["is", "greater", "less", "isNot"],
     days: ["withinDays"],
+    // "Not within" also takes in what was never listened to.
+    played: ["notWithinDays", "withinDays"],
     flag: ["isTrue", "isFalse"],
     quality: ["is", "isNot"],
   };
   const QUALITY = ["genuine", "suspect", "unclear", "unchecked"];
-  const SORTS: SmartSort[] = ["album", "artist", "title", "year", "added", "duration", "random"];
+  const SORTS: SmartSort[] = ["album", "artist", "title", "year", "added", "duration", "mostPlayed", "recentlyPlayed", "longestUnplayed", "random"];
 
   // svelte-ignore state_referenced_locally
   let name = $state(startName);
@@ -57,7 +61,9 @@
     const k = kindOf(f);
     if (!OPS[k].includes(r.op)) r.op = OPS[k][0];
     if (k === "quality") r.value = "suspect";
-    else if (k === "days") r.value = r.value && /^\d+$/.test(r.value) ? r.value : "30";
+    else if (k === "days" || k === "played") r.value = r.value && /^\d+$/.test(r.value) ? r.value : "30";
+    // "Times played" starts as "never": the list people come here for.
+    else if (f === "plays" && !/^\d+$/.test(r.value)) r.value = "0";
     else if (k === "flag") r.value = "";
   }
 

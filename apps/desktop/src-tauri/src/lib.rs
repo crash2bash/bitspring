@@ -27,6 +27,8 @@ mod queue;
 mod remote;
 mod remote_api;
 mod ripcheck;
+mod scrobble;
+mod stats;
 /// Qobuz and TIDAL: the real thing outside the App Store, a stand-in inside it.
 #[cfg_attr(all(feature = "streaming", not(target_os = "ios")), path = "stream_on.rs")]
 #[cfg_attr(not(all(feature = "streaming", not(target_os = "ios"))), path = "stream_off.rs")]
@@ -362,6 +364,8 @@ struct StatusDto {
     advance_error: Option<AdvanceError>,
     /// System volume 0…1 where the OS may scale our samples with it (iOS); else None.
     system_volume: Option<f32>,
+    /// Changes whenever a track has been counted as listened to; then fetch `plays`.
+    plays_rev: u64,
 }
 
 #[derive(Serialize)]
@@ -999,6 +1003,50 @@ fn take_lined_up(state: &AppState, i: usize, path: &str) -> Option<Arc<Track>> {
     Some(l.remove(at).track)
 }
 
+/// One look at the player for the listening statistics and scrobbling (see stats::Tracker).
+/// Only the look happens under the locks; counting a listen writes files.
+fn watch_listening(state: &AppState, tracker: &mut stats::Tracker) {
+    let (seen, heard) = {
+        // A track starting right now: look again next time.
+        let Ok(_one) = state.play_lock.try_lock() else { return };
+        let Some(player) = player_now(state) else { return };
+        let current = state.current.lock().unwrap();
+        match (player.as_ref(), current.as_ref()) {
+            (Some(p), Some(c)) => {
+                // The player has moved on to a lined-up track and `took_over` hasn't noticed
+                // yet: the position is the next track's.
+                if !Arc::ptr_eq(&c.track, &p.heard()) {
+                    return;
+                }
+                let rev = state.now_rev.load(Ordering::Acquire);
+                let playing = !p.is_paused() && !p.is_finished() && !p.is_buffering();
+                let heard = (tracker.following() != Some(rev)).then(|| heard_of(c));
+                (Some(stats::Seen { rev, playing, position: p.position_secs() }), heard)
+            }
+            // Stopped, the channel test, or a finished queue that let go of the output.
+            _ => (None, None),
+        }
+    };
+    tracker.tick(seen, || heard);
+}
+
+/// The track a listen is of, with the tags a scrobble carries (when it has an artist and a
+/// title: a file known only by its name is counted here but told to nobody).
+fn heard_of(c: &Current) -> stats::Heard {
+    let meta = &c.track.meta;
+    let text = |s: &Option<String>| s.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let duration = c.track.duration_secs();
+    let song = text(&meta.artist).zip(text(&meta.title)).map(|(artist, title)| scrobble::Song {
+        artist,
+        title,
+        album: text(&meta.album),
+        album_artist: text(&meta.album_artist),
+        track_number: meta.track_number,
+        duration,
+    });
+    stats::Heard { path: c.path.to_string_lossy().into_owned(), duration, song }
+}
+
 /// Next (+1) or previous (−1) track, for controls outside the UI (lock screen, headphones).
 /// "Previous" more than 3 s into a track restarts it, like the UI's button.
 #[cfg_attr(desktop, allow(dead_code))]
@@ -1056,12 +1104,14 @@ impl StatusDto {
             now_rev,
             advance_error,
             system_volume,
+            plays_rev: 0,
         }
     }
 }
 
 #[tauri::command]
-fn status(state: State<'_, AppState>) -> StatusDto {
+fn status(state: State<'_, AppState>, plays: State<'_, Arc<stats::Plays>>) -> StatusDto {
+    let plays_rev = plays.rev();
     let queue_index = state.queue.lock().unwrap().index;
     let now_rev = state.now_rev.load(Ordering::Acquire);
     let advance_error = state.advance_error.lock().unwrap().clone();
@@ -1071,8 +1121,8 @@ fn status(state: State<'_, AppState>) -> StatusDto {
         // was finished is being replaced).
         let last = state.last_status.lock().unwrap().clone();
         return match last {
-            Some(s) => StatusDto { buffering: true, finished: false, queue_index, now_rev, advance_error, system_volume, ..s },
-            None => StatusDto { buffering: true, ..StatusDto::idle(queue_index, now_rev, advance_error, system_volume) },
+            Some(s) => StatusDto { buffering: true, finished: false, queue_index, now_rev, advance_error, system_volume, plays_rev, ..s },
+            None => StatusDto { buffering: true, plays_rev, ..StatusDto::idle(queue_index, now_rev, advance_error, system_volume) },
         };
     };
     let s = match player.as_ref() {
@@ -1091,8 +1141,9 @@ fn status(state: State<'_, AppState>) -> StatusDto {
             now_rev,
             advance_error,
             system_volume,
+            plays_rev,
         },
-        None => StatusDto::idle(queue_index, now_rev, advance_error, system_volume),
+        None => StatusDto { plays_rev, ..StatusDto::idle(queue_index, now_rev, advance_error, system_volume) },
     };
     drop(player);
     *state.last_status.lock().unwrap() = Some(s.clone());
@@ -1341,6 +1392,10 @@ pub fn run() {
             app.manage(quality::Quality::load(app.handle()));
             app.manage(loudness::Loudness::load(app.handle()));
             app.manage(remote::Remote::load(app.handle()));
+            let plays = Arc::new(stats::Plays::load(app.handle()));
+            app.manage(plays.clone());
+            let scrobbling = scrobble::Scrobbling::load(app.handle());
+            app.manage(scrobbling.clone());
             app.manage(abx::Abx::default());
             app.manage(ripcheck::RipCheck::load(app.handle()));
             *app.state::<AppState>().eq.lock().unwrap() = eq::EqStore::load(app.handle());
@@ -1369,10 +1424,12 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::Builder::new().name("hifi-queue".into()).spawn(move || {
                 let mut ended: Option<std::time::Instant> = None;
+                let mut listening = stats::Tracker::new(plays, scrobbling);
                 loop {
                     std::thread::sleep(Duration::from_millis(40));
                     let state = handle.state::<AppState>();
                     follow_queue(&state);
+                    watch_listening(&state, &mut listening);
                     if advance(&state) {
                         let since = *ended.get_or_insert_with(std::time::Instant::now);
                         if since.elapsed() >= RELEASE_AFTER {
@@ -1458,6 +1515,12 @@ pub fn run() {
             loudness::loudness_status,
             loudness::loudness_analyze,
             loudness::loudness_write_tags,
+            stats::plays,
+            scrobble::scrobble_status,
+            scrobble::scrobble_connect_token,
+            scrobble::scrobble_sign_in,
+            scrobble::scrobble_cancel,
+            scrobble::scrobble_disconnect,
             loudness::dynamics,
             ripcheck::rip_cached,
             ripcheck::rip_progress,

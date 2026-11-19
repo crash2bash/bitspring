@@ -143,7 +143,7 @@ fn current_cover(app: &AppHandle) -> Option<(&'static str, Vec<u8>)> {
 /// What plays, and how: the answer of `GET state` and of every event.
 pub(crate) fn state(app: &AppHandle) -> Value {
     let st = app.state::<AppState>();
-    let status = crate::status(app.state::<AppState>());
+    let status = crate::status(app.state::<AppState>(), app.state::<std::sync::Arc<crate::stats::Plays>>());
     let now = crate::now_playing(app.state::<AppState>());
     let (length, index, shuffle, repeat) = {
         let q = st.queue.lock().unwrap();

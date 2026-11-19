@@ -31,6 +31,12 @@
   let lists = $state<PlaylistSummary[]>([]);
   let selected = $state<string | null>(null);
   let detail = $state<PlaylistDetail | null>(null);
+  /** A smart playlist built on listening ("most played", "not played lately"): its table
+   *  shows the numbers it goes by in place of the format. */
+  let listensMatter = $derived.by(() => {
+    const s = detail?.smart;
+    return !!s && (["mostPlayed", "recentlyPlayed", "longestUnplayed"].includes(s.sort) || s.rules.some((r) => r.field === "plays" || r.field === "lastPlayed"));
+  });
   let report = $state<Imported[] | null>(null);
   let error = $state<string | null>(null);
   let note = $state<string | null>(null);
@@ -346,7 +352,7 @@
           tracks={rows}
           {currentPath}
           sortable={false}
-          columns={["number", "title", "artist", "album", "duration", "format"]}
+          columns={listensMatter ? ["number", "title", "artist", "album", "duration", "plays", "lastPlayed"] : ["number", "title", "artist", "album", "duration", "format"]}
           dimmed={(t) => !(t as Row).available}
           onplay={(_, i) => play((rows[i] as Row).entry)}
         >

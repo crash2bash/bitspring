@@ -607,7 +607,7 @@
           tracks={albumTracks}
           {currentPath}
           sortable={false}
-          columns={albumTracks.some((tr) => dynamics[tr.path]?.dr != null) ? ["number", "title", "duration", "dr", "format"] : ["number", "title", "duration", "format"]}
+          columns={albumTracks.some((tr) => dynamics[tr.path]?.dr != null) ? ["number", "title", "duration", "dr", "format", "plays"] : ["number", "title", "duration", "format", "plays"]}
           {dynamics}
           onplay={(_, i) => playAlbum(openAlbum!, i)}
         >
@@ -645,7 +645,7 @@
         <TrackTable
           tracks={visibleTracks}
           {currentPath}
-          columns={anyDynamics ? ["number", "title", "artist", "album", "year", "duration", "dr", "format"] : undefined}
+          columns={anyDynamics ? ["number", "title", "artist", "album", "year", "duration", "dr", "format", "plays", "lastPlayed"] : ["number", "title", "artist", "album", "year", "duration", "format", "plays", "lastPlayed"]}
           {dynamics}
           bind:sortKey={trackSort}
           bind:sortAsc={trackAsc}

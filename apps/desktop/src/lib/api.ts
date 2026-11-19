@@ -95,7 +95,7 @@ export type EngineError =
   | { code: "audioSetup" | "outputFailed" | "profileUnreadable" | "playlistUnreadable" | "writeFailed" | "irUnreadable" | "updateFailed" | "catalogUnavailable"; detail: string }
   | { code: "irChannels"; channels: number }
   | { code: "irTooLong"; seconds: number }
-  | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
+  | { code: "signInNeeded" | "signInExpired" | "tokenRefused" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
   | { code: "serviceUnreachable"; service: string; detail: string }
   | { code: "noRates"; device: string }
   | { code: "rateRefused"; khz: number }
@@ -255,6 +255,35 @@ export interface Status {
   advanceError: AdvanceError | null;
   /** iOS: system volume 0…1 (below 1 iOS may scale the samples). Null elsewhere. */
   systemVolume: number | null;
+  /** Changes whenever a track has been counted as listened to — then fetch plays(). */
+  playsRev: number;
+}
+
+/** How often a track was listened to, and when last (Unix seconds). Kept on this device only. */
+export interface Played {
+  count: number;
+  last: number;
+}
+
+/** A service listens can be sent to, once the user connects an account. */
+export type ScrobbleService = "lastfm" | "listenbrainz";
+export interface ScrobbleStatus {
+  service: ScrobbleService;
+  name: string;
+  /** This build can talk to it. */
+  available: boolean;
+  /** The connected account's name. */
+  user: string | null;
+  /** The service no longer accepts the sign-in: connect again. */
+  rejected: boolean;
+  /** Listens waiting to be sent. */
+  waiting: number;
+  /** The last try didn't get through; it is tried again later. */
+  offline: boolean;
+  /** Waiting for the sign-in to be approved in the browser. */
+  connecting: boolean;
+  /** Why the last sign-in ended without an account. */
+  failed: EngineError | null;
 }
 
 export interface LibraryStatus {
@@ -432,10 +461,10 @@ export interface PlaylistSummary {
 
 export type SmartField =
   | "title" | "artist" | "album" | "albumArtist" | "genre" | "format" | "quality" | "dr" | "lra"
-  | "year" | "sampleRate" | "bits" | "duration" | "added" | "hiRes" | "lossless";
+  | "year" | "sampleRate" | "bits" | "duration" | "added" | "hiRes" | "lossless" | "plays" | "lastPlayed";
 export type SmartOp =
-  | "contains" | "notContains" | "is" | "isNot" | "startsWith" | "greater" | "less" | "withinDays" | "isTrue" | "isFalse";
-export type SmartSort = "album" | "artist" | "title" | "year" | "added" | "duration" | "random";
+  | "contains" | "notContains" | "is" | "isNot" | "startsWith" | "greater" | "less" | "withinDays" | "notWithinDays" | "isTrue" | "isFalse";
+export type SmartSort = "album" | "artist" | "title" | "year" | "added" | "duration" | "random" | "mostPlayed" | "recentlyPlayed" | "longestUnplayed";
 export interface SmartRule {
   field: SmartField;
   op: SmartOp;
@@ -673,6 +702,15 @@ export const api = {
   crashReport: () => call<string | null>("crash_report"),
   crashDismiss: () => call<void>("crash_dismiss"),
   loudnessStatus: () => call<LoudnessStatus>("loudness_status"),
+  /** Every track listened to so far, by path. */
+  plays: () => call<Record<string, Played>>("plays"),
+  scrobbleStatus: () => call<ScrobbleStatus[]>("scrobble_status"),
+  /** Connect a service with a token the user pasted (ListenBrainz). */
+  scrobbleConnectToken: (service: ScrobbleService, token: string) => call<ScrobbleStatus[]>("scrobble_connect_token", { service, token }),
+  /** Start a sign-in that is approved in the browser (Last.fm); the status says how it ends. */
+  scrobbleSignIn: (service: ScrobbleService) => call<ScrobbleStatus[]>("scrobble_sign_in", { service }),
+  scrobbleCancel: () => call<ScrobbleStatus[]>("scrobble_cancel"),
+  scrobbleDisconnect: (service: ScrobbleService) => call<ScrobbleStatus[]>("scrobble_disconnect", { service }),
   /** An earlier check of this album (its tracks' paths, in disc order), if its files are as they were. */
   ripCached: (paths: string[]) => call<RipResult | null>("rip_cached", { paths }),
   /** [done, total] tracks read by the check that runs now. */
@@ -912,6 +950,7 @@ export function errorText(e: unknown): string {
         return t("error.irTooLong", { seconds: num(err.seconds) });
       case "signInNeeded":
       case "signInExpired":
+      case "tokenRefused":
       case "streamPreview":
       case "streamEncrypted":
       case "streamRestricted":

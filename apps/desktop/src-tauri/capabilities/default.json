@@ -10,7 +10,7 @@
     "dialog:allow-save",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://bitspring.app" }, { "url": "https://bitspring.app/*" }, { "url": "https://github.com/crash2bash/bitspring/issues/new*" }]
+      "allow": [{ "url": "https://bitspring.app" }, { "url": "https://bitspring.app/*" }, { "url": "https://github.com/crash2bash/bitspring/issues/new*" }, { "url": "https://listenbrainz.org/settings/" }]
     }
   ]
 }

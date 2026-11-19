@@ -47,6 +47,9 @@ them, and off means bit-perfect again.
 - **Blind test (ABX).** Do you hear the hi-res edition, or the equalizer? The player lines the two
   up, matches their loudness, switches without telling which is which, and gives the odds that
   you were guessing.
+- **Play counts that stay with you:** how often and when you played each track is kept on your
+  device, and smart playlists can use it ("not played this year", "most played"). Scrobbling to
+  Last.fm or ListenBrainz is there if you connect an account, and off until you do.
 - **Local API** for Home Assistant, a Stream Deck or your own scripts, on the same local server
   as the phone remote: off until you switch it on. See [docs/api.md](docs/api.md).
 - **Nothing to sign up for:** no account, no ads, no in-app purchases, nothing collected.
@@ -84,6 +87,10 @@ npx tauri dev                 # run the desktop app
 npx tauri build               # installer for this computer
 npm run build:appstore        # Mac App Store build (sandboxed, no streaming or self-update)
 ```
+
+Scrobbling to Last.fm needs an API key of your own ([last.fm/api](https://www.last.fm/api)): set
+`BITSPRING_LASTFM_KEY` and `BITSPRING_LASTFM_SECRET` when you build. Without them the build has
+ListenBrainz only.
 
 <details>
 <summary><b>What's where</b></summary>

@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
 
 use crate::library::TrackInfo;
+use crate::plays::Played;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +53,10 @@ pub enum Field {
     Lossless,
     /// The quality check's word: "genuine", "suspect" or "unchecked".
     Quality,
+    /// How many times the track was listened to (0: never).
+    Plays,
+    /// When it was last listened to, in days.
+    LastPlayed,
     /// Dynamic range (the DR figure), where it has been measured.
     Dr,
     /// Loudness range (LRA) in LU, where it has been measured.
@@ -68,8 +73,10 @@ pub enum Op {
     StartsWith,
     Greater,
     Less,
-    /// Added within the last N days.
+    /// Added (or listened to) within the last N days.
     WithinDays,
+    /// Not listened to within the last N days — or ever.
+    NotWithinDays,
     IsTrue,
     IsFalse,
 }
@@ -89,12 +96,20 @@ pub enum Sort {
     /// Longest first.
     Duration,
     Random,
+    /// Listened to most often first.
+    MostPlayed,
+    /// Listened to most recently first.
+    RecentlyPlayed,
+    /// Longest not listened to first: never played, then the oldest listen.
+    LongestUnplayed,
 }
 
 /// What the rules ask about a track that the library index doesn't hold.
 pub struct Facts<'a> {
     /// The quality check's word for a track.
     pub quality: &'a dyn Fn(&TrackInfo) -> &'static str,
+    /// How often and when it was listened to.
+    pub played: &'a dyn Fn(&TrackInfo) -> Played,
     /// Its dynamic range (DR) and loudness range (LRA, in LU), when measured.
     pub dynamics: &'a dyn Fn(&TrackInfo) -> (Option<f64>, Option<f64>),
     /// The time, in Unix seconds.
@@ -135,6 +150,19 @@ pub fn select(tracks: &[TrackInfo], rules: &SmartRules, facts: &Facts) -> Vec<us
         Sort::Added => picked.sort_by(|&a, &b| tracks[b].mtime.cmp(&tracks[a].mtime).then_with(|| album_order(&tracks[a], &tracks[b]))),
         Sort::Duration => picked.sort_by(|&a, &b| tracks[b].duration.partial_cmp(&tracks[a].duration).unwrap_or(Ordering::Equal)),
         Sort::Random => shuffle(&mut picked),
+        Sort::MostPlayed | Sort::RecentlyPlayed | Sort::LongestUnplayed => {
+            let played: Vec<Played> = tracks.iter().map(facts.played).collect();
+            picked.sort_by(|&a, &b| {
+                let (pa, pb) = (played[a], played[b]);
+                match rules.sort {
+                    Sort::MostPlayed => pb.count.cmp(&pa.count).then_with(|| pb.last.cmp(&pa.last)),
+                    Sort::RecentlyPlayed => pb.last.cmp(&pa.last),
+                    // (Never listened to has no time: 0, before everything.)
+                    _ => pa.last.cmp(&pb.last),
+                }
+                .then_with(|| album_order(&tracks[a], &tracks[b]))
+            });
+        }
     }
     if let Some(n) = rules.limit {
         picked.truncate(n);
@@ -192,6 +220,16 @@ fn matches(t: &TrackInfo, r: &Rule, facts: &Facts) -> bool {
             (Op::WithinDays, Ok(days)) => now.saturating_sub(t.mtime) <= days * 86_400,
             _ => false,
         },
+        Field::Plays => number(Some(f64::from((facts.played)(t).count))),
+        Field::LastPlayed => {
+            let played = (facts.played)(t);
+            let within = |days: u64| played.count > 0 && now.saturating_sub(played.last) <= days * 86_400;
+            match (r.op, value.parse::<u64>()) {
+                (Op::WithinDays, Ok(days)) => within(days),
+                (Op::NotWithinDays, Ok(days)) => !within(days),
+                _ => false,
+            }
+        }
         // (A track nobody measured matches no rule about its dynamics. The DR figure is
         // compared as it is shown: rounded.)
         Field::Dr => number((facts.dynamics)(t).0.map(f64::round)),
@@ -255,12 +293,34 @@ mod tests {
         SmartRules { match_all, rules: rules.into_iter().map(|(field, op, v)| Rule { field, op, value: v.into() }).collect(), sort, limit: None }
     }
 
+    fn never(_: &TrackInfo) -> Played {
+        Played::default()
+    }
+
     fn unmeasured(_: &TrackInfo) -> (Option<f64>, Option<f64>) {
         (None, None)
     }
 
     fn paths(lib: &[TrackInfo], r: &SmartRules) -> Vec<String> {
-        select(lib, r, &Facts { quality: &|_| "unchecked", dynamics: &unmeasured, now: NOW }).into_iter().map(|i| lib[i].path.clone()).collect()
+        select(lib, r, &Facts { quality: &|_| "unchecked", played: &never, dynamics: &unmeasured, now: NOW }).into_iter().map(|i| lib[i].path.clone()).collect()
+    }
+
+    /// The clock of the listening tests (years after the files were added).
+    const LATER: u64 = 100_000_000;
+
+    /// The library with listens: /b/1 three times (long ago), /a/1 once (an hour ago),
+    /// /c/1 twice (ten days ago), /b/2 never.
+    fn played(t: &TrackInfo) -> Played {
+        match t.path.as_str() {
+            "/b/1.flac" => Played { count: 3, last: LATER - 400 * 86_400 },
+            "/a/1.flac" => Played { count: 1, last: LATER - 3_600 },
+            "/c/1.flac" => Played { count: 2, last: LATER - 10 * 86_400 },
+            _ => Played::default(),
+        }
+    }
+
+    fn listened(lib: &[TrackInfo], r: &SmartRules) -> Vec<String> {
+        select(lib, r, &Facts { quality: &|_| "unchecked", played: &played, dynamics: &unmeasured, now: LATER }).into_iter().map(|i| lib[i].path.clone()).collect()
     }
 
     #[test]
@@ -300,7 +360,7 @@ mod tests {
         let l = lib();
         let r = rules(true, vec![(Field::Quality, Op::Is, "suspect")], Sort::Album);
         let word = |t: &TrackInfo| if t.path == "/a/1.flac" { "suspect" } else { "genuine" };
-        let picked: Vec<usize> = select(&l, &r, &Facts { quality: &word, dynamics: &unmeasured, now: NOW });
+        let picked: Vec<usize> = select(&l, &r, &Facts { quality: &word, played: &never, dynamics: &unmeasured, now: NOW });
         assert_eq!(picked, [2]);
     }
 
@@ -316,7 +376,7 @@ mod tests {
             _ => (None, None),
         };
         let picked = |r: &SmartRules| -> Vec<String> {
-            select(&l, r, &Facts { quality: &|_| "unchecked", dynamics: &dynamics, now: NOW }).into_iter().map(|i| l[i].path.clone()).collect()
+            select(&l, r, &Facts { quality: &|_| "unchecked", played: &never, dynamics: &dynamics, now: NOW }).into_iter().map(|i| l[i].path.clone()).collect()
         };
         assert_eq!(picked(&rules(true, vec![(Field::Dr, Op::Less, "7")], Sort::Album)), ["/b/1.flac", "/a/1.flac"]);
         assert_eq!(picked(&rules(true, vec![(Field::Dr, Op::Is, "6")], Sort::Album)), ["/b/1.flac", "/a/1.flac"]);
@@ -324,6 +384,56 @@ mod tests {
         assert_eq!(picked(&rules(true, vec![(Field::Lra, Op::Greater, "10")], Sort::Album)), ["/c/1.flac"]);
         assert_eq!(picked(&rules(true, vec![(Field::Lra, Op::Less, "10")], Sort::Album)), ["/a/1.flac"]);
         assert!(paths(&l, &rules(true, vec![(Field::Dr, Op::Less, "99")], Sort::Album)).is_empty());
+    }
+
+    #[test]
+    fn never_listened_to() {
+        let l = lib();
+        let r = rules(true, vec![(Field::Plays, Op::Is, "0")], Sort::Album);
+        assert_eq!(listened(&l, &r), ["/b/2.flac"]);
+        // Nothing has been listened to yet: everything is "never".
+        assert_eq!(paths(&l, &r).len(), 4);
+    }
+
+    #[test]
+    fn most_played_first() {
+        let l = lib();
+        let r = rules(true, vec![(Field::Plays, Op::Greater, "0")], Sort::MostPlayed);
+        assert_eq!(listened(&l, &r), ["/b/1.flac", "/c/1.flac", "/a/1.flac"]);
+        let r = rules(true, vec![(Field::Plays, Op::Greater, "1")], Sort::MostPlayed);
+        assert_eq!(listened(&l, &r), ["/b/1.flac", "/c/1.flac"]);
+    }
+
+    #[test]
+    fn not_listened_to_for_a_long_time() {
+        let l = lib();
+        // Not in the last 30 days: the one from long ago, and the one never played — which
+        // comes first, having waited longest.
+        let r = rules(true, vec![(Field::LastPlayed, Op::NotWithinDays, "30")], Sort::LongestUnplayed);
+        assert_eq!(listened(&l, &r), ["/b/2.flac", "/b/1.flac"]);
+        // Listened to before, but not lately.
+        let r = rules(true, vec![(Field::LastPlayed, Op::NotWithinDays, "30"), (Field::Plays, Op::Greater, "0")], Sort::LongestUnplayed);
+        assert_eq!(listened(&l, &r), ["/b/1.flac"]);
+    }
+
+    #[test]
+    fn listened_to_lately_most_recent_first() {
+        let l = lib();
+        let r = rules(true, vec![(Field::LastPlayed, Op::WithinDays, "30")], Sort::RecentlyPlayed);
+        assert_eq!(listened(&l, &r), ["/a/1.flac", "/c/1.flac"]);
+        let r = rules(true, vec![(Field::LastPlayed, Op::WithinDays, "1")], Sort::RecentlyPlayed);
+        assert_eq!(listened(&l, &r), ["/a/1.flac"]);
+        // A track never listened to was not listened to lately, whatever the clock says.
+        let r = rules(true, vec![(Field::LastPlayed, Op::WithinDays, "100000")], Sort::Album);
+        assert_eq!(listened(&l, &r).len(), 3);
+    }
+
+    #[test]
+    fn listening_rules_round_trip_as_json() {
+        let r = rules(true, vec![(Field::LastPlayed, Op::NotWithinDays, "90"), (Field::Plays, Op::Less, "3")], Sort::LongestUnplayed);
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains(r#""field":"lastPlayed""#) && json.contains(r#""op":"notWithinDays""#) && json.contains(r#""sort":"longestUnplayed""#), "{json}");
+        assert_eq!(serde_json::from_str::<SmartRules>(&json).unwrap(), r);
     }
 
     #[test]

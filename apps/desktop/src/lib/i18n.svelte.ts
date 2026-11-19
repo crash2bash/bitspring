@@ -184,6 +184,25 @@ export function sentences(items: (string | null | undefined | false)[]): string 
   return items.filter(Boolean).join(/^(zh|ja)/.test(current.code) ? "" : " ");
 }
 
+/**
+ * How long ago a moment (Unix seconds) was, the way the UI language says it: "today",
+ * "yesterday", "5 days ago"; past a month, the date.
+ */
+export function ago(unix: number, now: number = Date.now()): string {
+  const day = (ms: number) => {
+    const d = new Date(ms);
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
+  };
+  const days = Math.max(0, day(now) - day(unix * 1000));
+  if (days > 30) return new Date(unix * 1000).toLocaleDateString(current.numbers, { dateStyle: "medium" });
+  return new Intl.RelativeTimeFormat(current.numbers, { numeric: "auto" }).format(-days, "day");
+}
+
+/** A moment (Unix seconds) in full: date and time. */
+export function dateTime(unix: number): string {
+  return new Date(unix * 1000).toLocaleString(current.numbers, { dateStyle: "long", timeStyle: "short" });
+}
+
 /** Sorting by the UI language's alphabet, digits compared as numbers. */
 export function collator(): Intl.Collator {
   return new Intl.Collator(current.tag, { numeric: true, sensitivity: "base" });
