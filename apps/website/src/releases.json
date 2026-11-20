@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.21.1",
+    "name": "BitSpring 0.21.1",
+    "date": "2026-11-20T10:31:18Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.21.1",
+    "notes": "- **Favourites.** A heart for tracks and for albums. It closes every row of the track lists, stands beside an album's title, and is a key of the player, left of shuffle (F on a keyboard). The two are marked separately: a favourite track does not make its album one.\n- **Favourites only.** A heart switch in the library's toolbar. In Tracks it leaves the favourite tracks; in Albums, the favourite albums and the albums that hold favourite tracks, and a tile says how many. The Tracks list can also be sorted by the heart.\n- **Star ratings**, one to five, for tracks. They are off until you switch them on in Settings → Appearance. Then the track lists get a column of stars, and the player shows the stars of what plays under its title.\n- **Smart playlists** can pick by all of it: \"Favourite\", \"Album is a favourite\" and \"Rating (stars)\" as rules, \"latest favourites first\" and \"highest rated first\" as orders.\n- **Phone remote and local API.** The remote has the heart of what plays. The API reports a track's heart and stars, lists the favourites and sets both; the reference is at https://bitspring.app/api/.\n- **The library's counter counts what is shown**: under the heart switch, \"Hi-res only\", a search or a picked artist, and tracks rather than albums in Tracks.\n- The marks are kept on your device, next to the library index, and are sent nowhere. A rescan leaves them alone. Qobuz and TIDAL tracks keep their service's own favourites."
+  },
+  {
     "version": "0.21.0",
     "name": "BitSpring 0.21.0",
     "date": "2026-11-19T17:54:21Z",
