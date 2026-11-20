@@ -16,6 +16,19 @@ let mockCrash = new URLSearchParams(location.search).has("crash");
 let mockStepDown = new URLSearchParams(location.search).has("stepdown");
 let mockStep: { seq: number; filter: DspSettings["upsampleFilter"]; taps: number | null } | null = null;
 let mockStepSeq = 0;
+// DSD output (Enhancers → DSD output) runs whenever it is chosen, on the USB DAC in exclusive
+// mode, without the device's DoP switch. These give its other states:
+/** ?dsdnote=exclusive|device|volume|network|rate|refused: it doesn't run, for that reason. */
+const mockDsdNote = new URLSearchParams(location.search).get("dsdnote");
+/** ?dsdlimit: the device takes DoP up to DSD128 only (DSD256 asked for runs as DSD128). */
+const mockDsdLimit = new URLSearchParams(location.search).has("dsdlimit") ? 128 : 256;
+/** ?dsdstep: a few seconds into a track, the pretend processor falls behind and the DSD output
+ *  steps down once: 256 → 128 → 64 at the same modulator, then 64 with the 5th order, then off. */
+let mockDsdStepDown = new URLSearchParams(location.search).has("dsdstep");
+let mockDsdStep: { seq: number; dsdOut: number | null; order: number | null } | null = null;
+let mockDsdStepSeq = 0;
+/** The DoP word rate that carries each DSD rate. */
+const DOP_WIRE: Record<number, number> = { 64: 176400, 128: 352800, 256: 705600 };
 const LIB: [string, string, string | null, string | null, string, number, number | null, string | null, string[]][] = [
   ["Ada Marlow", "Paper Moons", "2017", "Folk", "ALAC", 48000, 24, "#6b5d2e", ["Kite Strings", "Harbour", "Paper Moons"]],
   ["Echo Field", "Signal Path", "2020", "Electronic", "MP3", 44100, null, "#16233a", ["Carrier", "Sideband", "Noise Floor"]],
@@ -96,7 +109,7 @@ const devices: Device[] = [
   { uid: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
 ];
 
-let dsp: DspSettings = { upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true };
+let dsp: DspSettings = { upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, dsdOut: null, dsdOrder: 7 };
 /** The pretend library analysis: when it started (null: not running) and how much was done before. */
 let measuring: number | null = null;
 let measured = 0;
@@ -106,7 +119,7 @@ let tagLast: [number, number] | null = null;
 /** What volume levelling does to the pretend track. */
 function mockLevel(): Pick<Signal, "levelDb" | "levelBasis" | "levelLimited"> {
   if (dsp.level) return { levelDb: dsp.level === "album" ? -6.1 : -7.3, levelBasis: dsp.level, levelLimited: false };
-  const reshapes = !!(dsp.upsampleKhz || dsp.crossfeed || dsp.convolution || eqOn());
+  const reshapes = !!(dsp.upsampleKhz || dsp.dsdOut || dsp.crossfeed || dsp.convolution || eqOn());
   if (dsp.peakHeadroom && reshapes) return { levelDb: -0.8, levelBasis: "peak", levelLimited: true };
   return { levelDb: null, levelBasis: null, levelLimited: false };
 }
@@ -174,13 +187,15 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
       eq: dop ? null : eqOn(), eqLinear: false, convolution: dop ? null : convName(), crossfeed: dop ? null : dsp.crossfeed,
       sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
       ...(dop ? { levelDb: null, levelBasis: null, levelLimited: false } : mockLevel()),
-      dsdRate, dop, dsdNote, layout: "Stereo", downmix: null, upsampleFilter: null, upsampleTaps: null, bitPerfect: dop,
+      dsdRate, dop, dsdNote, layout: "Stereo", downmix: null, upsampleFilter: null, upsampleTaps: null,
+      dsdOut: null, dsdOutOrder: null, dsdOutNote: null, bitPerfect: dop,
     };
   }
   const src = 44100;
   // A surround file folds down to stereo on every mock device.
   const surround = /surround|5\.1/i.test(path);
-  const up = dsp.upsampleKhz ? Math.min(dsp.upsampleKhz * 1000, air ? 48000 : 352800) : null;
+  const dsd = mockDsdOut(dev, exclusive);
+  const up = dsd.dsdOut ? DOP_WIRE[dsd.dsdOut] : dsp.upsampleKhz ? Math.min(dsp.upsampleKhz * 1000, air ? 48000 : 352800) : null;
   const rate = up ?? (air ? 48000 : src);
   // Like the engine: the long filter runs where upsampling at least doubles the rate.
   const long = up !== null && rate >= 2 * src ? dsp.upsampleFilter : null;
@@ -192,10 +207,24 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
     eq: eqOn(), eqLinear: eqSnapshot().presets.find((p) => p.name === eqOn())?.phase === "linear", convolution: convName(), crossfeed: dsp.crossfeed,
     sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
     ...mockLevel(),
-    dsdRate: null, dop: false, dsdNote: null,
+    dsdRate: null, dop: false, dsdNote: null, ...dsd,
     layout: surround ? "5.1" : "Stereo", downmix: surround ? { to: "Stereo", gainDb: -7.7 } : null,
-    bitPerfect: !surround && !air && exclusive && rate === src && !eqOn() && !dsp.convolution && !dsp.crossfeed && !dsp.level,
+    bitPerfect: !surround && !air && exclusive && rate === src && !eqOn() && !dsp.convolution && !dsp.crossfeed && !dsp.level && !dsd.dsdOut,
   };
+}
+
+/** DSD output for a PCM track on `dev`: what runs of the one chosen, or why nothing does. */
+function mockDsdOut(dev: Device, exclusive: boolean): Pick<Signal, "dsdOut" | "dsdOutOrder" | "dsdOutNote"> {
+  const want = dsp.dsdOut;
+  if (!want) return { dsdOut: null, dsdOutOrder: null, dsdOutNote: null };
+  const off = (note: NonNullable<Signal["dsdOutNote"]>) => ({ dsdOut: null, dsdOutOrder: null, dsdOutNote: note });
+  const name = dev.name;
+  if (mockDsdNote === "rate" || (!mockDsdNote && !dev.network && exclusive && !dev.maxDop)) return off({ kind: "rate", device: name, dsd: "DSD64", khz: 176.4 });
+  if (mockDsdNote === "refused") return off({ kind: "refused", device: name, dsd: `DSD${want}`, khz: DOP_WIRE[want] / 1000 });
+  if (mockDsdNote === "exclusive" || mockDsdNote === "device" || mockDsdNote === "volume" || mockDsdNote === "network") return off({ kind: mockDsdNote });
+  if (dev.network) return off({ kind: "network" });
+  if (!exclusive) return off({ kind: "exclusive" });
+  return { dsdOut: Math.min(want, dev.maxDop ?? 64, mockDsdLimit), dsdOutOrder: dsp.dsdOrder, dsdOutNote: null };
 }
 
 let mockQueue: string[] = [];
@@ -508,7 +537,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         const next = mockRepeat === "one" ? mockIndex : mockRepeat === "all" && mockQueue.length ? (mockIndex + 1) % mockQueue.length : mockIndex + 1;
         if (next < mockQueue.length) await mock("play_file", { path: mockQueue[next], deviceUid: lastDevice.uid, exclusive: lastExclusive, dop: lastDop, index: next });
       }
-      const processing = !!(dsp.upsampleKhz || eqOn() || dsp.convolution || dsp.crossfeed);
+      const processing = !!(dsp.upsampleKhz || dsp.dsdOut || eqOn() || dsp.convolution || dsp.crossfeed);
       const long = duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null;
       const filter = long?.upsampleFilter ?? null;
       // A long filter's pretend cost: a share of a core that wobbles a little.
@@ -520,13 +549,27 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         mockStep = { seq: ++mockStepSeq, ...next };
         mockNow = { ...mockNow, signal: mockSignal(lastDevice!, lastExclusive, lastPath, lastDop) };
       }
+      const encoding = long?.dsdOut ?? null;
+      if (mockDsdStepDown && encoding && now() > 4 && mockNow) {
+        mockDsdStepDown = false;
+        // Like the backend: a lower rate at the same modulator, then the lighter modulator, then off.
+        const order = long!.dsdOutOrder ?? 7;
+        const next: { dsdOut: number | null; order: number | null } =
+          encoding > 64 ? { dsdOut: encoding / 2, order } : order === 7 ? { dsdOut: 64, order: 5 } : { dsdOut: null, order: null };
+        dsp = { ...dsp, dsdOut: next.dsdOut as DspSettings["dsdOut"], dsdOrder: next.order === 5 ? 5 : dsp.dsdOrder };
+        mockDsdStep = { seq: ++mockDsdStepSeq, ...next };
+        mockNow = { ...mockNow, signal: mockSignal(lastDevice!, lastExclusive, lastPath, lastDop) };
+      }
+      // The encoder's pretend cost: more at the higher rates and with the 7th order.
+      const dsdCost = encoding ? (encoding / 64) * 0.05 * (long?.dsdOutOrder === 5 ? 0.7 : 1) : 0;
       const s: Status = {
         active: duration > 0, position: Math.min(now(), duration), duration, paused,
         finished: now() >= duration && duration > 0, peakDb: processing ? -3.4 : null, underruns: 0,
         buffering: false, buffered: duration, error: null,
         queueIndex: mockIndex, nowRev: mockRev, advanceError: null, systemVolume: isIOS ? 0.8 : null,
-        load: processing && duration > 0 ? (filter ? cost : 0.002) * (1 + 0.08 * Math.sin(performance.now() / 900)) : null,
+        load: processing && duration > 0 ? ((filter ? cost : 0.002) + dsdCost) * (1 + 0.08 * Math.sin(performance.now() / 900)) : null,
         filterStep: mockStep,
+        dsdStep: mockDsdStep,
       };
       return s as T;
     }
@@ -552,6 +595,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return undefined as T;
     case "set_dsp": {
       mockStep = null;
+      mockDsdStep = null;
       dsp = {
         upsampleKhz: args.upsampleKhz as number | null,
         upsampleFilter: (["linear", "minimum", "apodizing"].includes(args.upsampleFilter as string) ? args.upsampleFilter : null) as DspSettings["upsampleFilter"],
@@ -559,6 +603,9 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         crossfeed: args.crossfeed as DspSettings["crossfeed"],
         convolution: args.convolution as string | null, headroom: !!args.headroom, restoreHighs: !!args.restoreHighs,
         level: (args.level as DspSettings["level"]) ?? null, peakHeadroom: !!args.peakHeadroom,
+        // Like the backend: 64, 128 or 256 (phones keep 64), anything else is off; order 5 or 7.
+        dsdOut: args.dsdOut === 64 || args.dsdOut === 128 || args.dsdOut === 256 ? (phone.has("android") || phone.has("ios") ? 64 : args.dsdOut) : null,
+        dsdOrder: args.dsdOrder === 5 ? 5 : 7,
       };
       return {
         signal: duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null,
@@ -639,7 +686,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "eq_export_text":
       return "Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.7\n" as T;
     case "channel_test":
-      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, levelDb: null, levelBasis: null, levelLimited: false, dsdRate: null, dop: false, dsdNote: null, layout: "Stereo", downmix: null, bitPerfect: true } as T;
+      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, levelDb: null, levelBasis: null, levelLimited: false, dsdRate: null, dop: false, dsdNote: null, dsdOut: null, dsdOutOrder: null, dsdOutNote: null, layout: "Stereo", downmix: null, bitPerfect: true } as T;
     case "playlists_list":
       return [...mockLists].sort((a, b) => b.updated - a.updated).map(mockSummary) as T;
     case "playlist_get": {

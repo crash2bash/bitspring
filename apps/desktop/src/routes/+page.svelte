@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { trackSafeArea } from "$lib/safeArea";
-  import { api, clock, isNetworkUid, inTauri, isMac, isIOS, isAndroid, isLinux, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type FilterStep, type UpsampleFilter, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus, type RemoteCommand } from "$lib/api";
+  import { api, clock, isNetworkUid, inTauri, isMac, isIOS, isAndroid, isLinux, khz, dsdName, artistLabel, errorText, AUDIO_EXTENSIONS, type Device, type DspSettings, type DsdStep, type FilterStep, type UpsampleFilter, type LibraryGoto, type EqState, type IrInfo, type NowPlaying, type PlaylistEntry, type Status, type StreamingStatus, type RemoteCommand } from "$lib/api";
   import { i18n, sentences, t } from "$lib/i18n.svelte";
   import Settings from "$lib/Settings.svelte";
   import Heart from "$lib/Heart.svelte";
@@ -63,7 +63,7 @@
   let repeat = $state<Repeat>(load("repeat", "off"));
   let canNext = $derived(index < queue.length - 1 || (repeat === "all" && queue.length > 0));
   let now = $state<NowPlaying | null>(null);
-  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null, queueIndex: null, nowRev: 0, advanceError: null, systemVolume: null, load: null, filterStep: null });
+  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null, queueIndex: null, nowRev: 0, advanceError: null, systemVolume: null, load: null, filterStep: null, dsdStep: null });
   /** The backend's nowRev we are showing; when it moves, the queue went on by itself. */
   let knownRev = 0;
   let lastOutputError: string | null = null;
@@ -71,11 +71,15 @@
   const savedDsp = load<Partial<DspSettings> & { eqPath?: string | null }>("dsp", {});
   const legacyEqPath = savedDsp.eqPath ?? null;
   delete savedDsp.eqPath;
-  let dsp = $state<DspSettings>({ upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, ...savedDsp });
+  let dsp = $state<DspSettings>({ upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, dsdOut: null, dsdOrder: 7, ...savedDsp });
   /** The backend's last automatic filter step taken over (its seq). */
   let stepSeen: number | null = null;
   /** The filter that step left on, until the user picks one: the panel says why it changed. */
   let filterStepped = $state<{ filter: UpsampleFilter | null; taps: number | null } | null>(null);
+  /** The same for the DSD output: its last automatic step taken over, and what it left on (and
+   *  whether it lowered the rate, took the lighter modulator or turned the output off). */
+  let dsdStepSeen: number | null = null;
+  let dsdStepped = $state<{ dsdOut: number | null; order: number | null; kind: "rate" | "order" | "off" } | null>(null);
   let ir = $state<IrInfo | null>(null);
   let eqState = $state<EqState | null>(null);
   /** The EQ preset that plays on the picked output (null = EQ off there). */
@@ -395,6 +399,7 @@
   /** Apply processing settings; a playing track continues in place with the new chain. */
   async function applyDsp(next: DspSettings) {
     if (next.upsampleFilter !== dsp.upsampleFilter || next.upsampleTaps !== dsp.upsampleTaps) filterStepped = null;
+    if (next.dsdOut !== dsp.dsdOut || next.dsdOrder !== dsp.dsdOrder) dsdStepped = null;
     try {
       const res = await api.setDsp(next);
       dsp = next;
@@ -481,10 +486,33 @@
       .catch(() => {});
   }
 
+  /** The same for the DSD output: the backend went to a lower rate, the 5th-order modulator, or
+   *  PCM, already playing. */
+  function adoptDsdStep(step: DsdStep | null) {
+    if (!step || step.seq === dsdStepSeen) return;
+    dsdStepSeen = step.seq;
+    // A lower rate keeps the modulator, so a change of order means the order was the step. What
+    // played before tells it (with the setting for a step taken while no page was there).
+    const before = now?.signal.dsdOutOrder ?? dsp.dsdOrder;
+    const kind = step.dsdOut === null ? "off" : step.order !== null && step.order !== before ? "order" : "rate";
+    const dsdOut = step.dsdOut === 64 || step.dsdOut === 128 || step.dsdOut === 256 ? step.dsdOut : null;
+    const next: DspSettings = { ...dsp, dsdOut, dsdOrder: step.order === 5 ? 5 : step.order === 7 ? 7 : dsp.dsdOrder };
+    dsp = next;
+    save("dsp", next);
+    dsdStepped = { dsdOut, order: step.order, kind };
+    api
+      .nowPlaying()
+      .then((n) => {
+        if (n && now && !testing && n.path === now.path) now = { ...now, signal: n.signal };
+      })
+      .catch(() => {});
+  }
+
   /** Fetch the status; when the backend has moved on to another track by itself, show it. */
   async function catchUp() {
     status = await api.status();
     adoptFilterStep(status.filterStep);
+    adoptDsdStep(status.dsdStep);
     if (status.nowRev === knownRev || loading) return;
     knownRev = status.nowRev;
     const n = await api.nowPlaying();
@@ -509,13 +537,14 @@
     }
   });
 
-  // DoP switched for the current device: only a DSD track needs to restart.
+  // DoP switched for the current device: only a DSD track needs to restart, or any track while
+  // DSD output is chosen (it goes as DoP too).
   let lastDop = untrack(() => dop);
   $effect(() => {
     save("dopDevices", dopDevices);
     if (dop !== lastDop) {
       lastDop = dop;
-      if (untrack(() => status.active && !testing && index >= 0 && now?.signal.dsdRate !== null))
+      if (untrack(() => status.active && !testing && index >= 0 && (now?.signal.dsdRate !== null || dsp.dsdOut !== null)))
         playIndex(index, untrack(() => status.position), untrack(() => status.paused));
     }
   });
@@ -578,7 +607,10 @@
     // a filter step the backend took while no page was there to see it.
     api
       .status()
-      .then((s) => adoptFilterStep(s.filterStep))
+      .then((s) => {
+        adoptFilterStep(s.filterStep);
+        adoptDsdStep(s.dsdStep);
+      })
       .catch(() => {})
       .finally(() => applyDsp(untrack(() => dsp)));
     if (!untrack(() => fades)) api.setFades(false).catch(() => {});
@@ -696,7 +728,7 @@
       <button class:sel={screen === "eq"} aria-current={screen === "eq" ? "page" : undefined} data-label={t("nav.eq")} onclick={() => (screen = "eq")}>{t("nav.eq")}</button>
     </nav>
     <div class="controls">
-      <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} onchange={applyDsp} onopeneq={() => (screen = "eq")} />
+      <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} {dsdStepped} onchange={applyDsp} onopeneq={() => (screen = "eq")} />
       <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} />
       <RemoteButton />
       <button class="trigger gear" class:open={screen === "settings"} onclick={toggleSettings} aria-pressed={screen === "settings"} aria-label={t("settings.label")} title={t("settings.label")}>
@@ -870,7 +902,7 @@
         </span>
       </div>
       <span class="mini-sig" class:ok={now.signal.bitPerfect}>
-        <i aria-hidden="true"></i>{t(now.signal.bitPerfect ? "signal.bitPerfect" : "signal.processing")}{t("list.sep")}{#if now.signal.dop && now.signal.dsdRate}{dsdName(now.signal.dsdRate)} DoP{:else}{khz(now.signal.deviceRate)} {t("unit.khz")}{/if}
+        <i aria-hidden="true"></i>{t(now.signal.bitPerfect ? "signal.bitPerfect" : "signal.processing")}{t("list.sep")}{#if now.signal.dop && now.signal.dsdRate}{dsdName(now.signal.dsdRate)} DoP{:else if now.signal.dsdOut}DSD{now.signal.dsdOut} DoP{:else}{khz(now.signal.deviceRate)} {t("unit.khz")}{/if}
       </span>
       <div class="mini-keys" dir="ltr">
         <button onclick={prev} aria-label={t("common.prev")} title={hint(t("common.prev"), `${modKey}←`)} disabled={testing}>

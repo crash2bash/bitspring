@@ -162,7 +162,8 @@ pub async fn abx_start(
     if crate::stream::is_uri(&a) || b.as_deref().is_some_and(crate::stream::is_uri) {
         return Err(UserError::AbxNotFile);
     }
-    let dsp = crate::dsp_for(&state, device.uid());
+    // (Rendered here, not played through the device: no DSD output.)
+    let dsp = crate::dsp_offline(&state, device.uid());
     let filters = if kind == "filters" { Some(playing_filter(&state, &a, &device_uid)?) } else { None };
     let pair = tauri::async_runtime::spawn_blocking(move || match (kind.as_str(), b, filters) {
         ("files", Some(b), _) => abx::of_files(&PathBuf::from(a), &PathBuf::from(b)),

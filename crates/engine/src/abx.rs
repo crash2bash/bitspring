@@ -377,9 +377,10 @@ pub fn of_files(a: &Path, b: &Path) -> Result<Pair> {
 
 /// One file as it is (A) and as the processing in `dsp` makes it (B): equaliser, crossfeed,
 /// convolution, the lossy enhancers. Not upsampling — the DAC would have to switch rates
-/// between the two — and not levelling, which the test's own level matching would undo.
+/// between the two — nor DSD output (both sides are PCM here), and not levelling, which the
+/// test's own level matching would undo.
 pub fn of_processing(path: &Path, dsp: &DspSettings) -> Result<Pair> {
-    let dsp = DspSettings { upsample: Upsample::Off, eq_bypass: false, level: LevelSettings { mode: LevelMode::Off, headroom: true }, ..dsp.clone() };
+    let dsp = DspSettings { upsample: Upsample::Off, eq_bypass: false, level: LevelSettings { mode: LevelMode::Off, headroom: true }, dsd_out: None, ..dsp.clone() };
     let a = decode(path, MAX_BYTES)?;
     if !(dsp.reshapes() || (a.lossy && dsp.lossy.any())) {
         bail!(UserError::AbxNothing);

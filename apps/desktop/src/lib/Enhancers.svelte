@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, isAndroid, isIOS, type Crossfeed, type DspSettings, type IrInfo, type LevelMode, type LoudnessStatus, type Signal, type UpsampleFilter, type UpsampleTaps } from "./api";
+  import { api, dsdOutNoteText, isAndroid, isIOS, type Crossfeed, type DsdOrder, type DsdOut, type DspSettings, type IrInfo, type LevelMode, type LoudnessStatus, type Signal, type UpsampleFilter, type UpsampleTaps } from "./api";
   import { list, num, sentences, t } from "./i18n.svelte";
   import { liquidPill } from "./liquid";
   import { startAbx } from "./abx.svelte";
@@ -12,6 +12,7 @@
     signal = null,
     load = null,
     stepped = null,
+    dsdStepped = null,
     onchange,
     onopeneq,
   }: {
@@ -27,6 +28,8 @@
     load?: number | null;
     /** The filter an automatic step down left on, while it is still the one chosen. */
     stepped?: { filter: UpsampleFilter | null; taps: number | null } | null;
+    /** What an automatic step down of the DSD output left on, and which step it was. */
+    dsdStepped?: { dsdOut: number | null; order: number | null; kind: "rate" | "order" | "off" } | null;
     onchange: (s: DspSettings) => void;
     onopeneq: () => void;
   } = $props();
@@ -37,6 +40,7 @@
   let active = $derived(
     [
       settings.upsampleKhz && t("enh.on.upsampling"),
+      settings.dsdOut && t("enh.on.dsd"),
       eqName && t("enh.on.eq"),
       settings.convolution && t("enh.on.convolution"),
       settings.crossfeed && t("enh.on.crossfeed"),
@@ -55,8 +59,9 @@
     startAbx({ kind: "processing", a: track.path, title: track.title });
   }
   // The long filter against the standard one: only while one plays this track (the test
-  // takes its rate and filter from what plays).
-  let canTestFilter = $derived(!!track && !/^(qobuz|tidal):/.test(track.path) && !!signal?.upsampleFilter);
+  // takes its rate and filter from what plays), and not while DSD output runs (the test plays
+  // PCM: it wouldn't be what is heard).
+  let canTestFilter = $derived(!!track && !/^(qobuz|tidal):/.test(track.path) && !!signal?.upsampleFilter && !signal?.dsdOut);
   function filterTest() {
     if (!track) return;
     open = false;
@@ -75,7 +80,37 @@
   // Phones play the shorter length only (the backend holds them to it): nothing to choose.
   const phone = isIOS || isAndroid;
   let hasLength = $derived(!phone && (settings.upsampleFilter === "linear" || settings.upsampleFilter === "minimum"));
-  let loadPct = $derived(signal?.upsampleFilter && load ? load * 100 : null);
+  // The processing's cost, where it is worth showing: a long filter or DSD output. Shown once,
+  // in the DSD block while that runs (it is then most of the cost), else under the filter.
+  let loadPct = $derived((signal?.upsampleFilter || signal?.dsdOut) && load ? load * 100 : null);
+  let loadText = $derived(loadPct === null ? null : t("enh.load", { pct: num(loadPct, { maximumFractionDigits: loadPct < 10 ? 1 : 0 }) }));
+
+  // DSD output: phones take DSD64 only (the higher rates cost a core's worth of battery or more).
+  const DSD_OUT: (DsdOut | null)[] = phone ? [null, 64] : [null, 64, 128, 256];
+  /** The rate chosen, as it plays: a higher one in a phone's settings plays as DSD64. */
+  let dsdChosen = $derived<DsdOut | null>(phone && settings.dsdOut ? 64 : settings.dsdOut);
+  const ORDERS: DsdOrder[] = [7, 5];
+  /** Each modulator's signal-to-noise at each rate, dB: measured by the engine's tests (a 1 kHz
+   *  tone at full scale against the noise from 20 Hz to 20 kHz), rounded down. */
+  const DSD_SNR: Record<DsdOut, Record<DsdOrder, number>> = {
+    64: { 5: 109, 7: 119 },
+    128: { 5: 127, 7: 132 },
+    256: { 5: 146, 7: 160 },
+  };
+  /** The one notice under DSD output: why it changed by itself, why it doesn't run, or that it
+   *  runs at a lower rate than chosen. */
+  let dsdNotice = $derived.by(() => {
+    const s = dsdStepped;
+    if (s && s.dsdOut === settings.dsdOut && (s.order === null || s.order === settings.dsdOrder)) {
+      if (s.kind === "off") return t("enh.dsdStepOff");
+      if (s.kind === "order") return t("enh.dsdStepOrder");
+      return t("enh.dsdStepRate", { dsd: `DSD${s.dsdOut}` });
+    }
+    if (signal && settings.dsdOut !== null && signal.dsdOut === null && signal.dsdOutNote)
+      return t("enh.dsdOff", { reason: dsdOutNoteText(signal.dsdOutNote) });
+    if (signal?.dsdOut && dsdChosen !== null && signal.dsdOut < dsdChosen) return t("enh.dsdLimited", { dsd: `DSD${signal.dsdOut}` });
+    return null;
+  });
 
   /** The step-down notice. A length written with an abbreviation's dot ("64 тыс.") ends the
    *  sentence with that dot, not a second one. */
@@ -170,7 +205,11 @@
           {/each}
         </div>
         <p class="help">{t("enh.upsamplingHelp", { a: num(44.1), b: num(352.8) })}</p>
-        {#if settings.upsampleKhz !== null}
+        {#if settings.dsdOut !== null}
+          <p class="help">{t("enh.dsdUpsampling")}</p>
+        {/if}
+        <!-- DSD output upsamples too (to its own rate), through the filter chosen here. -->
+        {#if settings.upsampleKhz !== null || settings.dsdOut !== null}
           <div class="sub">
             <span class="sub-title" id="enh-filter">{t("enh.filter")}</span>
             <!-- A list rather than a row: four names don't fit side by side in most languages. -->
@@ -200,8 +239,8 @@
                 ])}
               </p>
             {/if}
-            {#if loadPct !== null}
-              <p class="help figure">{t("enh.load", { pct: num(loadPct, { maximumFractionDigits: loadPct < 10 ? 1 : 0 }) })}</p>
+            {#if loadText && !signal?.dsdOut}
+              <p class="help figure">{loadText}</p>
             {/if}
             {#if stepped && stepped.filter === settings.upsampleFilter}
               <p class="help notice" role="status">
@@ -213,6 +252,41 @@
               <p class="help">{t("enh.abxFilterHelp")}</p>
             {/if}
           </div>
+        {/if}
+      </fieldset>
+
+      <!-- Next to upsampling: DSD output sets the rate, and the filter above serves both. -->
+      <fieldset>
+        <legend>{t("enh.dsd")}</legend>
+        <div class="seg" role="radiogroup" aria-label={t("enh.dsd")} use:liquidPill={dsdChosen}>
+          {#each DSD_OUT as v (v)}
+            <button role="radio" aria-checked={dsdChosen === v} class:sel={dsdChosen === v} onclick={() => set({ dsdOut: v })}>
+              {v ? `DSD${v}` : t("enh.offShort")}
+            </button>
+          {/each}
+        </div>
+        <p class="help">{sentences([t("enh.dsdHelp"), t("enh.dsdNeeds")])}</p>
+        {#if dsdChosen !== null}
+          {@const rate = dsdChosen}
+          <div class="sub">
+            <span class="sub-title" id="enh-modulator">{t("enh.modulator")}</span>
+            <div class="radios" role="radiogroup" aria-labelledby="enh-modulator" tabindex="-1" onkeydown={filterKeys}>
+              {#each ORDERS as o (o)}
+                {@const sel = settings.dsdOrder === o}
+                <button role="radio" aria-checked={sel} class:sel tabindex={sel ? 0 : -1} aria-describedby={`enh-m-${o}`} onclick={() => sel || set({ dsdOrder: o })}>
+                  <span class="r-name">{t(`enh.modulator.${o}`)}</span>
+                  <span class="r-desc" id={`enh-m-${o}`}>{t(`enh.modulator.${o}Help`, { db: num(DSD_SNR[rate][o]) })}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if loadText && signal?.dsdOut}
+          <p class="help figure">{loadText}</p>
+        {/if}
+        <!-- Outside the block above: "turned off" stays readable while the row shows "Off". -->
+        {#if dsdNotice}
+          <p class="help notice" role="status">{dsdNotice}</p>
         {/if}
       </fieldset>
 

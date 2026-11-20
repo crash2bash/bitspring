@@ -127,7 +127,9 @@ impl Device {
     /// DoP can't be queried — that's the user's per-device switch.)
     pub fn supports_dop(&self, dsd_rate: u32) -> bool {
         let Self::Hw { .. } = self else { return false };
-        let Some(caps) = caps_cache().lock().unwrap().get(&self.uid()).cloned().or_else(|| probe(self)) else { return false };
+        // In its own statement, so the cache's lock is let go before `probe` takes it again.
+        let cached = caps_cache().lock().unwrap().get(&self.uid()).cloned();
+        let Some(caps) = cached.or_else(|| probe(self)) else { return false };
         caps.wide_int && caps.rates.contains(&(dsd_rate / 16))
     }
 }
@@ -309,7 +311,7 @@ impl Player {
         // A card's own device is always ours alone; the system mixer never is.
         let exclusive = matches!(device, Device::Hw { .. });
         let opts = &PlayOptions { exclusive, ..opts.clone() };
-        let dop_ok = track.dsd.is_some_and(|d| device.supports_dop(d.rate));
+        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let wide = exclusive && track.channels > 2 && info.output_channels > 2;
         let open_channels = if wide { info.output_channels as usize } else { 2 };
         let speakers = crate::channels::default_layout(open_channels);
@@ -347,9 +349,9 @@ impl Player {
             let _ = pb_tx.send(None);
             let _ = thread.join();
         };
-        if plan.dop && (!neg.format.carries_dop() || neg.format == OutFormat::F32 || (neg.rate - track.sample_rate as f64).abs() >= 0.5) {
+        if plan.dop && (!neg.format.carries_dop() || neg.format == OutFormat::F32 || (neg.rate - plan.target).abs() >= 0.5) {
             abort(&pb_tx, thread);
-            return Err(output::dop_error(&info.name, &track));
+            return Err(output::dop_error(&info.name, (plan.target * 16.0).round() as u32));
         }
         // The card said where its channels go, or took fewer than asked: plan for what it has.
         let actual = neg.speakers.clone().unwrap_or_else(|| crate::channels::default_layout(neg.channels));
