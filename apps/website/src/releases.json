@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.22.2",
+    "name": "BitSpring 0.22.2",
+    "date": "2026-11-22T09:04:55Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.22.2",
+    "notes": "- **Opus files play.** `.opus` files, and Opus audio inside `.ogg`, now show up in the library with their tags and covers and play like everything else: seeking works, the length is right to the sample, and mono, stereo and surround up to 7.1 are all covered. A listener asked for it on GitHub (#32).\n- Opus is decoded by libopus, the format's own reference decoder, at its native 48 kHz. The library marks these albums \"Opus\", and the quality check treats them as lossy, like MP3 and AAC."
+  },
+  {
     "version": "0.22.1",
     "name": "BitSpring 0.22.1",
     "date": "2026-11-22T08:29:22Z",
