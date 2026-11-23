@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.23.0",
+    "name": "BitSpring 0.23.0",
+    "date": "2026-11-23T17:07:50Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.23.0",
+    "notes": "- **DSD output.** Any music can now go to the DAC as DSD: BitSpring upsamples it, turns it into a one-bit stream and sends it as DoP. Pick DSD64, DSD128 or DSD256 in the processing panel, next to Upsampling. It is off until you turn it on, and with it off playback is what it was, bit-perfect included. DSD files still play as they are.\n- **Two modulators**, of the 7th and the 5th order, each shown with its measured signal-to-noise ratio in the audio band: from 110 dB (DSD64, 5th order) to 160 dB (DSD256, 7th order).\n- **The equalizer, crossfeed and volume levelling work with it**: they run before the conversion. The filter chosen under Upsampling is used here too.\n- **The signal path shows it**: the readout says \"DSD128 DoP\" and the path ends with \"PCM → DSD128 (7th-order modulator), DoP at 352.8 kHz\".\n- **What it needs**: exclusive mode and the device's \"DSD over DoP\" switch, on a DAC that decodes DoP. When it can't run, BitSpring plays PCM and says why. If the processor can't keep up, it steps down by itself (a lower rate, then the 5th-order modulator) and tells you.\n- Phones get DSD64. Network players don't take DSD output."
+  },
+  {
     "version": "0.22.2",
     "name": "BitSpring 0.22.2",
     "date": "2026-11-22T09:04:55Z",
