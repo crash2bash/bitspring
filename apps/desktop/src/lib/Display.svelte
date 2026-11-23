@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, clock, deviceLabel, dsdName, dsdNoteText, filePath, khz, layoutName, osMixer, transportLabel, type NowPlaying, type Status } from "./api";
+  import { api, clock, deviceLabel, dsdName, dsdNoteText, dsdOutNoteText, filePath, khz, layoutName, osMixer, transportLabel, type NowPlaying, type Status } from "./api";
   import { list, num, sentences, t } from "./i18n.svelte";
 
   let {
@@ -54,6 +54,9 @@
       const limited = signal.levelLimited && signal.levelBasis !== "peak" ? "Limited" : "";
       steps.push(t(`step.level.${signal.levelBasis}${signal.levelBasis === "unknown" ? "" : limited}`, { db }));
     }
+    // The last thing done: everything above works on PCM, which is then encoded to DSD.
+    if (signal.dsdOut)
+      steps.push(t(signal.dsdOutOrder === 5 ? "step.pcmToDsd5" : "step.pcmToDsd7", { dsd: `DSD${signal.dsdOut}`, rate: khz(signal.deviceRate) }));
     return steps;
   });
 
@@ -70,6 +73,9 @@
 
   let clipping = $derived(status.peakDb !== null && status.peakDb > -0.1);
 
+  /** What reaches the DAC as DSD in DoP: a DSD file as it is, or PCM encoded to DSD. */
+  let dsdShown = $derived(signal?.dop && signal.dsdRate ? dsdName(signal.dsdRate) : signal?.dsdOut ? `DSD${signal.dsdOut}` : null);
+
   let lamp = $derived.by(() => {
     if (error) return { tone: "alarm", text: t("lamp.error") };
     if (!signal) return { tone: "off", text: t("lamp.noSignal") };
@@ -85,17 +91,21 @@
     if (error) return error;
     if (!signal || !links) return t("verdict.empty");
     if (testing) return t("verdict.test");
+    // Only a DSD file can go bit-perfect as DoP; PCM encoded to DSD is processing.
     if (signal.bitPerfect && signal.dop) return t("verdict.dop");
+    // DSD output was chosen and PCM plays: said after whatever else is said, bit-perfect or not.
+    const noDsdOut = signal.dsdOutNote && t("verdict.noDsdOut", { reason: dsdOutNoteText(signal.dsdOutNote) });
     // iOS may scale the samples by the system volume (unless the DAC takes the volume itself).
     if (signal.bitPerfect && status.systemVolume !== null && status.systemVolume < 0.999)
-      return t("verdict.iosVolume");
-    if (signal.bitPerfect) return t(signal.transport === "Network" ? "verdict.network" : "verdict.bitPerfect");
+      return sentences([t("verdict.iosVolume"), noDsdOut]);
+    if (signal.bitPerfect) return sentences([t(signal.transport === "Network" ? "verdict.network" : "verdict.bitPerfect"), noDsdOut]);
     const reasons = list([links.decode, links.toDac, links.out]);
-    if (!reasons && signal.sourceLossy) return t("verdict.lossy");
+    if (!reasons && signal.sourceLossy) return sentences([t("verdict.lossy"), noDsdOut]);
     return sentences([
       t(processing.length ? "verdict.processed" : "verdict.changed", { reasons }),
       clipping && t("verdict.clip"),
       signal.dsdNote && t("verdict.noDop", { reason: dsdNoteText(signal.dsdNote) }),
+      noDsdOut,
     ]);
   });
 
@@ -191,8 +201,8 @@
 
   <div class="readout">
     <div class="digits" class:dim={!signal}>
-      {#if signal?.dop && signal.dsdRate}
-        <span class="value num">{dsdName(signal.dsdRate)}</span><span class="unit">DoP</span>
+      {#if dsdShown}
+        <span class="value num">{dsdShown}</span><span class="unit">DoP</span>
       {:else}
         <span class="value num">{signal ? khz(signal.deviceRate) : "– –"}</span><span class="unit">{t("unit.khz")}</span>
         <span class="value num bits">{signal?.dacBits ?? "– –"}</span><span class="unit">{t("unit.bit")}</span>

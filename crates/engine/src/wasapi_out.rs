@@ -243,7 +243,7 @@ impl Deref for Player {
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = track.dsd.is_some_and(|d| device.supports_dop(d.rate));
+        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         // Shared mode can only run at the mixer's rate.
         let rates = if opts.exclusive { info.rates.clone() } else { vec![RateRange { min: info.nominal_rate, max: info.nominal_rate }] };
         // Exclusive mode opens a stereo pair, or every channel for a multichannel track on a
@@ -287,10 +287,10 @@ impl Player {
                 bail!("audio thread ended unexpectedly");
             }
         };
-        if plan.dop && (!neg.format.carries_dop() || neg.format == OutFormat::F32 || (neg.rate - track.sample_rate as f64).abs() >= 0.5) {
+        if plan.dop && (!neg.format.carries_dop() || neg.format == OutFormat::F32 || (neg.rate - plan.target).abs() >= 0.5) {
             let _ = pb_tx.send(None);
             let _ = thread.join();
-            return Err(output::dop_error(&info.name, &track));
+            return Err(output::dop_error(&info.name, (plan.target * 16.0).round() as u32));
         }
         // The device took fewer channels than asked (a driver without multichannel exclusive
         // formats): fold down to what it did take.

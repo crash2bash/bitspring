@@ -42,6 +42,11 @@ them, and off means bit-perfect again.
   minimum-phase filter of 64 thousand or a million taps (150 dB down from the recording's own
   limit, a transition under 1 Hz wide), or a short apodizing one. If the processor can't keep up,
   the player moves to a shorter filter and says so.
+- **PCM to DSD on the fly:** any file can go to the DAC as DSD64, DSD128 or DSD256 over DoP,
+  made by a 5th- or 7th-order sigma-delta modulator (119 dB of signal-to-noise in the audio band
+  at DSD64 with the seventh order, 160 dB at DSD256). The equalizer and the rest of the processing
+  run ahead of the modulator. Off by default; if the processor can't keep up, the player moves to
+  a lighter setting and says so.
 - **Volume levelling** by track or by album: one fixed gain per track towards −18 LUFS, nothing
   compressed. The player reads ReplayGain tags, measures the files that have none (EBU R128), and
   can write the result into their tags. Off by default.

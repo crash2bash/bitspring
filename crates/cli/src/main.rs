@@ -11,6 +11,7 @@ use clap::{Parser, Subcommand};
 use hifi_engine::output::{self, Device, DeviceInfo, PlayOptions};
 use hifi_engine::player::{self as outputs, Output, Player};
 use hifi_engine::dsp::crossfeed::CrossfeedLevel;
+use hifi_engine::dsp::dsd_encode::{DsdOut, DsdRate, ModOrder};
 use hifi_engine::dsp::upsample::{self, FilterKind, FilterSpec};
 use hifi_engine::dsp::{DspSettings, Upsample};
 use hifi_engine::dsp::lossy::LossySettings;
@@ -44,14 +45,23 @@ enum Cmd {
         /// Upsample to the highest same-family rate up to this many kHz (e.g. 192, 384).
         #[arg(long, value_name = "KHZ")]
         upsample: Option<f64>,
-        /// With --upsample: a long filter instead of the standard one (linear, minimum or
-        /// apodizing), where the DAC runs at twice the source rate or more.
+        /// With --upsample or --dsd: a long filter instead of the standard one (linear, minimum
+        /// or apodizing), where the DAC runs at twice the source rate or more.
         #[arg(long, value_name = "KIND")]
         filter: Option<String>,
         /// Length of the long filter (a power of two from 4096 to 16777216; minimum phase up to
         /// 1048576; apodizing has its own).
         #[arg(long, value_name = "N", default_value_t = 65_536)]
         taps: usize,
+        /// PCM files: encode to DSD at this rate (64, 128 or 256) and send it as DoP. Needs
+        /// exclusive access and a DAC that takes DoP at the wire rate (176.4, 352.8 or 705.6
+        /// kHz); otherwise the file plays as PCM.
+        #[arg(long, value_name = "RATE")]
+        dsd: Option<u32>,
+        /// With --dsd: order of the modulator, 5 or 7 (the seventh: lower noise in the audio band,
+        /// a little more work).
+        #[arg(long, value_name = "ORDER", default_value_t = 7)]
+        modulator: u32,
         /// AutoEQ ParametricEQ.txt profile to apply.
         #[arg(long, value_name = "FILE")]
         eq: Option<PathBuf>,
@@ -107,7 +117,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Loudness { files } => loudness(files),
-        Cmd::Play { files, device, shared, upsample, filter, taps, eq, crossfeed, headroom, restore_highs, dop, level, peak_headroom } => {
+        Cmd::Play { files, device, shared, upsample, filter, taps, dsd, modulator, eq, crossfeed, headroom, restore_highs, dop, level, peak_headroom } => {
             let kind = match filter.as_deref() {
                 None => None,
                 Some("linear") => Some(FilterKind::Linear),
@@ -115,9 +125,17 @@ fn main() -> Result<()> {
                 Some("apodizing") => Some(FilterKind::Apodizing),
                 Some(other) => bail!("unknown filter {other:?}"),
             };
-            if kind.is_some() && upsample.is_none() {
-                bail!("--filter needs --upsample");
+            if kind.is_some() && upsample.is_none() && dsd.is_none() {
+                bail!("--filter needs --upsample or --dsd");
             }
+            let dsd_out = match dsd {
+                None => None,
+                Some(m) => {
+                    let Some(rate) = DsdRate::from_multiple(m) else { bail!("unknown DSD rate {m} (64, 128 or 256)") };
+                    let Some(order) = ModOrder::from_number(modulator) else { bail!("unknown modulator order {modulator} (5 or 7)") };
+                    Some(DsdOut { rate, order })
+                }
+            };
             let dsp = DspSettings {
                 upsample: upsample.map_or(Upsample::Off, |k| Upsample::UpTo(k * 1000.0)),
                 upsample_filter: kind.map(|kind| FilterSpec { kind, taps }),
@@ -149,6 +167,7 @@ fn main() -> Result<()> {
                     },
                     headroom: peak_headroom,
                 },
+                dsd_out,
             };
             let mode = if dop { DsdMode::Dop } else { DsdMode::Pcm };
             play(files, device, mode, PlayOptions { exclusive: !shared, dsp, ..Default::default() })
@@ -372,6 +391,9 @@ fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: Pl
     loop {
         let mut player = Player::start(&out, track, &opts)?;
         describe(&dev_name, &player.path);
+        if let Some(o) = opts.dsp.dsd_out.filter(|_| player.path.dsd_out.is_none() && !player.path.dsd.is_some_and(|d| d.dop)) {
+            println!("Note:    DSD{} asked for, but this output can't take DoP at {} kHz: PCM instead", o.rate.multiple(), o.rate.wire_rate() as f64 / 1000.0);
+        }
         // A long filter holds seconds of input back: line the next file up that much earlier,
         // or the render thread reaches the end before it is there.
         let held = player.path.upsample_filter.map_or(0.0, |f| upsample::filter(f).startup_frames() as f64 / player.path.source_rate as f64);
@@ -462,6 +484,9 @@ fn describe(dev_name: &str, p: &hifi_engine::output::SignalPath) {
     }
     if let Some(name) = &p.eq {
         dsp.push(format!("EQ {name}"));
+    }
+    if let Some(o) = p.dsd_out {
+        dsp.push(format!("encoded to DSD{} ({}th-order modulator), sent as DoP", o.rate.multiple(), o.order.get()));
     }
     if let Some(cf) = p.crossfeed {
         dsp.push(format!("crossfeed {} Hz / {} dB", cf.cutoff_hz, cf.feed_db));

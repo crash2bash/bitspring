@@ -14,6 +14,7 @@ mod linux_media;
 mod abx;
 mod bookmarks;
 mod crash;
+mod dsd_out;
 mod eq;
 mod folders;
 mod library;
@@ -64,6 +65,7 @@ use hifi_engine::dsp::upsample;
 use hifi_engine::dsp::{Convolution, DspSettings, Upsample};
 use hifi_engine::dsd::{self, DsdMode};
 use hifi_engine::{Track, UserError, open_file_at, testsignal};
+use dsd_out::DsdOutNote;
 use queue::{Queue, Repeat};
 use serde::Serialize;
 use tauri::State;
@@ -78,6 +80,8 @@ struct Current {
     dop: bool,
     /// Why a DSD file plays as PCM although DoP was asked for.
     dsd_note: Option<DsdNote>,
+    /// Why PCM plays although DSD output was asked for (kept for a track that joins on).
+    dsd_out_note: Option<DsdOutNote>,
 }
 
 /// Why a DSD file plays as PCM although DoP was asked for. Sent as a code: the UI words it
@@ -132,10 +136,13 @@ struct AppState {
     lined_up: Mutex<Vec<LinedUp>>,
     /// The queue entry (index, path) that failed to open ahead: not tried again every tick.
     line_up_failed: Mutex<Option<(usize, String)>>,
-    /// The last automatic step down of the upsampling filter (see `step_down_filter`), until
+    /// The last automatic step down of the upsampling filter (see `step_down`), until
     /// the UI sends settings of its own.
     filter_step: Mutex<Option<upsampling::FilterStep>>,
     filter_step_seq: AtomicU64,
+    /// The last automatic step down of the DSD output (see `step_down`), likewise.
+    dsd_step: Mutex<Option<dsd_out::DsdStep>>,
+    dsd_step_seq: AtomicU64,
 }
 
 /// A queue entry opened ahead of time, to join on after the current track (gapless).
@@ -287,6 +294,14 @@ struct SignalDto {
     upsample_filter: Option<String>,
     /// Its length in taps (None for apodizing).
     upsample_taps: Option<u32>,
+    /// PCM encoded to DSD and sent as DoP: the rate that runs (64, 128, 256), which may be
+    /// lower than the one asked for (the device's limit). None = it doesn't run.
+    dsd_out: Option<u32>,
+    /// The modulator's order (5, 7) with `dsd_out`.
+    dsd_out_order: Option<u32>,
+    /// Why DSD output was asked for and doesn't run (None when it runs, and for a DSD file
+    /// sent as DoP, which ignores it).
+    dsd_out_note: Option<DsdOutNote>,
     bit_perfect: bool,
 }
 
@@ -300,6 +315,7 @@ struct DownmixDto {
 impl From<&SignalPath> for SignalDto {
     fn from(p: &SignalPath) -> Self {
         let (upsample_filter, upsample_taps) = upsampling::names(p.upsample_filter);
+        let (dsd_out, dsd_out_order) = dsd_out::names(p.dsd_out);
         Self {
             source_rate: p.source_rate,
             source_bits: p.source_bits,
@@ -328,6 +344,9 @@ impl From<&SignalPath> for SignalDto {
             downmix: p.downmix.as_ref().map(|d| DownmixDto { to: d.to.clone(), gain_db: d.gain_db }),
             upsample_filter,
             upsample_taps,
+            dsd_out,
+            dsd_out_order,
+            dsd_out_note: None,
             bit_perfect: p.bit_perfect,
         }
     }
@@ -381,6 +400,8 @@ struct StatusDto {
     load: Option<f32>,
     /// The upsampling filter was stepped down because the processor couldn't keep up.
     filter_step: Option<upsampling::FilterStep>,
+    /// The DSD output was stepped down (or off) because the processor couldn't keep up.
+    dsd_step: Option<dsd_out::DsdStep>,
 }
 
 #[derive(Serialize)]
@@ -410,14 +431,35 @@ fn find_device(uid: &str) -> CmdResult<Output> {
 
 /// Stop whatever plays and start `track` on `device`. The old player is dropped *first*, so
 /// its hog mode is released and the device restored before we claim it again.
-fn start(state: &AppState, device: &Output, track: Arc<Track>, opts: PlayOptions) -> CmdResult<SignalDto> {
+///
+/// `dsd_out_note`: why the DSD output asked for doesn't run (see [`dsp_for`]), for the signal
+/// path. A device that was opened for DSD output and failed to start (for any reason) gets
+/// one more try with PCM, and the signal path says why.
+fn start(state: &AppState, device: &Output, track: Arc<Track>, opts: PlayOptions, dsd_out_note: Option<DsdOutNote>) -> CmdResult<SignalDto> {
     let mut slot = state.player.lock().unwrap();
     if let Some(p) = slot.take() {
         // What sounds now ends in a short fade, not a click.
         p.fade_out();
     }
-    let player = Player::start(device, track, &opts).map_err(err)?;
-    let signal = SignalDto::from(&player.path);
+    let mut refused = None;
+    let player = match (Player::start(device, track.clone(), &opts).map_err(err), opts.dsp.dsd_out) {
+        // Opened for DSD output and failed, whatever the reason (the device refused DoP, or
+        // the format, or the rate, or didn't open at that rate at all): once more with PCM.
+        // Should that fail too, its error is the one to show: it is about plain playback.
+        (Err(_), Some(asked)) if !track.is_dop() => {
+            refused = Some(DsdOutNote::refused(device.name(), asked));
+            // The track's gain stays as it was set for the encoder (`set_level`): levelling
+            // gives the same gain either way, and the peak headroom it adds (a dB or so, at
+            // most what keeps the true peaks at full scale) applies only if this playback
+            // processes at all; a bit-perfect one ignores the gain. At worst the track plays
+            // that much quieter, never louder, and bit-perfect playback stays bit-perfect.
+            let pcm = PlayOptions { dsp: DspSettings { dsd_out: None, ..opts.dsp.clone() }, ..opts.clone() };
+            Player::start(device, track.clone(), &pcm).map_err(err)?
+        }
+        (r, _) => r?,
+    };
+    let mut signal = SignalDto::from(&player.path);
+    signal.dsd_out_note = if signal.dsd_out.is_some() || track.is_dop() { None } else { refused.or(dsd_out_note) };
     *slot = Some(player);
     Ok(signal)
 }
@@ -633,13 +675,39 @@ fn set_output_volume(uid: String, volume: u32) {
     }
 }
 
-/// The processing for a playback on `device_uid`: the shared settings plus that output's EQ.
-fn dsp_for(state: &AppState, device_uid: &str) -> DspSettings {
+/// The processing asked for on `device_uid`: the shared settings plus that output's EQ. Its
+/// `dsd_out` is a wish, not yet what can run: never hand this to the engine or to `set_level`
+/// as it is, go through [`dsp_for`] (a playback) or [`dsp_offline`] (none).
+fn wanted_dsp(state: &AppState, device_uid: &str) -> DspSettings {
     let mut dsp = state.dsp.lock().unwrap().clone();
     let eq = state.eq.lock().unwrap();
     dsp.eq = eq.effective(device_uid);
     dsp.eq_bypass = eq.bypass;
     dsp
+}
+
+/// The processing for one playback on `device`, `exclusive` as asked and `dop` the device's
+/// DoP switch, and why the DSD output asked for doesn't run, if it doesn't.
+///
+/// Invariant: every `DspSettings` that reaches the engine (`PlayOptions`) or `set_level` for
+/// a playback comes from here, so its `dsd_out` is what can run on that device for that
+/// playback (see `dsd_out::resolve`), not the user's wish. A wish left in would make
+/// `set_level` see processing (`reshapes`) and give the track a peak headroom cut meant for
+/// the encoder, which a playback that then can't encode would still apply wherever it
+/// processes for another reason; and the signal path couldn't say why nothing was encoded.
+/// (The engine itself falls back to PCM silently.) A DSD file sent as DoP ignores `dsd_out`
+/// in the engine and gets no note (`start` drops it).
+fn dsp_for(state: &AppState, device: &Output, exclusive: bool, dop: bool) -> (DspSettings, Option<DsdOutNote>) {
+    let mut dsp = wanted_dsp(state, device.uid());
+    let (out, note) = dsd_out::resolve(dsp.dsd_out, device, exclusive, dop);
+    dsp.dsd_out = out;
+    (dsp, note)
+}
+
+/// The processing asked for on `device_uid`, for work that plays nothing through a device
+/// (an offline render): no DSD output.
+fn dsp_offline(state: &AppState, device_uid: &str) -> DspSettings {
+    DspSettings { dsd_out: None, ..wanted_dsp(state, device_uid) }
 }
 
 /// Set the gain `track` plays at with these settings (volume levelling, peak headroom): call
@@ -682,11 +750,19 @@ fn begin(
     dop: bool,
     dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
-    let dsp = dsp_for(state, device.uid());
+    let (dsp, dsd_out_note) = dsp_for(state, device, exclusive, dop);
     let opts = PlayOptions { exclusive, dsp, start_at, start_paused, fades: !state.fades_off.load(Ordering::Relaxed) };
-    let mut signal = start(state, device, track.clone(), opts)?;
+    let mut signal = start(state, device, track.clone(), opts, dsd_out_note)?;
     signal.dsd_note = dsd_note.clone();
-    let current = Current { track, path: file, device_uid: device.uid().to_string(), exclusive, dop, dsd_note };
+    let current = Current {
+        track,
+        path: file,
+        device_uid: device.uid().to_string(),
+        exclusive,
+        dop,
+        dsd_note,
+        dsd_out_note: signal.dsd_out_note.clone(),
+    };
     Ok(record_now(state, current, device.name().trim().to_string(), signal))
 }
 
@@ -748,7 +824,7 @@ async fn play_file(
     let device = find_device(&device_uid)?;
     let file = PathBuf::from(&path);
     let dop = dop.unwrap_or(false);
-    let dsp = dsp_for(&state, device.uid());
+    let (dsp, _) = dsp_for(&state, &device, exclusive, dop);
     let (mode, dsd_note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
     // Only the headers are parsed here; the decoder keeps filling RAM in the background
     // while playback starts. Still off the UI/IPC threads: opening may touch a slow disk.
@@ -812,7 +888,7 @@ fn play_queue_at(state: &AppState, i: usize) {
     let file = PathBuf::from(&path);
     let ahead = take_lined_up(state, i, &path);
     let result = find_device(&device_uid).and_then(|device| {
-        let dsp = dsp_for(state, device.uid());
+        let (dsp, _) = dsp_for(state, &device, exclusive, dop);
         let (mode, note) = dsd_mode(&file, &device, exclusive, dop, &dsp);
         // Opened ahead (and decoding already) — unless the settings changed how DSD goes out.
         let track = match ahead.filter(|t| t.is_dop() == (mode == DsdMode::Dop)) {
@@ -905,7 +981,8 @@ fn follow_queue(state: &AppState) {
             // Opening may take a moment (a stream): no locks held meanwhile.
             let file = PathBuf::from(&want.path);
             let Ok(device) = find_device(&want.device_uid) else { return };
-            let dsp = dsp_for(state, device.uid());
+            // (Resolved as for the playback it joins on to: its gain is set by these.)
+            let (dsp, _) = dsp_for(state, &device, want.exclusive, want.dop);
             let (mode, dsd_note) = dsd_mode(&file, &device, want.exclusive, want.dop, &dsp);
             let track = match open_for(&file, mode) {
                 Ok(t) => t,
@@ -1007,6 +1084,10 @@ fn took_over(state: &AppState) {
     p.path = p.path.for_next(&heard);
     let mut signal = SignalDto::from(&p.path);
     signal.dsd_note = e.dsd_note.clone();
+    // The same player, so the same DSD output as before, and the same reason when there is
+    // none (a refusal included).
+    let dsd_out_note = if p.path.dsd_out.is_some() || heard.is_dop() { None } else { cur.dsd_out_note.clone() };
+    signal.dsd_out_note = dsd_out_note.clone();
     drop(player);
     let next = Current {
         track: heard,
@@ -1015,6 +1096,7 @@ fn took_over(state: &AppState) {
         exclusive: cur.exclusive,
         dop: cur.dop,
         dsd_note: e.dsd_note,
+        dsd_out_note,
     };
     drop(current);
     let device_name = state.now.lock().unwrap().as_ref().map(|n| n.device_name.clone()).unwrap_or_default();
@@ -1065,12 +1147,19 @@ fn channel_test(state: State<'_, AppState>, device_uid: String) -> CmdResult<Sig
     // The test bypasses processing: crossfeed would blur exactly what it checks.
     let _one = state.play_lock.lock().unwrap();
     *state.current.lock().unwrap() = None;
-    start(&state, &device, Arc::new(testsignal::channel_test(rate)), PlayOptions::default())
+    start(&state, &device, Arc::new(testsignal::channel_test(rate)), PlayOptions::default(), None)
 }
 
 impl StatusDto {
     /// Nothing loaded.
-    fn idle(queue_index: Option<usize>, now_rev: u64, advance_error: Option<AdvanceError>, system_volume: Option<f32>, filter_step: Option<upsampling::FilterStep>) -> Self {
+    fn idle(
+        queue_index: Option<usize>,
+        now_rev: u64,
+        advance_error: Option<AdvanceError>,
+        system_volume: Option<f32>,
+        filter_step: Option<upsampling::FilterStep>,
+        dsd_step: Option<dsd_out::DsdStep>,
+    ) -> Self {
         Self {
             active: false,
             position: 0.0,
@@ -1088,6 +1177,7 @@ impl StatusDto {
             system_volume,
             load: None,
             filter_step,
+            dsd_step,
         }
     }
 }
@@ -1099,13 +1189,14 @@ fn status(state: State<'_, AppState>) -> StatusDto {
     let advance_error = state.advance_error.lock().unwrap().clone();
     let system_volume = output::system_volume();
     let filter_step = state.filter_step.lock().unwrap().clone();
+    let dsd_step = state.dsd_step.lock().unwrap().clone();
     let Some(player) = player_now(&state) else {
         // A track is starting: the last answer, as waiting for audio (and not finished: what
         // was finished is being replaced).
         let last = state.last_status.lock().unwrap().clone();
         return match last {
-            Some(s) => StatusDto { buffering: true, finished: false, queue_index, now_rev, advance_error, system_volume, filter_step, ..s },
-            None => StatusDto { buffering: true, ..StatusDto::idle(queue_index, now_rev, advance_error, system_volume, filter_step) },
+            Some(s) => StatusDto { buffering: true, finished: false, queue_index, now_rev, advance_error, system_volume, filter_step, dsd_step, ..s },
+            None => StatusDto { buffering: true, ..StatusDto::idle(queue_index, now_rev, advance_error, system_volume, filter_step, dsd_step) },
         };
     };
     let s = match player.as_ref() {
@@ -1126,8 +1217,9 @@ fn status(state: State<'_, AppState>) -> StatusDto {
             system_volume,
             load: p.load(),
             filter_step,
+            dsd_step,
         },
-        None => StatusDto::idle(queue_index, now_rev, advance_error, system_volume, filter_step),
+        None => StatusDto::idle(queue_index, now_rev, advance_error, system_volume, filter_step, dsd_step),
     };
     drop(player);
     *state.last_status.lock().unwrap() = Some(s.clone());
@@ -1202,6 +1294,8 @@ async fn set_dsp(
     peak_headroom: Option<bool>,
     upsample_filter: Option<String>,
     upsample_taps: Option<u32>,
+    dsd_out: Option<u32>,
+    dsd_order: Option<u32>,
 ) -> CmdResult<DspResult> {
     use tauri::Manager;
     let state = app.state::<AppState>();
@@ -1222,9 +1316,12 @@ async fn set_dsp(
         None => None,
     };
     // A long filter is designed once and kept; the longest minimum-phase one takes about half a
-    // second the first time: that too off the IPC thread, before the restart needs it.
+    // second the first time: that too off the IPC thread, before the restart needs it. It runs
+    // when upsampling is on, and with DSD output (which always upsamples to the wire rate, see
+    // `dsp::long_filter`) even when "upsample to" is off.
     let filter = upsampling::parse(upsample_filter.as_deref(), upsample_taps);
-    if let Some(spec) = filter.filter(|_| upsample_khz.is_some()) {
+    let dsd_out = dsd_out::parse(dsd_out, dsd_order);
+    if let Some(spec) = filter.filter(|_| upsample_khz.is_some() || dsd_out.is_some()) {
         tauri::async_runtime::spawn_blocking(move || drop(upsample::filter(spec))).await.map_err(err)?;
     }
     let ir_dto = ir.as_ref().map(|r| IrDto {
@@ -1250,9 +1347,12 @@ async fn set_dsp(
             },
             headroom: peak_headroom.unwrap_or(false),
         },
+        // What the user wants: each playback runs what its device can take of it (`dsp_for`).
+        dsd_out,
     };
     // The UI's own choice now: an earlier automatic step is no longer news.
     *state.filter_step.lock().unwrap() = None;
+    *state.dsd_step.lock().unwrap() = None;
     // What was lined up carries a gain from the old settings: it is opened again.
     state.lined_up.lock().unwrap().clear();
     let signal = restart(&state)?;
@@ -1275,7 +1375,7 @@ fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalD
     let mut current = state.current.lock().unwrap();
     let (Some((pos, paused, false)), Some(cur)) = (resume, current.as_mut()) else { return Ok(None) };
     let device = find_device(&cur.device_uid)?;
-    let settings = dsp_for(state, &cur.device_uid);
+    let (settings, dsd_out_note) = dsp_for(state, &device, cur.exclusive, cur.dop);
     // A DSD file may have to switch between DoP and PCM (the EQ and friends need PCM).
     let mut mode = DsdMode::Pcm;
     if dsd::is_dsd_path(&cur.path) {
@@ -1299,55 +1399,90 @@ fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalD
         set_level(&settings, std::path::Path::new(&next.path), &next.track, Duration::ZERO);
     }
     let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused, fades: !state.fades_off.load(Ordering::Relaxed) };
-    let mut signal = start(state, &device, cur.track.clone(), opts)?;
+    let mut signal = start(state, &device, cur.track.clone(), opts, dsd_out_note)?;
     signal.dsd_note = cur.dsd_note.clone();
+    cur.dsd_out_note = signal.dsd_out_note.clone();
     if let Some(now) = state.now.lock().unwrap().as_mut() {
         now.signal = signal.clone();
     }
     Ok(Some(signal))
 }
 
-/// How often the queue thread asks whether the upsampling filter is too heavy.
-const FILTER_CHECK_EVERY: Duration = Duration::from_secs(3);
+/// How often the queue thread asks whether the processing is too heavy.
+const STEP_CHECK_EVERY: Duration = Duration::from_secs(3);
 
-/// The processor can't keep up with the long upsampling filter that plays: put the next
-/// cheaper one in the settings (2^20 → 2^16 taps → the standard resampler), restart in place
-/// with it, and record the step for the UI to show and adopt. Runs on the queue thread, so it
-/// works with no window to ask; never while a track is starting or restarting.
-fn step_down_filter(state: &AppState) {
+/// The processor can't keep up with what plays: put the next cheaper setting in the settings
+/// (see `dsd_out::next_step`: a lighter DSD output, a shorter upsampling filter — 2^20 → 2^16
+/// taps → the standard resampler — or no DSD output), restart in place with it, and record the
+/// step for the UI to show and adopt. Runs on the queue thread, so it works with no window to
+/// ask; never while a track is starting or restarting.
+fn step_down(state: &AppState) {
     let playing = {
         let Ok(_one) = state.play_lock.try_lock() else { return };
         let player = state.player.lock().unwrap();
         let Some(p) = player.as_ref() else { return };
-        // A debug build run with BITSPRING_TRACE says what the filter is doing.
+        // A debug build run with BITSPRING_TRACE says what the filter and the encoder are doing.
         if cfg!(debug_assertions) && std::env::var_os("BITSPRING_TRACE").is_some() {
-            eprintln!("filter {:?}, {} → {} Hz, load {:?}, underruns {}, at {:.1} s", p.path.upsample_filter, p.path.source_rate, p.path.device_rate, p.load(), p.underruns(), p.position_secs());
+            eprintln!(
+                "filter {:?}, dsd out {:?}, {} → {} Hz, load {:?}, underruns {}, at {:.1} s",
+                p.path.upsample_filter,
+                p.path.dsd_out,
+                p.path.source_rate,
+                p.path.device_rate,
+                p.load(),
+                p.underruns(),
+                p.position_secs()
+            );
         }
-        if p.is_finished() || !upsampling::should_step_down(p.load(), p.underruns(), p.path.upsample_filter.is_some()) {
+        let heavy = p.path.upsample_filter.is_some() || p.path.dsd_out.is_some();
+        if p.is_finished() || !upsampling::should_step_down(p.load(), p.underruns(), heavy) {
             return;
         }
-        p.path.upsample_filter
+        (p.path.upsample_filter, p.path.dsd_out)
     };
-    let Some(playing) = playing else { return };
-    let next = playing.shorter();
-    // Designed (or fetched) with no lock held.
-    if let Some(spec) = next {
+    let (filter, out) = playing;
+    // From what plays: the device may run a lower DSD rate than the one asked for.
+    let Some(step) = dsd_out::next_step(out, filter) else { return };
+    // A filter is designed (or fetched) with no lock held.
+    if let dsd_out::Step::Filter(Some(spec)) = step {
         drop(upsample::filter(spec));
     }
     let Ok(_one) = state.play_lock.try_lock() else { return };
-    // Still the same filter playing, and still the one the settings ask for? Settings sent
-    // meanwhile restart playback themselves.
-    let same = state.player.lock().unwrap().as_ref().is_some_and(|p| p.path.upsample_filter == Some(playing));
+    // Still the same playing, and still what the settings ask for? Settings sent meanwhile
+    // restart playback themselves.
+    let same = state.player.lock().unwrap().as_ref().is_some_and(|p| (p.path.upsample_filter, p.path.dsd_out) == playing);
     {
         let mut dsp = state.dsp.lock().unwrap();
-        if !same || dsp.upsample_filter.map(|f| f.effective()) != Some(playing) {
+        if !same {
             return;
         }
-        dsp.upsample_filter = next;
+        match step {
+            dsd_out::Step::Filter(next) => {
+                if dsp.upsample_filter.map(|f| f.effective()) != filter {
+                    return;
+                }
+                dsp.upsample_filter = next;
+            }
+            dsd_out::Step::Dsd(next) => {
+                if !out.is_some_and(|o| dsd_out::asks_for(dsp.dsd_out, o)) {
+                    return;
+                }
+                dsp.dsd_out = next;
+            }
+        }
     }
-    let (filter, taps) = upsampling::names(next);
-    let seq = state.filter_step_seq.fetch_add(1, Ordering::AcqRel) + 1;
-    *state.filter_step.lock().unwrap() = Some(upsampling::FilterStep { seq, filter, taps });
+    match step {
+        dsd_out::Step::Filter(next) => {
+            let (filter, taps) = upsampling::names(next);
+            let seq = state.filter_step_seq.fetch_add(1, Ordering::AcqRel) + 1;
+            *state.filter_step.lock().unwrap() = Some(upsampling::FilterStep { seq, filter, taps });
+        }
+        dsd_out::Step::Dsd(next) => {
+            let (dsd_out, order) = dsd_out::names(next);
+            let seq = state.dsd_step_seq.fetch_add(1, Ordering::AcqRel) + 1;
+            *state.dsd_step.lock().unwrap() = Some(dsd_out::DsdStep { seq, dsd_out, order });
+        }
+    }
     // (A failure shows as the next status's error, as for any restart.)
     let _ = restart_locked(state, None);
 }
@@ -1379,6 +1514,7 @@ fn apply_eq(state: &AppState) -> CmdResult<Option<SignalDto>> {
                 let mut now = state.now.lock().unwrap();
                 if let Some(now) = now.as_mut() {
                     signal.dsd_note = now.signal.dsd_note.clone();
+                    signal.dsd_out_note = now.signal.dsd_out_note.clone();
                     now.signal = signal.clone();
                 }
                 return Ok(Some(signal));
@@ -1462,13 +1598,13 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::Builder::new().name("hifi-queue".into()).spawn(move || {
                 let mut ended: Option<std::time::Instant> = None;
-                let mut filter_checked = std::time::Instant::now();
+                let mut load_checked = std::time::Instant::now();
                 loop {
                     std::thread::sleep(Duration::from_millis(40));
                     let state = handle.state::<AppState>();
-                    if filter_checked.elapsed() >= FILTER_CHECK_EVERY {
-                        filter_checked = std::time::Instant::now();
-                        step_down_filter(&state);
+                    if load_checked.elapsed() >= STEP_CHECK_EVERY {
+                        load_checked = std::time::Instant::now();
+                        step_down(&state);
                     }
                     follow_queue(&state);
                     if advance(&state) {

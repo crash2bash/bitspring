@@ -2,6 +2,7 @@
 //! takes the untouched bit-perfect path and none of this code runs.
 
 pub mod crossfeed;
+pub mod dsd_encode;
 pub mod eq;
 pub mod eq_io;
 pub mod fir;
@@ -13,6 +14,7 @@ pub mod upsample;
 use std::sync::Arc;
 
 use crossfeed::{Crossfeed, CrossfeedLevel};
+use dsd_encode::DsdOut;
 use eq::EqPreset;
 use fir::{Convolver, FirControl, ImpulseResponse};
 use lossy::{Lossy, LossyPlan, LossySettings};
@@ -54,6 +56,10 @@ pub struct DspSettings {
     /// Volume levelling and peak headroom: each track plays at the gain set on it
     /// ([`crate::Track::set_level`]).
     pub level: LevelSettings,
+    /// Encode PCM to DSD at this rate and send it as DoP (see [`dsd_encode`]), where the
+    /// device can take it: exclusive access, DoP at the wire rate. Where it can't, playback
+    /// goes on as if this were unset (see `output::plan`). A DSD track sent as DoP ignores it.
+    pub dsd_out: Option<DsdOut>,
 }
 
 impl Default for DspSettings {
@@ -67,6 +73,7 @@ impl Default for DspSettings {
             crossfeed: None,
             lossy: LossySettings::default(),
             level: LevelSettings::default(),
+            dsd_out: None,
         }
     }
 }
@@ -78,9 +85,15 @@ impl DspSettings {
     }
 
     /// Processing that rebuilds the waveform, so it may peak where the source's samples
-    /// don't — what the peak headroom is for.
+    /// don't — what the peak headroom is for. The DSD encoder counts: it upsamples to the wire
+    /// rate, and the headroom is what keeps its input's true peaks within what the modulator
+    /// is rated for ([`dsd_encode::MAX_DEPTH`]).
     pub fn reshapes(&self) -> bool {
-        self.upsample != Upsample::Off || self.eq.is_some() || self.convolution.is_some() || self.crossfeed.is_some()
+        self.upsample != Upsample::Off
+            || self.eq.is_some()
+            || self.convolution.is_some()
+            || self.crossfeed.is_some()
+            || self.dsd_out.is_some()
     }
 
     /// Tracks play at the gain set on them.
@@ -90,16 +103,20 @@ impl DspSettings {
 }
 
 /// The long upsampling filter that runs for `in_rate → out_rate`, if one does: when upsampling
-/// is on, a long filter is chosen, and the device runs at twice the source rate or more (the
-/// ×2 stage has nothing to do below that). Otherwise the chain is the standard one. The spec
-/// is the one built ([`FilterSpec::effective`]).
+/// is on (or the output is encoded to DSD, which always upsamples to the wire rate), a long
+/// filter is chosen, and the device runs at twice the source rate or more (the ×2 stage has
+/// nothing to do below that). Otherwise the chain is the standard one. The spec is the one
+/// built ([`FilterSpec::effective`]).
 pub fn long_filter(settings: &DspSettings, in_rate: u32, out_rate: u32) -> Option<FilterSpec> {
     let doubles = in_rate > 0 && out_rate as u64 >= 2 * in_rate as u64;
-    (settings.upsample != Upsample::Off && doubles).then_some(settings.upsample_filter?.effective())
+    let upsamples = settings.upsample != Upsample::Off || settings.dsd_out.is_some();
+    (upsamples && doubles).then_some(settings.upsample_filter?.effective())
 }
 
 /// The processing chain for one track at one device rate. Runs on the render thread. (The
-/// parametric EQ itself runs later, in the audio callback — see [`eq::EqStage`].)
+/// parametric EQ itself runs later: in the audio callback, or after the chain on the render
+/// thread when the output is encoded to DSD — see [`eq::EqStage`]. The encoder runs after it,
+/// see `output::render_loop`.)
 pub struct Chain {
     channels: usize,
     /// The long filter's ×2 stage, ahead of `resampler` (which then only takes 2·in_rate on

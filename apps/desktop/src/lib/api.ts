@@ -63,6 +63,14 @@ export interface Signal {
   upsampleFilter: UpsampleFilter | null;
   /** Its length in taps (null for apodizing, which has one length). */
   upsampleTaps: number | null;
+  /** PCM encoded to DSD and sent as DoP: the DSD multiple that runs (64, 128, 256). It can be
+   *  lower than the one asked for, where the device goes no higher. Null: PCM goes out, or a
+   *  DSD file goes as DoP (that is `dop`). */
+  dsdOut: number | null;
+  /** The modulator's order with `dsdOut`. */
+  dsdOutOrder: DsdOrder | null;
+  /** Why DSD output was asked for and doesn't run (null when it runs or wasn't asked for). */
+  dsdOutNote: DsdOutNote | null;
   bitPerfect: boolean;
 }
 
@@ -72,6 +80,20 @@ export type UpsampleFilter = "linear" | "minimum" | "apodizing";
 export type UpsampleTaps = 65536 | 1048576;
 
 export type Crossfeed = "light" | "medium" | "strong";
+
+/** DSD output rates, as multiples of 44.1 kHz. */
+export type DsdOut = 64 | 128 | 256;
+/** The order of the sigma-delta modulator that makes the DSD stream. */
+export type DsdOrder = 5 | 7;
+
+/** Why DSD output was asked for and PCM plays (worded by dsdOutNoteText). */
+export type DsdOutNote =
+  | { kind: "exclusive" }
+  | { kind: "device" }
+  | { kind: "volume" }
+  | { kind: "network" }
+  | { kind: "rate"; device: string; dsd: string; khz: number }
+  | { kind: "refused"; device: string; dsd: string; khz: number };
 
 /** Why a DSD file plays as PCM although DoP was asked for (worded by dsdNoteText). */
 export type DsdNote =
@@ -196,6 +218,10 @@ export interface DspSettings {
   level: LevelMode | null;
   /** With other processing on: lower a track whose true peak would overshoot full scale. */
   peakHeadroom: boolean;
+  /** Encode PCM to DSD at this rate and send it as DoP (null: off). Phones take 64 only. */
+  dsdOut: DsdOut | null;
+  /** The modulator for it. */
+  dsdOrder: DsdOrder;
 }
 
 export type LevelMode = "track" | "album";
@@ -272,6 +298,8 @@ export interface Status {
   load: number | null;
   /** The processor couldn't keep up: the backend stepped the upsampling filter down and plays on with it. */
   filterStep: FilterStep | null;
+  /** The processor couldn't keep up: the backend stepped the DSD output down and plays on with it. */
+  dsdStep: DsdStep | null;
 }
 
 /** An automatic step down of the upsampling filter. `seq` grows with each; `filter: null` = the standard one now. */
@@ -279,6 +307,14 @@ export interface FilterStep {
   seq: number;
   filter: UpsampleFilter | null;
   taps: number | null;
+}
+
+/** An automatic step down of the DSD output: a lower rate, or the 5th-order modulator (`order`
+ *  comes with every rate), or `dsdOut: null` = DSD output off, PCM plays. `seq` grows with each. */
+export interface DsdStep {
+  seq: number;
+  dsdOut: number | null;
+  order: number | null;
 }
 
 export interface LibraryStatus {
@@ -915,6 +951,12 @@ export function dsdNoteText(n: DsdNote): string {
   if (n.kind === "rate") return t("dsd.rate", { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
   if (n.kind === "channels") return t("dsd.channels", { n: num(n.channels) });
   return t(`dsd.${n.kind}`);
+}
+
+/** Why DSD output doesn't run, in the UI language. */
+export function dsdOutNoteText(n: DsdOutNote): string {
+  if (n.kind === "rate" || n.kind === "refused") return t(`dsdOutNote.${n.kind}`, { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  return t(`dsdOutNote.${n.kind}`);
 }
 
 /**

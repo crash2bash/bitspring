@@ -1,12 +1,14 @@
 //! Playback, independent of the operating system.
 //!
 //! Everything between the decoded track and the device buffers lives here: the processing
-//! chain on its render thread, the lock-free hand-off to the realtime callback, DoP packing,
-//! sample format conversion, position, seek and meters. A backend (CoreAudio on macOS, WASAPI
+//! chain on its render thread, the lock-free hand-off to the realtime callback, DoP packing
+//! (of a DSD track's own bits, or of PCM the render thread encodes to DSD), sample format
+//! conversion, position, seek and meters. A backend (CoreAudio on macOS, WASAPI
 //! on Windows, ALSA on Linux) only finds the device, sets its rate and format, and calls
 //! [`Shared::render`] from its realtime callback with the device's buffers.
 
 use crate::channels::{Route, Speaker};
+use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU64, AtomicUsize, Ordering};
@@ -18,6 +20,7 @@ use anyhow::{Result, bail};
 use crate::decode::{DsdSource, Track};
 use crate::dsd::{DOP_IDLE, PCM_GAIN};
 use crate::dsp::crossfeed::CrossfeedLevel;
+use crate::dsp::dsd_encode::{DsdOut, Encoder};
 use crate::dsp::lossy::LossyPlan;
 use crate::dsp::loudness::Level;
 use crate::dsp::eq::{EqPreset, EqStage, IirPlan, Phase};
@@ -146,6 +149,9 @@ pub struct SignalPath {
     pub lossy: Option<LossyPlan>,
     /// The source is DSD: its rate, and whether it goes out as DoP or was converted to PCM.
     pub dsd: Option<DsdSource>,
+    /// PCM encoded to DSD on the way and sent as DoP: the rate and modulator it runs with.
+    /// None when it isn't, also where it was asked for and the device couldn't take it.
+    pub dsd_out: Option<DsdOut>,
     /// The gain this track plays at (volume levelling, peak headroom), when one applies.
     pub level: Option<Level>,
     pub bit_perfect: bool,
@@ -294,18 +300,47 @@ pub(crate) struct Plan {
     pub resampled: bool,
     /// Audio goes through the render thread (resampling, DSP or lossy enhancers).
     pub processing: bool,
+    /// The wire carries DoP: a DSD track's own bits sent straight, or PCM encoded (`encode`).
+    /// The device must run at `target` in a format that carries the words untouched.
     pub dop: bool,
+    /// PCM is encoded to DSD on the render thread (after the whole chain and the EQ) and the
+    /// words go out as DoP. A DSD track played straight is `dop` with this None.
+    pub encode: Option<DsdOut>,
     /// How the track's channels reach the device's (straight, or folded down).
     pub route: Route,
 }
 
-pub(crate) fn dop_error(device_name: &str, track: &Track) -> anyhow::Error {
+/// The device couldn't take DoP for `dsd_hz` (its wire rate is `dsd_hz / 16`): what a backend
+/// returns when the format it got can't carry the words, or the rate isn't the one planned.
+pub(crate) fn dop_error(device_name: &str, dsd_hz: u32) -> anyhow::Error {
     crate::UserError::DopRefused {
         device: device_name.trim().to_string(),
-        dsd: crate::dsd::dsd_name(track.dsd.map_or(0, |d| d.rate)),
-        khz: track.sample_rate as f64 / 1000.0,
+        dsd: crate::dsd::dsd_name(dsd_hz),
+        khz: dsd_hz as f64 / 16.0 / 1000.0,
     }
     .into()
+}
+
+/// The DSD rate that would go over the wire as DoP for `track`: its own when it is a DSD
+/// track sent straight, else the rate PCM is to be encoded at, if that is asked for. What a
+/// backend checks the device's DoP support against, before planning.
+pub(crate) fn wire_dsd_rate(track: &Track, opts: &PlayOptions) -> Option<u32> {
+    if track.is_dop() {
+        Some(track.dsd.map_or(track.sample_rate * 16, |d| d.rate))
+    } else {
+        opts.dsp.dsd_out.map(|o| o.rate.hz())
+    }
+}
+
+/// The settings as this playback runs them: `dsd_out` is what the plan decided (`encode`),
+/// whatever was asked for. Everything after `plan` goes by these, so a playback that couldn't
+/// encode is exactly the one planned without it.
+fn effective(dsp: &DspSettings, encode: Option<DsdOut>) -> Cow<'_, DspSettings> {
+    if dsp.dsd_out == encode {
+        Cow::Borrowed(dsp)
+    } else {
+        Cow::Owned(DspSettings { dsd_out: encode, ..dsp.clone() })
+    }
 }
 
 /// `rates`: what the device can run at. `dop_ok`: the device could carry this DoP track.
@@ -316,17 +351,39 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     // DoP: the DSD bits must reach the DAC exactly, so no processing, no rate change and no
     // folding channels together.
     let dop = track.is_dop();
+    let dsd_hz = wire_dsd_rate(track, opts).unwrap_or(0);
     if dop && (!opts.exclusive || !dop_ok || !route.is_direct()) {
-        return Err(dop_error(device_name, track));
+        return Err(dop_error(device_name, dsd_hz));
     }
+    // PCM encoded to DSD: only with the device to ourselves and able to carry DoP at the wire
+    // rate (`dop_ok` is for that rate: see `wire_dsd_rate`). Otherwise the playback is planned
+    // exactly as if it weren't asked for, without an error: the app says why, and the signal
+    // path shows what plays. A DSD track sent straight ignores it.
+    let encode = opts.dsp.dsd_out.filter(|out| {
+        let wire = out.rate.wire_rate();
+        !dop && opts.exclusive
+            && dop_ok
+            && rates.iter().any(|r| r.contains(wire as f64))
+            && crate::dsp::resample::phases(track.sample_rate, wire) <= crate::dsp::resample::MAX_PHASES
+    });
+    let dsp = effective(&opts.dsp, encode);
     let mut target = match choose_device_rate(track.sample_rate, rates) {
         RateDecision::BitPerfect(hz) | RateDecision::Resample { device_hz: hz } => hz,
         RateDecision::Unsupported => bail!(crate::UserError::NoRates { device: device_name.trim().to_string() }),
     };
-    if let Upsample::UpTo(max_hz) = opts.dsp.upsample {
+    if let Upsample::UpTo(max_hz) = dsp.upsample {
         if !dop {
             target = upsample_target(track.sample_rate, rates, max_hz);
         }
+    }
+    // The DSD bits go out at their own rate or not at all: the backends check the device got
+    // `target`, so it must be that rate.
+    if dop && (target - src_hz).abs() >= 0.5 {
+        return Err(dop_error(device_name, dsd_hz));
+    }
+    if let Some(out) = encode {
+        // The chain always upsamples to the wire rate, whatever "upsample to" says.
+        target = out.rate.wire_rate() as f64;
     }
     let start_frame = ((opts.start_at.max(0.0) * src_hz) as usize).min(track.frames());
     // A progressively decoded track: give the decoder a head start (local files get there
@@ -339,11 +396,11 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     }
     let lossy = crate::dsp::lossy::plan(track, &opts.dsp.lossy);
     let resampled = (target - src_hz).abs() >= 0.5;
-    let processing = !dop && (resampled || opts.dsp.is_active() || lossy.is_some());
+    let processing = encode.is_some() || (!dop && (resampled || dsp.is_active() || lossy.is_some()));
     if resampled && crate::dsp::resample::phases(track.sample_rate, target as u32) > crate::dsp::resample::MAX_PHASES {
         bail!(crate::UserError::Resample { from: track.sample_rate, to: target as u32 });
     }
-    Ok(Plan { target, start_frame, lossy, resampled, processing, dop, route })
+    Ok(Plan { target, start_frame, lossy, resampled, processing, dop: dop || encode.is_some(), encode, route })
 }
 
 /// Fill in the signal path from what the backend actually got from the device.
@@ -358,7 +415,9 @@ pub(crate) fn signal_path(
     transport: Transport,
 ) -> SignalPath {
     let src_hz = track.sample_rate as f64;
-    // (Never for DoP: the DSD bits can't be scaled.)
+    let dsp = effective(&opts.dsp, plan.encode);
+    // (Never for a DSD track sent straight: its bits can't be scaled. PCM encoded to DSD is
+    // levelled ahead of the encoder.)
     let leveled = plan.processing && opts.dsp.levels();
     let pcm_clean = !plan.processing
         && (device_rate - src_hz).abs() < 0.5
@@ -385,7 +444,7 @@ pub(crate) fn signal_path(
         transport,
         resampled: plan.resampled,
         // As the chain decides it, from the rate the device actually runs at.
-        upsample_filter: if plan.processing { crate::dsp::long_filter(&opts.dsp, track.sample_rate, device_rate.round() as u32) } else { None },
+        upsample_filter: if plan.processing { crate::dsp::long_filter(&dsp, track.sample_rate, device_rate.round() as u32) } else { None },
         eq: opts.dsp.eq.as_ref().map(|p| p.name.clone()),
         eq_linear: opts.dsp.eq.as_ref().is_some_and(|p| p.phase == Phase::Linear),
         convolution: opts.dsp.convolution.as_ref().map(|c| c.0.name.clone()),
@@ -393,10 +452,12 @@ pub(crate) fn signal_path(
         source_lossy: track.lossy,
         lossy: plan.lossy,
         dsd: track.dsd,
+        dsd_out: plan.encode,
         level: if leveled { track.level() } else { None },
         // DoP gets this far only with the exact rate, a ≥24-bit integer format and exclusive
-        // access (the backend checked).
-        bit_perfect: (plan.dop && transport.can_be_bit_perfect()) || pcm_clean && bits_ok,
+        // access (the backend checked). Only a DSD track's own bits are bit-perfect: PCM
+        // encoded to DSD is a new signal.
+        bit_perfect: (plan.dop && plan.encode.is_none() && track.is_dop() && transport.can_be_bit_perfect()) || pcm_clean && bits_ok,
         out_bits: out.bits(),
         pcm_clean,
         leveled,
@@ -453,13 +514,14 @@ pub(crate) struct Shared {
     /// Peak |sample| per output channel (L, R) since the UI last read it, as f32 bits.
     /// Non-negative f32 bit patterns order like u32, so `fetch_max` works on them directly.
     meter: [AtomicU32; 2],
-    /// The track is raw DSD: the callback packs it as DoP.
+    /// The track is raw DSD: the callback packs it as DoP, straight from the track. (False
+    /// when PCM is encoded: those words come through the ring, see `RingState::dop_words`.)
     dop: bool,
     /// Track channels → device channels.
     route: Route,
     /// Callback-only: marker of the next DoP frame (false = 0x05, true = 0xFA). Runs on across
-    /// callbacks, pauses, seeks and tracks — a break in the alternation makes the DAC drop out
-    /// of DSD.
+    /// callbacks, pauses, seeks, dropouts and tracks — a break in the alternation makes the
+    /// DAC drop out of DSD.
     dop_phase: AtomicBool,
     /// The lossy enhancers are on: they measure each track, so no track may follow another
     /// in the same chain when either is lossy.
@@ -468,7 +530,8 @@ pub(crate) struct Shared {
     /// Set from the control side (`Playback::set_fades`), read by the callback.
     fade_len: AtomicU32,
     /// What `fade_len` is with fades on; 0 = this playback never fades (DoP: the DSD bits
-    /// can't be scaled, and the DAC mutes by itself).
+    /// can't be scaled, and the DAC mutes by itself; PCM encoded to DSD fades in ahead of the
+    /// encoder instead, see `Encode`).
     fade_max: u32,
     /// Where the fade stands: 0 (silent) ..= `fade_len` (full level). Written by the callback
     /// only.
@@ -511,7 +574,14 @@ fn fade_gain(pos: u32, len: u32) -> f32 {
 
 /// Hand-off between the render thread (producer) and the callback (consumer).
 struct RingState {
+    /// Processed samples at the device rate, program channels interleaved. When `dop_words`,
+    /// DoP payloads instead: each 16-bit word the encoder made, as its numeric value (0..=65535
+    /// is exact in f32; the callback takes it back with `as u16`).
     ring: Ring,
+    /// The ring carries DSD words, not PCM (see [`Plan::encode`]): the render thread has run
+    /// the EQ, the clamp, the fade-in and the encoder; the callback only packs the words as
+    /// DoP, under the next markers.
+    dop_words: bool,
     channels: usize,
     source_rate: f64,
     device_rate: f64,
@@ -536,7 +606,8 @@ struct RingState {
     /// can join on any more (until a seek).
     tail_out: AtomicBool,
     quit: AtomicBool,
-    /// Peak |sample| after processing, as f32 bits (for a clipping indicator).
+    /// Peak |sample| after processing, as f32 bits (for a clipping indicator). Written by the
+    /// side that runs the EQ: the callback, or the render thread when it encodes.
     peak: AtomicU32,
     /// Callbacks that found the ring short while the render thread wasn't finished — each
     /// one is an audible dropout. Should stay 0.
@@ -545,16 +616,18 @@ struct RingState {
     /// buffering, not a dropout of ours.
     starved: AtomicBool,
     /// The render thread's processing time over the audio it handled, as f32 bits (see
-    /// [`Playback::load`]).
+    /// [`Playback::load`]). With the EQ and the encoder when it encodes.
     load: AtomicU32,
-    /// The parametric EQ, run by the callback on what it pops from the ring.
+    /// The parametric EQ, run by the callback on what it pops from the ring — or, when
+    /// `dop_words`, by the render thread ahead of the encoder (and then never by the callback).
     eq: Option<EqStage>,
     /// The render thread's FIR stage (linear-phase EQ, curves, convolution).
     fir: Option<Arc<FirControl>>,
 }
 
-// SAFETY: `scratch` is touched only by the callback thread; everything else is atomic or `Ring`
-// (itself SPSC-safe: render thread produces, callback consumes).
+// SAFETY: `scratch` is touched only by the callback thread; `eq`'s live half by one thread only
+// (see its field); everything else is atomic or `Ring` (itself SPSC-safe: render thread
+// produces, callback consumes).
 unsafe impl Sync for RingState {}
 
 /// The OS-independent half of a player: shared state plus the render thread.
@@ -581,6 +654,8 @@ impl Playback {
             swap: AtomicPtr::new(std::ptr::null_mut()),
         });
         let (ring, render) = if plan.processing {
+            // What runs is what the plan decided, not what was asked for (see `effective`).
+            let dsp = effective(&opts.dsp, plan.encode);
             // The chain works on the program: the track's channels, or the speakers it is
             // folded down to (so EQ and crossfeed see the stereo pair they were made for).
             let channels = plan.route.program_channels();
@@ -591,6 +666,13 @@ impl Playback {
                 && crate::dsp::resample::phases(track.sample_rate, out_rate) > crate::dsp::resample::MAX_PHASES
             {
                 bail!(crate::UserError::Resample { from: track.sample_rate, to: out_rate });
+            }
+            // The words are made for one wire rate: the backend has checked the device runs
+            // at it, this only guards against a caller that didn't.
+            if let Some(out) = plan.encode
+                && out_rate != out.rate.wire_rate()
+            {
+                bail!("DSD{} needs the device at {} Hz, it runs at {out_rate} Hz", out.rate.multiple(), out.rate.wire_rate());
             }
             let fs = out_rate as f64;
             let eq = opts.dsp.eq.as_ref();
@@ -604,6 +686,7 @@ impl Playback {
                 // ~0.5 s of audio: enough to ride out scheduling hiccups, short enough that
                 // a seek or a settings change is heard promptly.
                 ring: Ring::new(((device_rate * 0.5) as usize).max(32_768) * channels),
+                dop_words: plan.encode.is_some(),
                 channels,
                 source_rate: track.sample_rate as f64,
                 device_rate,
@@ -624,7 +707,21 @@ impl Playback {
                 eq: eq.map(|e| EqStage::new(e, fs, channels, opts.dsp.eq_bypass)),
                 fir: fir.as_ref().map(|(c, _)| c.clone()),
             });
-            let chain = Chain::new(&opts.dsp, plan.lossy.as_ref(), fir, track.sample_rate, out_rate, channels);
+            let chain = Chain::new(&dsp, plan.lossy.as_ref(), fir, track.sample_rate, out_rate, channels);
+            // (The modulator's design is computed here, once per rate and order, before the
+            // render thread starts: see `Encoder::new`.)
+            let encode = plan.encode.map(|out| {
+                let fade_len = if opts.fades { ((device_rate * FADE_SECS) as u32).max(1) } else { 0 };
+                Encode {
+                    encoder: Encoder::new(out, channels),
+                    pcm: Vec::new(),
+                    words: Vec::new(),
+                    fade_len,
+                    // As on the PCM path: a track from its top starts at full level, one picked
+                    // up in the middle fades in.
+                    fade: if plan.start_frame == 0 { fade_len } else { 0 },
+                }
+            });
             let handle = {
                 let (slots, rs) = (slots.clone(), rs.clone());
                 let start = plan.start_frame;
@@ -632,7 +729,7 @@ impl Playback {
                 let leveled = opts.dsp.levels();
                 std::thread::Builder::new()
                     .name("hifi-render".into())
-                    .spawn(move || render_loop(slots, rs, chain, start, route, leveled))?
+                    .spawn(move || render_loop(slots, rs, chain, encode, start, route, leveled))?
             };
             // Let the ring fill a little before IO starts, so playback doesn't open on silence.
             let deadline = Instant::now() + Duration::from_millis(500);
@@ -654,7 +751,7 @@ impl Playback {
             finished: AtomicBool::new(false),
             ring,
             meter: [AtomicU32::new(0), AtomicU32::new(0)],
-            dop: plan.dop,
+            dop: plan.dop && plan.encode.is_none(),
             route: plan.route.clone(),
             dop_phase: AtomicBool::new(false),
             lossy_enhancers: opts.dsp.lossy.any(),
@@ -764,10 +861,12 @@ impl Playback {
     /// [`PlayOptions::fades`]), a few milliseconds each — and exactly the same way when
     /// `track` is the one already playing, so that nothing about a switch tells whether the
     /// track changed. False when this playback can't: the two differ in rate or channels (the
-    /// device would have to switch), it is DoP, or a following track is already on its way.
+    /// device would have to switch), it is DoP (a DSD track, or PCM encoded to DSD: no fade
+    /// can follow the modulator), or a following track is already on its way.
     pub fn swap(&self, track: Arc<Track>) -> bool {
         let (mut tracks, [heard, cur, _]) = self.tidy();
-        if cur != heard || self.shared.dop || track.is_dop() {
+        let words = self.shared.ring.as_ref().is_some_and(|rs| rs.dop_words);
+        if cur != heard || self.shared.dop || words || track.is_dop() {
             return false;
         }
         // SAFETY: `heard` is owned by `tracks`, which we hold locked.
@@ -853,7 +952,9 @@ impl Playback {
     }
 
     /// Turn the fades on or off for what plays now (see [`PlayOptions::fades`]). A playback
-    /// that never fades (DoP) stays that way.
+    /// that never fades (DoP) stays that way. PCM encoded to DSD keeps what it was started
+    /// with: its only fade, the fade-in after a seek, is made on the render thread ahead of the
+    /// encoder, and is not followed by this.
     pub fn set_fades(&self, on: bool) {
         let st = &self.shared;
         st.fade_len.store(if on { st.fade_max } else { 0 }, Ordering::Relaxed);
@@ -971,6 +1072,8 @@ pub(crate) fn render_offline(track: Arc<Track>, dsp: &DspSettings) -> Result<Vec
         resampled: false,
         processing: true,
         dop: false,
+        // PCM out, whatever `dsp.dsd_out` says: the chain runs as if it were unset.
+        encode: None,
         route: Route::new(&track.layout, &track.layout),
     };
     let p = Playback::new(track.clone(), &opts, &plan, rate)?;
@@ -1005,7 +1108,13 @@ pub(crate) fn render_offline(track: Arc<Track>, dsp: &DspSettings) -> Result<Vec
 /// the callback at which output frame the new track begins to be heard.
 ///
 /// `leveled`: each track goes in at its own gain (volume levelling, peak headroom).
-fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_frame: usize, route: Route, leveled: bool) {
+///
+/// `encode`: PCM out becomes DSD here (see [`Plan::encode`]). After the chain come the EQ (or
+/// the clamp to full scale), a fade-in where one is due, and the encoder, and the ring gets
+/// the words. The position, `played`, the boundary of a join and the ring all count wire
+/// frames, one per device frame, just as they count PCM frames otherwise. The encoder's state
+/// runs on across a join like the filters'; a seek starts it, the chain and the EQ over.
+fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut encode: Option<Encode>, start_frame: usize, route: Route, leveled: bool) {
     // Our own thread: flush-to-zero for its whole life (the FIR's tails, see fpu.rs).
     let _ftz = crate::fpu::FlushDenormals::on();
     const BLOCK: usize = 2048;
@@ -1034,6 +1143,9 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
             flushed = false;
             rs.tail_out.store(false, Ordering::Release);
             chain.reset();
+            if let Some(e) = &mut encode {
+                e.reset(&rs, src == 0);
+            }
             out.clear();
             sent = 0;
             rs.render_done.store(false, Ordering::Release);
@@ -1063,6 +1175,11 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
             flushed = false;
             rs.tail_out.store(false, Ordering::Release);
             chain.reset();
+            // (`Playback::swap` refuses while encoding; should one get here, it starts over
+            // like a seek.)
+            if let Some(e) = &mut encode {
+                e.reset(&rs, src == 0);
+            }
             out.clear();
             sent = 0;
             rs.render_done.store(false, Ordering::Release);
@@ -1098,7 +1215,7 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
             } else if !flushed && chain.finishing() {
                 // The tail is on its way out, a block at a time (a long upsampling filter's
                 // can be many seconds): nothing joins on any more.
-                flushed = tail(&mut chain, &rs, &mut load, &mut out);
+                flushed = tail(&mut chain, encode.as_mut(), &rs, &mut load, &mut out);
                 sent = 0;
                 continue;
             } else if !flushed {
@@ -1112,7 +1229,7 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
                         rs.tail_out.store(false, Ordering::Release);
                         continue;
                     }
-                    flushed = tail(&mut chain, &rs, &mut load, &mut out);
+                    flushed = tail(&mut chain, encode.as_mut(), &rs, &mut load, &mut out);
                     sent = 0;
                     continue;
                 }
@@ -1145,22 +1262,118 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, start_fr
         } else {
             chain.process(input, gain, false)
         };
-        load.add(&rs, t.elapsed(), input.len() / track.channels, processed.len() / rs.channels);
-        out.clear();
-        // Not clamped yet: the callback's EQ may still lower the level (its preamp).
-        out.extend(processed.iter().map(|&v| v as f32));
+        let (frames_in, frames_out) = (input.len() / track.channels, processed.len() / rs.channels);
+        match &mut encode {
+            Some(e) => {
+                e.run(&rs, processed, &mut out);
+                // (The EQ and the encoder are work of this thread too.)
+                load.add(&rs, t.elapsed(), frames_in, frames_out);
+            }
+            None => {
+                load.add(&rs, t.elapsed(), frames_in, frames_out);
+                out.clear();
+                // Not clamped yet: the callback's EQ may still lower the level (its preamp).
+                out.extend(processed.iter().map(|&v| v as f32));
+            }
+        }
         sent = 0;
     }
 }
 
-/// One step of letting the chain's tail out at the end, into `out`. True once it is all out.
-fn tail(chain: &mut Chain, rs: &RingState, load: &mut Load, out: &mut Vec<f32>) -> bool {
+/// One step of letting the chain's tail out at the end, into `out`. True once it is all out
+/// (and, when encoding, the encoder's own after it).
+fn tail(chain: &mut Chain, encode: Option<&mut Encode>, rs: &RingState, load: &mut Load, out: &mut Vec<f32>) -> bool {
     let t = Instant::now();
     let processed = chain.process(&[], 1.0, true);
-    load.add(rs, t.elapsed(), 0, processed.len() / rs.channels);
-    out.clear();
-    out.extend(processed.iter().map(|&v| v as f32));
+    match encode {
+        Some(e) => {
+            e.run(rs, processed, out);
+            if !chain.finishing() {
+                e.finish(rs, out);
+            }
+            load.add(rs, t.elapsed(), 0, out.len() / rs.channels);
+        }
+        None => {
+            load.add(rs, t.elapsed(), 0, processed.len() / rs.channels);
+            out.clear();
+            out.extend(processed.iter().map(|&v| v as f32));
+        }
+    }
     !chain.finishing()
+}
+
+/// The render thread's end of PCM → DSD (see [`Plan::encode`]): what the callback does to PCM
+/// on the processed path — the EQ, the clamp, a fade-in — done here instead, ahead of the
+/// modulator, since no level can change after it. Pause, stop and the cut at a seek are
+/// abrupt, as for a DSD track (the DAC mutes on idle DoP by itself).
+struct Encode {
+    encoder: Encoder,
+    /// One block of PCM at the wire rate on its way to the encoder.
+    pcm: Vec<f32>,
+    words: Vec<u16>,
+    /// Length of the fade-in in wire frames; 0 = no fades (they were off when the playback
+    /// was created: `Playback::set_fades` isn't followed here).
+    fade_len: u32,
+    /// Where the fade-in stands: 0 (silent) ..= `fade_len` (full level).
+    fade: u32,
+}
+
+impl Encode {
+    /// A seek (or a swap): start over, fading in unless the new place is the track's top.
+    fn reset(&mut self, rs: &RingState, at_top: bool) {
+        self.encoder.reset();
+        if let Some(eq) = &rs.eq {
+            // SAFETY: while encoding, the render thread is the only one that runs the EQ: the
+            // callback never touches it in this mode (see `Shared::render_words`).
+            unsafe { eq.live() }.reset();
+        }
+        self.fade = if at_top { self.fade_len } else { 0 };
+    }
+
+    /// One block from the chain (program channels at the wire rate) into words, which go
+    /// into `out` (replacing what it held) as their numeric values (see `RingState::ring`).
+    fn run(&mut self, rs: &RingState, block: &[f64], out: &mut Vec<f32>) {
+        let ch = rs.channels;
+        self.pcm.clear();
+        self.pcm.extend(block.iter().map(|&v| v as f32));
+        // The EQ, or just the clamp to full scale, as the callback does them on PCM.
+        let peak = match &rs.eq {
+            // SAFETY: as in `reset`: this thread is the EQ's only one in this mode.
+            Some(eq) => unsafe { eq.live() }.process(&eq.mailbox, &mut self.pcm),
+            None => self.pcm.iter_mut().fold(0f32, |m, s| {
+                let p = m.max(s.abs());
+                *s = s.clamp(-1.0, 1.0);
+                p
+            }),
+        };
+        rs.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
+        if self.fade < self.fade_len {
+            for frame in self.pcm.chunks_exact_mut(ch) {
+                if self.fade >= self.fade_len {
+                    break;
+                }
+                let g = fade_gain(self.fade + 1, self.fade_len);
+                frame.iter_mut().for_each(|s| *s *= g);
+                self.fade += 1;
+            }
+        }
+        self.words.clear();
+        self.encoder.process(&self.pcm, &mut self.words);
+        out.clear();
+        out.extend(self.words.iter().map(|&w| w as f32));
+    }
+
+    /// The end of the stream: silence through the encoder for as long as its delay and 2 ms
+    /// more, appended to `out`, so the last of the music is out and the stream ends in coded
+    /// silence rather than in the middle of a waveform.
+    fn finish(&mut self, rs: &RingState, out: &mut Vec<f32>) {
+        let frames = self.encoder.latency_frames() + (rs.device_rate * 0.002).ceil() as usize;
+        self.pcm.clear();
+        self.pcm.resize(frames * rs.channels, 0.0);
+        self.words.clear();
+        self.encoder.process(&self.pcm, &mut self.words);
+        out.extend(self.words.iter().map(|&w| w as f32));
+    }
 }
 
 /// The render thread's tally for [`Playback::load`]: time in the chain, and the audio that
@@ -1173,10 +1386,11 @@ struct Load {
 }
 
 impl Load {
-    /// Count one `chain.process` call: `took`, `frames_in` source frames, `frames_out` device
-    /// frames. Published once a second of audio has come out. The work is set against the
-    /// longer of what went in and what came out: a long filter takes seconds of input before
-    /// its first output (and after each seek), and lets its tail out with no input at the end.
+    /// Count one `chain.process` call (with the EQ and the encoder after it, when encoding):
+    /// `took`, `frames_in` source frames, `frames_out` device frames. Published once a second
+    /// of audio has come out. The work is set against the longer of what went in and what came
+    /// out: a long filter takes seconds of input before its first output (and after each
+    /// seek), and lets its tail out with no input at the end.
     fn add(&mut self, rs: &RingState, took: Duration, frames_in: usize, frames_out: usize) {
         self.busy += took;
         self.frames_in += frames_in;
@@ -1336,6 +1550,8 @@ impl Shared {
                 st.meter(peaks);
                 done
             }
+            // PCM encoded to DSD: words from the ring, packed as DoP.
+            Some(rs) if rs.dop_words => self.render_words(rs, buffers, frames, paused),
             // Processed path: pre-rendered samples from the ring.
             Some(rs) => {
                 // SAFETY: only this (IO) thread ever touches `scratch`.
@@ -1447,35 +1663,92 @@ impl Shared {
                 st.fade.store(settled(level, fade_len, st.fade_max, was_sounding, sounding), Ordering::Relaxed);
                 st.sounding.store(sounding, Ordering::Relaxed);
                 st.meter(peaks);
-                let counted = (got - before_seek) as u64;
-                let played = rs.played.fetch_add(counted, Ordering::Relaxed) + counted;
-                // The next track's first frame has reached the device: it is what plays now.
-                let boundary = rs.boundary.load(Ordering::Acquire);
-                if boundary != NO_BOUNDARY && played >= boundary {
-                    slots.heard.store(slots.cur.load(Ordering::Acquire), Ordering::Release);
-                    rs.played.store(played - boundary, Ordering::Relaxed);
-                    rs.base_frame.store(0, Ordering::Relaxed);
-                    rs.boundary.store(NO_BOUNDARY, Ordering::Release);
-                    slots.switches.fetch_add(1, Ordering::AcqRel);
-                }
-                if got == frames {
-                    // (Not while the old sound still fades out in front of a seek.)
-                    if !flush {
-                        rs.refilling.store(false, Ordering::Relaxed);
-                    }
-                } else if !paused
-                    && !rs.refilling.load(Ordering::Relaxed)
-                    && !rs.starved.load(Ordering::Relaxed)
-                    && !rs.render_done.load(Ordering::Acquire)
-                {
-                    rs.underruns.fetch_add(1, Ordering::Relaxed);
-                }
-                if !paused && got < frames && rs.render_done.load(Ordering::Acquire) && rs.ring.available() == 0 {
-                    st.finished.store(true, Ordering::Relaxed);
-                }
+                self.ring_played(rs, got, (got - before_seek) as u64, frames, paused, flush);
                 got
             }
         }
+    }
+
+    /// The processed path's bookkeeping at the end of a callback that wrote `got` of `frames`
+    /// frames from the ring, `counted` of them played music: the position, the switch to the
+    /// next track once its first frame is out, dropouts, and the end.
+    #[inline(always)]
+    fn ring_played(&self, rs: &RingState, got: usize, counted: u64, frames: usize, paused: bool, flush: bool) {
+        let slots = &*self.slots;
+        let played = rs.played.fetch_add(counted, Ordering::Relaxed) + counted;
+        // The next track's first frame has reached the device: it is what plays now.
+        let boundary = rs.boundary.load(Ordering::Acquire);
+        if boundary != NO_BOUNDARY && played >= boundary {
+            slots.heard.store(slots.cur.load(Ordering::Acquire), Ordering::Release);
+            rs.played.store(played - boundary, Ordering::Relaxed);
+            rs.base_frame.store(0, Ordering::Relaxed);
+            rs.boundary.store(NO_BOUNDARY, Ordering::Release);
+            slots.switches.fetch_add(1, Ordering::AcqRel);
+        }
+        if got == frames {
+            // (Not while the old sound still fades out in front of a seek.)
+            if !flush {
+                rs.refilling.store(false, Ordering::Relaxed);
+            }
+        } else if !paused
+            && !rs.refilling.load(Ordering::Relaxed)
+            && !rs.starved.load(Ordering::Relaxed)
+            && !rs.render_done.load(Ordering::Acquire)
+        {
+            rs.underruns.fetch_add(1, Ordering::Relaxed);
+        }
+        if !paused && got < frames && rs.render_done.load(Ordering::Acquire) && rs.ring.available() == 0 {
+            self.finished.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// The callback when the ring carries DSD words (PCM the render thread encoded): every
+    /// device frame goes out as DoP under the next marker, the words while there are any, the
+    /// idle pattern otherwise (paused, the ring dry, after the end). Nothing here changes a
+    /// level — no EQ (the render thread ran it, and the callback must never touch it in this
+    /// mode), no clamp, no fades: the words are bits, not samples. A seek drops what is queued
+    /// at once.
+    fn render_words(&self, rs: &RingState, buffers: &mut [OutBuf<'_>], frames: usize, paused: bool) -> usize {
+        // SAFETY: only this (IO) thread ever touches `scratch`.
+        let scratch = unsafe { &mut *rs.scratch.get() };
+        let ch = rs.channels;
+        let piece = scratch.len() / ch;
+        let route = &self.route;
+        let generation = rs.flush_gen.load(Ordering::Acquire);
+        let flush = generation != rs.flush_ack.load(Ordering::Relaxed);
+        if flush {
+            rs.ring.discard();
+            rs.played.store(0, Ordering::Relaxed);
+            rs.flush_ack.store(generation, Ordering::Release);
+            rs.refilling.store(true, Ordering::Relaxed);
+        }
+        let mut got = 0;
+        let mut peaks = [0f32; 2];
+        // In pieces of the scratch size; once the ring runs short, the rest is idle DoP. Each
+        // piece follows on from the last, so the markers run on unbroken (see `fill_dop`).
+        while got < frames {
+            let want = (frames - got).min(piece);
+            let n = if paused { 0 } else { rs.ring.pop(&mut scratch[..want * ch]) / ch };
+            let block = &scratch[..n * ch];
+            let to = if n < want { frames } else { got + want };
+            // (A word is exact in f32; `as u16` takes it back.)
+            let p = fill_dop(buffers, got..to, n, &self.dop_phase, |f, dc| match route.program_channel(dc) {
+                Some(pc) => block[f * ch + pc] as u16,
+                None => DOP_IDLE,
+            });
+            peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
+            got += n;
+            if n < want {
+                break;
+            }
+        }
+        // `fill_dop` reads the density as a DSD file's level (70 % modulation = PCM full scale);
+        // here PCM full scale went into the encoder as `LEVEL` (50 %), so the meters show the
+        // PCM level the music had before it was encoded.
+        const TO_PCM: f32 = (1.0 / (crate::dsp::dsd_encode::LEVEL * PCM_GAIN)) as f32;
+        self.meter(peaks.map(|p| p * TO_PCM));
+        self.ring_played(rs, got, got as u64, frames, paused, flush);
+        got
     }
 
     #[inline(always)]
@@ -1625,7 +1898,7 @@ mod tests {
 
         fn start(eq: EqPreset) -> Playback {
             let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
-            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
+            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
             Playback::new(sine_track(8.0), &opts, &plan, FS as f64).unwrap()
         }
 
@@ -1710,7 +1983,7 @@ mod tests {
         }
 
         fn playback(first: Arc<Track>, processing: bool) -> Playback {
-            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop(), route: stereo_route() };
+            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop(), encode: None, route: stereo_route() };
             Playback::new(first.clone(), &PlayOptions::default(), &plan, first.sample_rate as f64).unwrap()
         }
 
@@ -1793,7 +2066,7 @@ mod tests {
                 ..Default::default()
             };
             let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
-            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
+            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
             let p = Playback::new(a, &opts, &plan, fs as f64).unwrap();
             assert!(p.queue_next(b));
             let rs = p.shared().ring.as_ref().unwrap();
@@ -1972,7 +2245,7 @@ mod tests {
         }
 
         fn plan(start_frame: usize) -> Plan {
-            Plan { target: DEV as f64, start_frame, lossy: None, resampled: true, processing: true, dop: false, route: stereo_route() }
+            Plan { target: DEV as f64, start_frame, lossy: None, resampled: true, processing: true, dop: false, encode: None, route: stereo_route() }
         }
 
         fn start(track: Arc<Track>, filter: Option<FilterSpec>, start_frame: usize, fades: bool) -> Playback {
@@ -2095,7 +2368,7 @@ mod tests {
                 println!("44.1 → 88.2 kHz stereo, {name}: load {load:.4} ({:.0}× real time)", 1.0 / load);
                 assert!(load > 0.0 && load < 1.0, "{name}: {load}");
             }
-            let plan = Plan { target: SRC as f64, start_frame: 0, lossy: None, resampled: false, processing: false, dop: false, route: stereo_route() };
+            let plan = Plan { target: SRC as f64, start_frame: 0, lossy: None, resampled: false, processing: false, dop: false, encode: None, route: stereo_route() };
             let direct = Playback::new(sine(0, 1_000), &PlayOptions::default(), &plan, SRC as f64).unwrap();
             assert_eq!(direct.load(), None);
         }
@@ -2123,6 +2396,494 @@ mod tests {
             let dsp = DspSettings { upsample: up, upsample_filter: Some(spec(65_536)), ..Default::default() };
             let full = signal_path(&track, &PlayOptions { dsp, ..Default::default() }, &plan(0), 88_200.0, None, OutFormat::F32, true, Transport::Usb);
             assert_eq!(full.for_next(&sine(0, 500)).upsample_filter, Some(spec(65_536)));
+        }
+    }
+
+    /// PCM encoded to DSD on the render thread and sent as DoP, pulled as a device would pull
+    /// it: the markers, what the words decode to, and what runs ahead of the encoder (the EQ,
+    /// the level, the fade-in), through pauses, seeks, dropouts and joins.
+    mod dsd_out {
+        use super::*;
+        use crate::decode::TrackMeta;
+        use crate::dsd::{Converter, kaiser_beta, kaiser_lowpass};
+        use crate::dsp::dsd_encode::{DsdRate, LEVEL, ModOrder};
+        use crate::dsp::eq::{Band, FilterKind};
+        use crate::dsp::loudness::{Basis, Level, LevelMode, LevelSettings};
+        use std::f64::consts::PI;
+
+        const DSD64_5: DsdOut = DsdOut { rate: DsdRate::Dsd64, order: ModOrder::Fifth };
+        const DSD64_7: DsdOut = DsdOut { rate: DsdRate::Dsd64, order: ModOrder::Seventh };
+        /// DSD64's wire rate, in frames per second.
+        const WIRE: usize = 176_400;
+        /// What the converter (`crate::dsd::Converter`) puts out for every DSD rate of the
+        /// 44.1 kHz family.
+        const DECODED: f64 = 176_400.0;
+
+        /// Stereo at `fs`: `left` Hz on the left, `right` Hz on the right (0 Hz: a steady
+        /// level), both at `amp`; frames `from..from + frames` of the signal.
+        fn tones(fs: u32, left: f64, right: f64, amp: f64, from: usize, frames: usize) -> Arc<Track> {
+            let wave = |f: f64, i: usize| if f == 0.0 { amp } else { amp * (2.0 * PI * f * i as f64 / fs as f64).sin() };
+            let samples: Vec<f32> = (from..from + frames).flat_map(|i| [wave(left, i) as f32, wave(right, i) as f32]).collect();
+            Arc::new(Track::from_samples(fs, 2, Some(24), &samples, TrackMeta::default()))
+        }
+
+        fn opts(out: DsdOut, fades: bool) -> PlayOptions {
+            PlayOptions { dsp: DspSettings { dsd_out: Some(out), ..Default::default() }, fades, ..Default::default() }
+        }
+
+        /// A DAC with the usual PCM rates, the DoP wire rates among them.
+        fn dac_rates() -> Vec<RateRange> {
+            [44_100.0, 48_000.0, 88_200.0, 96_000.0, 176_400.0, 192_000.0, 352_800.0, 384_000.0, 705_600.0, 768_000.0].map(RateRange::exact).to_vec()
+        }
+
+        /// Planned as a backend plans it, on a DAC that takes DoP at the wire rate, and started
+        /// at that rate.
+        fn start(track: Arc<Track>, opts: &PlayOptions) -> Playback {
+            let out = opts.dsp.dsd_out.unwrap();
+            let plan = plan(&track, opts, &dac_rates(), "DAC", true, &crate::channels::default_layout(2)).unwrap();
+            assert_eq!(plan.encode, Some(out));
+            Playback::new(track, opts, &plan, out.rate.wire_rate() as f64).unwrap()
+        }
+
+        /// The 24-bit DoP word a DAC reads back from one sample of `format`.
+        fn word(bytes: &[u8], format: OutFormat) -> u32 {
+            match format {
+                OutFormat::I24Packed => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], 0]),
+                OutFormat::I32 { bits: 32 } => u32::from_le_bytes(bytes.try_into().unwrap()) >> 8,
+                OutFormat::I32 { .. } => u32::from_le_bytes(bytes.try_into().unwrap()) & 0xFF_FFFF,
+                OutFormat::F32 => ((f32::from_le_bytes(bytes.try_into().unwrap()) as f64 * 8_388_608.0).round() as i32 as u32) & 0xFF_FFFF,
+                OutFormat::I16 => unreachable!("DoP never goes out in 16 bits"),
+            }
+        }
+
+        fn marker(w: u32) -> u8 {
+            (w >> 16) as u8
+        }
+
+        fn payload(w: u32) -> u16 {
+            w as u16
+        }
+
+        /// One callback of `frames` stereo frames in `format`: each frame's DoP word per channel.
+        fn callback(p: &Playback, frames: usize, format: OutFormat) -> Vec<[u32; 2]> {
+            let b = format.bytes();
+            let mut data = vec![0u8; frames * 2 * b];
+            p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format }]);
+            data.chunks_exact(2 * b).map(|f| [0, 1].map(|c| word(&f[c * b..(c + 1) * b], format))).collect()
+        }
+
+        /// Until the ring can serve a callback of 512 frames, or has nothing more coming.
+        fn wait(p: &Playback) {
+            let rs = p.shared().ring.as_ref().unwrap();
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while rs.ring.available() < 512 * 2 && !rs.render_done.load(Ordering::Acquire) {
+                assert!(Instant::now() < deadline, "the render thread stalled");
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+
+        /// Callbacks of 512 frames, each once the ring can serve it, as a device's clock asks.
+        fn pull(p: &Playback, frames: usize, format: OutFormat) -> Vec<[u32; 2]> {
+            let mut out = Vec::new();
+            while out.len() < frames {
+                wait(p);
+                out.extend(callback(p, 512, format));
+            }
+            out
+        }
+
+        fn pull_all(p: &Playback, format: OutFormat) -> Vec<[u32; 2]> {
+            let mut out = Vec::new();
+            while !p.is_finished() {
+                wait(p);
+                out.extend(callback(p, 512, format));
+            }
+            out
+        }
+
+        /// The payloads through the DSD → PCM converter (what a DSD file plays as), per channel
+        /// at [`DECODED`].
+        fn decode(frames: &[[u32; 2]], rate: DsdRate) -> [Vec<f64>; 2] {
+            let runs: Vec<Vec<u8>> = (0..2).map(|c| frames.iter().flat_map(|f| payload(f[c]).to_be_bytes()).collect()).collect();
+            let mut conv = Converter::new(rate.hz(), 2).unwrap();
+            let mut pcm = Vec::new();
+            conv.process(&runs, &mut pcm);
+            [0, 1].map(|c| pcm.iter().skip(c).step_by(2).map(|&v| v as f64).collect())
+        }
+
+        /// `len` samples of `x` low-passed at 20 kHz (DSD's shaped noise is above), the first
+        /// centred on sample `from + 255`.
+        fn audio_band(x: &[f64], from: usize, len: usize) -> Vec<f64> {
+            let lp = kaiser_lowpass(511, 20_000.0 / DECODED, kaiser_beta(120.0));
+            (from..from + len).map(|i| lp.iter().enumerate().map(|(k, g)| g * x[i + k]).sum()).collect()
+        }
+
+        /// Amplitude of `freq` in `x` (least-squares sinusoid) and the RMS of everything else.
+        fn tone_and_residual(x: &[f64], freq: f64) -> (f64, f64) {
+            let w = |i: usize| 2.0 * PI * freq * i as f64 / DECODED;
+            let (re, im) = x.iter().enumerate().fold((0.0, 0.0), |(a, b), (i, v)| (a + v * w(i).cos(), b + v * w(i).sin()));
+            let (re, im) = (2.0 * re / x.len() as f64, 2.0 * im / x.len() as f64);
+            let resid = x.iter().enumerate().map(|(i, v)| (v - re * w(i).cos() - im * w(i).sin()).powi(2)).sum::<f64>() / x.len() as f64;
+            ((re * re + im * im).sqrt(), resid.sqrt())
+        }
+
+        /// The amplitude of `freq` in `secs` (a whole number of its cycles) of decoded audio
+        /// from `at` seconds, and how far down (dB) the rest of the audio band is.
+        fn measure(decoded: &[f64], at: f64, secs: f64, freq: f64) -> (f64, f64) {
+            let x = audio_band(decoded, (at * DECODED) as usize, (secs * DECODED) as usize);
+            let (amp, resid) = tone_and_residual(&x, freq);
+            (amp, 20.0 * (amp / resid).log10())
+        }
+
+        /// A PCM amplitude once encoded and decoded: PCM full scale is modulation depth `LEVEL`,
+        /// which the converter scales by `PCM_GAIN`.
+        fn decoded_amp(pcm: f64) -> f64 {
+            pcm * LEVEL * PCM_GAIN
+        }
+
+        /// The markers alternate on every frame, both channels alike, for the whole life of a
+        /// playback: its start, a pause, the resume, a seek, a dropout, a join, the end and
+        /// after it. Paused and after the end, the payload is the idle pattern.
+        #[test]
+        fn the_markers_never_break() {
+            let fmt = OutFormat::I32 { bits: 32 };
+            let a_frames = 6 * 44_100 + 333;
+            let a = tones(44_100, 1000.0, 3000.0, 0.5, 0, a_frames);
+            let b = tones(44_100, 1000.0, 3000.0, 0.5, a_frames, 44_100 / 3);
+            let p = start(a.clone(), &opts(DSD64_7, true));
+            assert!(p.queue_next(b.clone()));
+            // No blind switch, and no fade to wait for: no level can change after the modulator.
+            assert!(!p.swap(a));
+            let rs = p.shared().ring.as_ref().unwrap();
+            let mut all = pull(&p, 10_000, fmt);
+            p.set_paused(true);
+            let paused: Vec<_> = (0..5).flat_map(|_| callback(&p, 512, fmt)).collect();
+            assert!(paused.iter().flatten().all(|&w| payload(w) == DOP_IDLE), "paused: the idle pattern");
+            all.extend(paused);
+            p.fade_out();
+            p.set_paused(false);
+            all.extend(pull(&p, 5_000, fmt));
+            let generation = rs.flush_gen.load(Ordering::Acquire);
+            assert!(p.seek(0.5));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while rs.flush_gen.load(Ordering::Acquire) == generation {
+                assert!(Instant::now() < deadline, "the render thread never took the seek up");
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            all.extend(pull(&p, 4_096, fmt));
+            // A device asking far faster than the render thread runs: the ring runs dry.
+            let before = p.underruns();
+            while p.underruns() == before {
+                assert!(Instant::now() < deadline + Duration::from_secs(10), "the ring never ran dry");
+                assert!(!p.is_finished(), "ran to the end without a dropout");
+                all.extend(callback(&p, 16_384, fmt));
+            }
+            // Then on to the end, through the join.
+            all.extend(pull_all(&p, fmt));
+            assert_eq!(p.switches(), 1);
+            assert!(Arc::ptr_eq(&p.heard(), &b));
+            let after: Vec<_> = (0..4).flat_map(|_| callback(&p, 512, fmt)).collect();
+            assert!(after.iter().flatten().all(|&w| payload(w) == DOP_IDLE), "after the end: the idle pattern");
+            all.extend(after);
+            println!("{} frames, {} dropouts: markers checked on every one", all.len(), p.underruns());
+            assert_eq!(marker(all[0][0]), 0x05);
+            for (i, f) in all.iter().enumerate() {
+                assert_eq!(marker(f[0]), marker(f[1]), "frame {i}: the channels' markers differ");
+                assert_eq!(marker(f[0]), if i % 2 == 0 { 0x05 } else { 0xFA }, "frame {i}: the alternation breaks");
+            }
+        }
+
+        /// 1 kHz on the left and 3 kHz on the right at half scale, from `fs` through the
+        /// playback, decoded: each at its own level, the rest of the audio band 90 dB down.
+        fn round_trip(fs: u32, out: DsdOut, format: OutFormat) {
+            let frames = fs as usize / 2;
+            let p = start(tones(fs, 1000.0, 3000.0, 0.5, 0, frames), &opts(out, true));
+            // The meters show the PCM level that went into the encoder: the tone's 0.5, read
+            // from the bit density over 256-bit windows (a rough estimate, the shaped noise in).
+            let wire = out.rate.wire_rate() as usize;
+            let mut pulled = pull(&p, wire / 10, format);
+            p.take_meter();
+            pulled.extend(pull(&p, wire / 5, format));
+            let meter = p.take_meter();
+            println!("meter on a 0.5 tone: {meter:?}");
+            assert!(meter.iter().all(|m| (m / 0.5 - 1.0).abs() <= 0.15), "meter {meter:?}");
+            pulled.extend(pull_all(&p, format));
+            let decoded = decode(&pulled, out.rate);
+            // All the music, then the encoder's delay and 2 ms more of coded silence.
+            let wire = out.rate.wire_rate() as f64;
+            let words = p.shared().ring.as_ref().unwrap().played.load(Ordering::Relaxed) as usize;
+            let music = (frames as f64 * wire / fs as f64).round() as usize;
+            let end = Encoder::new(out, 2).latency_frames() + (wire * 0.002).ceil() as usize;
+            assert!(words >= music + end, "{words} words for {music} frames of music");
+            let want = decoded_amp(0.5);
+            for (c, f) in [(0, 1000.0), (1, 3000.0)] {
+                let (amp, down) = measure(&decoded[c], 0.1, 0.2, f);
+                println!(
+                    "{} kHz → DSD{}/{} ({format:?}), ch{c}: amplitude {amp:.6} (want {want:.6}, {:+.3} %), residual {down:.1} dB down",
+                    fs as f64 / 1000.0,
+                    out.rate.multiple(),
+                    out.order.get(),
+                    100.0 * (amp / want - 1.0)
+                );
+                assert!((amp / want - 1.0).abs() <= 0.005, "ch{c}: amplitude {amp}, want {want}");
+                assert!(down >= 90.0, "ch{c}: residual only {down:.1} dB down");
+            }
+            assert_eq!(p.underruns(), 0);
+        }
+
+        #[test]
+        fn the_words_decode_to_the_source() {
+            round_trip(44_100, DSD64_7, OutFormat::I32 { bits: 32 });
+            round_trip(44_100, DSD64_5, OutFormat::I24Packed);
+            round_trip(48_000, DSD64_7, OutFormat::F32);
+            round_trip(176_400, DSD64_5, OutFormat::I32 { bits: 24 });
+        }
+
+        /// The same at DSD128 and DSD256:
+        /// `cargo test --release -p hifi-engine -- --ignored decode_to_the_source_at_every --nocapture`
+        #[test]
+        #[ignore]
+        fn the_words_decode_to_the_source_at_every_rate() {
+            for rate in [DsdRate::Dsd128, DsdRate::Dsd256] {
+                for order in ModOrder::ALL {
+                    round_trip(44_100, DsdOut { rate, order }, OutFormat::I32 { bits: 32 });
+                    round_trip(96_000, DsdOut { rate, order }, OutFormat::I24Packed);
+                }
+            }
+        }
+
+        /// The equaliser runs ahead of the modulator: a +6 dB peak at 1 kHz doubles the decoded
+        /// tone, and an edit is heard once what was in the ring has played (about half a second).
+        #[test]
+        fn the_eq_runs_ahead_of_the_modulator_and_takes_edits() {
+            let fmt = OutFormat::I24Packed;
+            let eq = |gain: f64| EqPreset { phase: Phase::Minimum, bands: vec![Band { kind: FilterKind::Peak, freq: 1000.0, gain, q: 1.0, ..Default::default() }], ..Default::default() };
+            let mut o = opts(DSD64_7, true);
+            o.dsp.eq = Some(eq(6.0));
+            let p = start(tones(44_100, 1000.0, 1000.0, 0.25, 0, 3 * 44_100), &o);
+            let mut all = pull(&p, WIRE, fmt);
+            assert!(p.update_eq(&eq(0.0), false));
+            all.extend(pull_all(&p, fmt));
+            let decoded = decode(&all, DsdRate::Dsd64);
+            let flat = decoded_amp(0.25);
+            let (boosted, _) = measure(&decoded[0], 0.5, 0.2, 1000.0);
+            let want = flat * 10f64.powf(6.0 / 20.0);
+            // A second after the edit was made: well after the ring and the EQ's crossfade.
+            let (after, down) = measure(&decoded[0], 2.0, 0.2, 1000.0);
+            let load = p.load().unwrap();
+            println!("+6 dB at 1 kHz: {boosted:.6} (want {want:.6}, {:+.3} %); edited to 0 dB: {after:.6} (want {flat:.6}, {:+.3} %, residual {down:.1} dB down); peak {:?}, load {load:.4}", 100.0 * (boosted / want - 1.0), 100.0 * (after / flat - 1.0), p.output_peak());
+            assert!((boosted / want - 1.0).abs() <= 0.005, "boosted {boosted}, want {want}");
+            assert!((after / flat - 1.0).abs() <= 0.005 && down >= 90.0, "after the edit {after}, want {flat}");
+            assert!(p.output_peak().is_some_and(|pk| (pk - 0.5).abs() < 0.01), "peak {:?}", p.output_peak());
+            assert!(load > 0.0 && load < 1.0, "load {load}");
+        }
+
+        /// Volume levelling: the track's gain applies ahead of the modulator.
+        #[test]
+        fn the_track_level_applies_ahead_of_the_modulator() {
+            let mut o = opts(DSD64_5, true);
+            o.dsp.level = LevelSettings { mode: LevelMode::Track, headroom: false };
+            let t = tones(44_100, 1000.0, 3000.0, 0.5, 0, 22_050);
+            t.set_level(Some(Level { gain: 0.5, basis: Basis::Track, limited: false }));
+            let p = start(t, &o);
+            let decoded = decode(&pull_all(&p, OutFormat::F32), DsdRate::Dsd64);
+            let want = decoded_amp(0.25);
+            for (c, f) in [(0, 1000.0), (1, 3000.0)] {
+                let (amp, _) = measure(&decoded[c], 0.1, 0.2, f);
+                println!("at a gain of 0.5, ch{c}: {amp:.6} (want {want:.6}, {:+.3} %)", 100.0 * (amp / want - 1.0));
+                assert!((amp / want - 1.0).abs() <= 0.005, "ch{c}: {amp}, want {want}");
+            }
+        }
+
+        /// Two tracks cut from one stereo sine, joined: across the join the decoded signal is as
+        /// clean as in the middle of a track (the encoder's state runs on), the heard track
+        /// changes on the frame the second begins, and the position follows the wire frames.
+        #[test]
+        fn a_join_runs_on_through_the_encoder() {
+            let fmt = OutFormat::I24Packed;
+            // Longer than the ring, so B is lined up before the render thread reaches A's end.
+            let a_frames = 44_100 + 777;
+            let (a, b) = (tones(44_100, 1000.0, 3000.0, 0.5, 0, a_frames), tones(44_100, 1000.0, 3000.0, 0.5, a_frames, 44_100));
+            let p = start(a, &opts(DSD64_7, true));
+            assert!(p.queue_next(b.clone()));
+            // 44.1 → 176.4 kHz: four wire frames per source frame.
+            let (join, total) = (4 * a_frames, 4 * (a_frames + 44_100));
+            let mut all = Vec::new();
+            while !p.is_finished() {
+                wait(&p);
+                all.extend(callback(&p, 512, fmt));
+                let heard_b = Arc::ptr_eq(&p.heard(), &b);
+                assert_eq!(heard_b, all.len() >= join, "at {}", all.len());
+                if all.len() <= total {
+                    let at = if heard_b { all.len() - join } else { all.len() };
+                    assert!((p.position_secs() - at as f64 / WIRE as f64).abs() < 1e-6, "at {}: {}", all.len(), p.position_secs());
+                }
+            }
+            assert_eq!(p.switches(), 1);
+            assert_eq!(p.underruns(), 0);
+            let decoded = decode(&all, DsdRate::Dsd64);
+            let at_join = join as f64 / DECODED;
+            for (c, f) in [(0, 1000.0), (1, 3000.0)] {
+                let (_, middle) = measure(&decoded[c], 0.3, 0.2, f);
+                let (amp, across) = measure(&decoded[c], at_join - 0.1, 0.2, f);
+                println!("ch{c}: residual {middle:.1} dB down in the middle of A, {across:.1} dB down across the join; amplitude there {amp:.6}");
+                assert!(across >= 90.0 && across >= middle - 3.0, "ch{c}: across the join {across:.1} dB, in the middle {middle:.1} dB");
+                assert!((amp / decoded_amp(0.5) - 1.0).abs() <= 0.005);
+            }
+            let load = p.load().unwrap();
+            println!("load {load:.4} ({:.0}× real time)", 1.0 / load);
+            assert!(load > 0.0 && load < 1.0, "load {load}");
+        }
+
+        /// The decoded rise of a steady level from the start of `frames`: how long (ms) it takes
+        /// from 10 % to 90 % of `full`, and where it settles.
+        fn rise(frames: &[[u32; 2]], full: f64) -> (f64, f64) {
+            let decoded = decode(frames, DsdRate::Dsd64);
+            let y = audio_band(&decoded[0], 0, decoded[0].len() - 511);
+            let first = |level: f64| y.iter().position(|&v| v >= level * full).expect("never gets there") as f64;
+            let settled = y[y.len() - 1_000..].iter().sum::<f64>() / 1_000.0;
+            ((first(0.9) - first(0.1)) / DECODED * 1000.0, settled / full)
+        }
+
+        /// Seek, let the callback drop what was queued, and pull what comes after.
+        fn seek(p: &Playback, secs: f64, fmt: OutFormat) -> Vec<[u32; 2]> {
+            let rs = p.shared().ring.as_ref().unwrap();
+            let generation = rs.flush_gen.load(Ordering::Acquire);
+            assert!(p.seek(secs));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while rs.flush_gen.load(Ordering::Acquire) == generation {
+                assert!(Instant::now() < deadline, "the render thread never took the seek up");
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            // The flush, then the new place from its first frame.
+            let mut out = callback(p, 512, fmt);
+            out.extend(pull(p, 8_192, fmt));
+            out
+        }
+
+        /// With fades on, what a seek lands in the middle of comes up over 10 ms (the half
+        /// cosine: 10 → 90 % in 5.9 ms) ahead of the encoder; a seek to the top, a playback
+        /// with fades off, starts at full level; one started in the middle fades in.
+        #[test]
+        fn a_seek_into_the_middle_fades_in_ahead_of_the_encoder() {
+            let fmt = OutFormat::F32;
+            // A steady level: the fade shows as its own shape.
+            let track = tones(44_100, 0.0, 0.0, 0.5, 0, 3 * 44_100);
+            let full = decoded_amp(0.5);
+            // 10 → 90 % of a half cosine over T: T·(acos(−0.8) − acos(0.8))/π.
+            let shape = 10.0 * ((-0.8f64).acos() - 0.8f64.acos()) / PI;
+            let p = start(track.clone(), &opts(DSD64_7, true));
+            pull(&p, 20_000, fmt);
+            let (middle, level) = rise(&seek(&p, 1.0, fmt), full);
+            println!("seek to 1 s: 10 → 90 % in {middle:.3} ms (a 10 ms half cosine: {shape:.3}), then {level:.5} of full");
+            assert!((middle - shape).abs() < 0.3, "{middle} ms");
+            assert!((level - 1.0).abs() < 0.005, "settles at {level}");
+            let (top, level) = rise(&seek(&p, 0.0, fmt), full);
+            println!("seek to the top: 10 → 90 % in {top:.3} ms");
+            assert!(top < 0.3 && (level - 1.0).abs() < 0.005, "{top} ms, settles at {level}");
+            drop(p);
+
+            let plain = start(track.clone(), &opts(DSD64_7, false));
+            pull(&plain, 20_000, fmt);
+            let (off, _) = rise(&seek(&plain, 1.0, fmt), full);
+            println!("fades off: 10 → 90 % in {off:.3} ms");
+            assert!(off < 0.3, "{off} ms");
+            drop(plain);
+
+            let o = PlayOptions { start_at: 1.0, ..opts(DSD64_7, true) };
+            let mid = start(track, &o);
+            let (picked_up, _) = rise(&pull(&mid, 8_192, fmt), full);
+            println!("started at 1 s: 10 → 90 % in {picked_up:.3} ms");
+            assert!((picked_up - shape).abs() < 0.3, "{picked_up} ms");
+        }
+
+        /// Planned only where the device can take it, and otherwise exactly as if it weren't
+        /// asked for; where it is, to the wire rate whatever "upsample to" says, through the
+        /// chosen long filter, and never called bit-perfect.
+        #[test]
+        fn planned_only_where_the_device_takes_it() {
+            let speakers = crate::channels::default_layout(2);
+            let pcm = tones(44_100, 1000.0, 1000.0, 0.5, 0, 4_410);
+            let spec = FilterSpec { kind: crate::dsp::upsample::FilterKind::Linear, taps: 65_536 };
+            let physical = StreamFormat { sample_rate: 176_400.0, bits: 24, float: false, channels: 2, non_mixable: true };
+            let with = |upsample: Upsample, exclusive: bool| PlayOptions {
+                exclusive,
+                dsp: DspSettings { upsample, upsample_filter: Some(spec), dsd_out: Some(DSD64_7), ..Default::default() },
+                ..Default::default()
+            };
+            let without = |o: &PlayOptions| PlayOptions { dsp: DspSettings { dsd_out: None, ..o.dsp.clone() }, ..o.clone() };
+            let fields = |p: &Plan| (p.target, p.start_frame, p.lossy, p.resampled, p.processing, p.dop, p.encode, p.route.clone());
+            let only_44k = vec![RateRange::exact(44_100.0), RateRange::exact(96_000.0)];
+            let only_88k = vec![RateRange::exact(88_200.0)];
+            let cases = [
+                ("shared mode", with(Upsample::Off, false), true, dac_rates()),
+                ("no DoP", with(Upsample::Off, true), false, dac_rates()),
+                ("no wire rate", with(Upsample::Off, true), true, only_44k),
+                // Resampled to twice the source rate, the long filter chosen: still the standard
+                // one, as upsampling is off.
+                ("no DoP, 88.2 kHz only", with(Upsample::Off, true), false, only_88k),
+            ];
+            for (name, o, dop_ok, rates) in cases {
+                let p = plan(&pcm, &o, &rates, "DAC", dop_ok, &speakers).unwrap();
+                assert_eq!(p.encode, None, "{name}");
+                assert_eq!(fields(&p), fields(&plan(&pcm, &without(&o), &rates, "DAC", dop_ok, &speakers).unwrap()), "{name}");
+                let path = signal_path(&pcm, &o, &p, p.target, Some(physical), OutFormat::I24Packed, o.exclusive, Transport::Usb);
+                let plain = signal_path(&pcm, &without(&o), &p, p.target, Some(physical), OutFormat::I24Packed, o.exclusive, Transport::Usb);
+                assert_eq!(path.dsd_out, None, "{name}");
+                assert_eq!(path.upsample_filter, None, "{name}");
+                assert_eq!((path.bit_perfect, path.resampled, path.device_rate), (plain.bit_perfect, plain.resampled, plain.device_rate), "{name}");
+            }
+
+            // A DSD track sent straight ignores it.
+            let dsd = Track::new_dop(2_822_400, 2, TrackMeta::default(), 1_000);
+            dsd.push_dop(&vec![0x69; 4_000]);
+            dsd.finish(None);
+            let o = with(Upsample::Off, true);
+            let p = plan(&dsd, &o, &dac_rates(), "DAC", true, &speakers).unwrap();
+            assert!(p.dop && p.encode.is_none() && !p.processing);
+            assert_eq!(fields(&p), fields(&plan(&dsd, &without(&o), &dac_rates(), "DAC", true, &speakers).unwrap()));
+            let path = signal_path(&dsd, &o, &p, 176_400.0, Some(physical), OutFormat::I24Packed, true, Transport::Usb);
+            assert!(path.bit_perfect && path.dsd_out.is_none());
+            assert_eq!(wire_dsd_rate(&dsd, &o), Some(2_822_400));
+
+            // Where it can: the wire rate, whatever "upsample to" says.
+            assert_eq!(wire_dsd_rate(&pcm, &o), Some(2_822_400));
+            assert_eq!(wire_dsd_rate(&pcm, &without(&o)), None);
+            for upsample in [Upsample::Off, Upsample::UpTo(96_000.0), Upsample::UpTo(768_000.0)] {
+                let o = with(upsample, true);
+                let p = plan(&pcm, &o, &dac_rates(), "DAC", true, &speakers).unwrap();
+                assert_eq!(p.encode, Some(DSD64_7), "{upsample:?}");
+                assert!(p.dop && p.processing && p.resampled, "{upsample:?}");
+                assert_eq!(p.target, 176_400.0, "{upsample:?}");
+                let path = signal_path(&pcm, &o, &p, 176_400.0, Some(physical), OutFormat::I32 { bits: 32 }, true, Transport::Usb);
+                assert_eq!(path.dsd_out, Some(DSD64_7));
+                assert!(!path.bit_perfect, "{upsample:?}: encoded PCM is never bit-perfect");
+                assert_eq!(path.upsample_filter, Some(spec), "{upsample:?}");
+                assert_eq!((path.device_rate, path.resampled), (176_400.0, true));
+            }
+            // A source at the wire rate itself: encoded, not resampled.
+            let at_wire = tones(176_400, 1000.0, 1000.0, 0.5, 0, 1_000);
+            let p = plan(&at_wire, &with(Upsample::Off, true), &dac_rates(), "DAC", true, &speakers).unwrap();
+            assert!(p.encode.is_some() && p.processing && !p.resampled && p.target == 176_400.0);
+            // DSD256 at its own wire rate.
+            let o = PlayOptions { dsp: DspSettings { dsd_out: Some(DsdOut { rate: DsdRate::Dsd256, order: ModOrder::Fifth }), ..Default::default() }, ..Default::default() };
+            assert_eq!(plan(&pcm, &o, &dac_rates(), "DAC", true, &speakers).unwrap().target, 705_600.0);
+            // The long filter runs with DSD output whether or not upsampling is on.
+            let filtered = DspSettings { upsample_filter: Some(spec), ..Default::default() };
+            assert_eq!(crate::dsp::long_filter(&DspSettings { dsd_out: Some(DSD64_7), ..filtered.clone() }, 44_100, 176_400), Some(spec));
+            assert_eq!(crate::dsp::long_filter(&filtered, 44_100, 176_400), None);
+        }
+
+        /// The blind test's offline render plays PCM, whatever the settings say about DSD.
+        #[test]
+        fn rendered_offline_it_stays_pcm() {
+            let t = tones(44_100, 1000.0, 3000.0, 0.5, 0, 22_050);
+            let base = DspSettings { crossfeed: Some(CrossfeedLevel::DEFAULT), ..Default::default() };
+            let plain = render_offline(t.clone(), &base).unwrap();
+            let asked = render_offline(t, &DspSettings { dsd_out: Some(DSD64_7), ..base }).unwrap();
+            assert_eq!(plain.len(), 2 * 22_050);
+            assert!(asked == plain, "the same samples with dsd_out set");
+            assert!(asked.iter().all(|v| v.abs() <= 1.0), "samples, not words");
         }
     }
 
@@ -2158,7 +2919,7 @@ mod tests {
         }
 
         fn playback(track: Arc<Track>, processing: bool, start_frame: usize, fades: bool) -> Playback {
-            let plan = Plan { target: FS as f64, start_frame, lossy: None, resampled: false, processing, dop: false, route: stereo_route() };
+            let plan = Plan { target: FS as f64, start_frame, lossy: None, resampled: false, processing, dop: false, encode: None, route: stereo_route() };
             Playback::new(track, &PlayOptions { fades, ..Default::default() }, &plan, FS as f64).unwrap()
         }
 
@@ -2370,7 +3131,7 @@ mod tests {
         #[test]
         fn a_playback_started_paused_makes_no_sound_and_starts_exact() {
             for processing in [false, true] {
-                let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: false, route: stereo_route() };
+                let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: false, encode: None, route: stereo_route() };
                 let p = Playback::new(ramp(FS as usize), &PlayOptions { start_paused: true, ..Default::default() }, &plan, FS as f64).unwrap();
                 for _ in 0..3 {
                     assert!(callback(&p, 512).iter().all(|&v| v == 0.0), "paused: silence");
@@ -2530,7 +3291,7 @@ mod tests {
 
         /// Play `a` then `b` joined, through the processed path; returns the left channel.
         fn play(a: Arc<Track>, b: Arc<Track>, opts: &PlayOptions, frames: usize) -> Vec<f32> {
-            let plan = Plan { target: 48_000.0, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
+            let plan = Plan { target: 48_000.0, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
             let p = Playback::new(a, opts, &plan, 48_000.0).unwrap();
             assert!(p.queue_next(b));
             let rs = p.shared().ring.as_ref().unwrap();
@@ -2665,7 +3426,7 @@ mod tests {
         let samples: Vec<f32> = (0..fs as usize * 4).flat_map(|i| [((i % 100) as f32 + 1.0) / 1000.0; 2]).collect();
         let track = Arc::new(Track::from_samples(fs, 2, Some(24), &samples, crate::decode::TrackMeta::default()));
         let opts = PlayOptions { dsp: DspSettings { crossfeed: None, ..Default::default() }, ..Default::default() };
-        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, route: stereo_route() };
+        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
         let p = Playback::new(track, &opts, &plan, fs as f64).unwrap();
         let rs = p.shared().ring.as_ref().unwrap();
         // Bigger than the scratch, smaller than the ring (which holds ~0.68 s here).

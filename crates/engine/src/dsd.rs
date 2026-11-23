@@ -10,6 +10,11 @@
 //!
 //! The DoP track keeps the raw bits in RAM (1x the file size); the IOProc adds the markers on
 //! the fly, so they stay continuous through seeks and pauses.
+//!
+//! The other way round, PCM can go out as DSD too: the render thread encodes it
+//! ([`crate::dsp::dsd_encode`], when `DspSettings::dsd_out` is set and the DAC takes DoP at
+//! the wire rate) and the callback packs the words it makes exactly as it packs a DSD
+//! track's, under the same running markers.
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -472,7 +477,7 @@ struct ChannelState {
     out: Vec<f64>,
 }
 
-fn bessel_i0(x: f64) -> f64 {
+pub(crate) fn bessel_i0(x: f64) -> f64 {
     let (mut sum, mut term, mut k) = (1.0, 1.0, 1.0);
     while term > 1e-12 * sum {
         term *= (x / (2.0 * k)).powi(2);
@@ -483,7 +488,7 @@ fn bessel_i0(x: f64) -> f64 {
 }
 
 /// Kaiser-windowed sinc low-pass, `cutoff` as a fraction of the sample rate, unity DC gain.
-fn kaiser_lowpass(n: usize, cutoff: f64, beta: f64) -> Vec<f64> {
+pub(crate) fn kaiser_lowpass(n: usize, cutoff: f64, beta: f64) -> Vec<f64> {
     let m = (n - 1) as f64;
     let mut h: Vec<f64> = (0..n)
         .map(|i| {
@@ -498,7 +503,7 @@ fn kaiser_lowpass(n: usize, cutoff: f64, beta: f64) -> Vec<f64> {
     h
 }
 
-fn kaiser_beta(atten_db: f64) -> f64 {
+pub(crate) fn kaiser_beta(atten_db: f64) -> f64 {
     if atten_db > 50.0 { 0.1102 * (atten_db - 8.7) } else { 0.5842 * (atten_db - 21.0).powf(0.4) + 0.07886 * (atten_db - 21.0) }
 }
 

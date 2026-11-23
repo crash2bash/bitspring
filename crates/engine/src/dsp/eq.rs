@@ -607,14 +607,17 @@ impl LiveEq {
     }
 }
 
-/// The live stage as stored in the player: the mailbox (shared) and the callback's half.
+/// The live stage as stored in the player: the mailbox (shared) and the half that runs the
+/// filters. That half belongs to one thread for the playback's whole life: the audio callback,
+/// or the render thread when the output is encoded to DSD (the EQ must run ahead of the
+/// modulator, and the callback then only packs words; see `output::render_loop`).
 pub struct EqStage {
     pub mailbox: EqMailbox,
     live: UnsafeCell<LiveEq>,
 }
 
-// SAFETY: `live` is touched only by the audio callback thread (see `live`); the mailbox is
-// atomics only.
+// SAFETY: `live` is touched only by the one thread that runs the EQ (see `live`); the mailbox
+// is atomics only.
 unsafe impl Sync for EqStage {}
 
 impl EqStage {
@@ -626,7 +629,8 @@ impl EqStage {
     }
 
     /// # Safety
-    /// Only the audio callback may call this, and never re-entrantly.
+    /// Only the one thread that runs the EQ may call this (the audio callback, or the render
+    /// thread when encoding to DSD: never both in one playback), and never re-entrantly.
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn live(&self) -> &mut LiveEq {
         // SAFETY: upheld by the caller.

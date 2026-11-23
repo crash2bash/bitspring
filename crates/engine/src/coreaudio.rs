@@ -555,7 +555,7 @@ impl Player {
         let hog = if opts.exclusive { Some(device.hog()?) } else { None };
         let restore = DeviceRestore::capture(device)?;
 
-        let dop_ok = track.dsd.is_some_and(|d| device.supports_dop(d.rate));
+        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let speakers = device.speakers(info.output_channels as usize);
         let plan = output::plan(&track, opts, &info.rates, &info.name, dop_ok, &speakers)?;
 
@@ -577,11 +577,11 @@ impl Player {
             .collect::<Result<Vec<_>>>()?;
         let first = formats.first().copied().unwrap_or(OutFormat::F32);
         if plan.dop
-            && ((device_rate - track.sample_rate as f64).abs() >= 0.5
+            && ((device_rate - plan.target).abs() >= 0.5
                 || !formats.iter().all(|f| f.carries_dop())
                 || !physical.is_some_and(|p| !p.float && p.bits >= 24))
         {
-            return Err(output::dop_error(&info.name, &track));
+            return Err(output::dop_error(&info.name, (plan.target * 16.0).round() as u32));
         }
         let path = output::signal_path(&track, opts, &plan, device_rate, physical, first, hog.is_some(), info.transport);
         let playback = Playback::new(track, opts, &plan, device_rate)?;
