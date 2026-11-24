@@ -7,6 +7,7 @@
     selected = $bindable(),
     exclusive = $bindable(),
     dopDevices = $bindable(),
+    playing = null,
     onrefresh,
     onchanneltest,
   }: {
@@ -15,6 +16,9 @@
     exclusive: boolean;
     /** The settings keys of the devices DoP is switched on for. */
     dopDevices: string[];
+    /** What the picked output runs at for the loaded track ("96 kHz", "DSD256"), which the
+     *  list's own rate (read when the list was) doesn't follow. Null: nothing is loaded. */
+    playing?: string | null;
     onrefresh: () => void;
     onchanneltest: () => void;
   } = $props();
@@ -86,7 +90,7 @@
   <button class="trigger" onclick={toggle} aria-expanded={open} aria-haspopup="dialog">
     <span class="dot" class:warn={current && !current.bitPerfectCapable}></span>
     <span class="name">{current ? deviceLabel(current.name) : t("dev.choose")}</span>
-    {#if current && current.nominalRate > 0}<span class="rate num">{khz(current.nominalRate)} {t("unit.khz")}</span>{/if}
+    {#if current && playing}<span class="rate num">{playing}</span>{:else if current && current.nominalRate > 0}<span class="rate num">{khz(current.nominalRate)} {t("unit.khz")}</span>{/if}
     <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
   </button>
 

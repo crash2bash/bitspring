@@ -286,6 +286,23 @@
 
   /** The glass backdrop glows with the signal's colour: brass untouched, violet processed. */
   let signalState = $derived(!now || testing ? null : now.signal.bitPerfect ? "bp" : "dsp");
+  /** What the output runs at for the loaded track, as the display has it (the device list's own
+   *  rate is as old as the list, and upsampling or another track has changed it since). */
+  let liveRate = $derived.by(() => {
+    if (!now || testing) return null;
+    const s = now.signal;
+    if (s.dop && s.dsdRate) return dsdName(s.dsdRate);
+    if (s.dsdOut) return `DSD${s.dsdOut}`;
+    return s.deviceRate > 0 ? `${khz(s.deviceRate)} ${t("unit.khz")}` : null;
+  });
+  // Nothing loaded any more: the picker goes back to the list's rate, so read the list again
+  // (the output stays at what the last track set).
+  let hadTrack = false;
+  $effect(() => {
+    const has = now !== null;
+    if (hadTrack && !has) untrack(() => void refreshDevices());
+    hadTrack = has;
+  });
   /** How much the glass backdrop darkens the cover: more over a bright one, so text keeps its contrast. */
   let coverVeil = $state(0.3);
   $effect(() => {
@@ -930,7 +947,7 @@
     </nav>
     <div class="controls">
       <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} {dsdStepped} device={dspDeviceName} others={dspOthers} onchange={(s) => applyDsp(s)} oncopy={copyDspFrom} onopeneq={() => (screen = "eq")} />
-      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} />
+      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices playing={liveRate} onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} />
       <RemoteButton />
       <button class="trigger gear" class:open={screen === "settings"} onclick={toggleSettings} aria-pressed={screen === "settings"} aria-label={t("settings.label")} title={t("settings.label")}>
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
