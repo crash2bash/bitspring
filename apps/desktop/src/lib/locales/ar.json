@@ -180,6 +180,7 @@
   "enh.forDevice": "لـ {device}",
   "enh.perDevice": "لكل مخرج معالجته الخاصة. يبدأ المخرج الجديد من دونها.",
   "enh.copyFrom": "نسخ من…",
+  "enh.earlierOutput": "المخرج المستخدم سابقًا",
   "enh.on.upsampling": "رفع معدل العيّنات",
   "enh.on.dsd": "إخراج DSD",
   "enh.on.eq": "معادل الصوت",

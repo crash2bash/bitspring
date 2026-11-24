@@ -123,13 +123,22 @@
   }
   /** What the processing panel shows and edits: the picked output's. */
   let dsp = $derived(dspOf(selectedKey));
+  /** The name to show for an output that has settings: as last seen. One that hasn't been
+   *  connected since an earlier version's settings became its own has no name yet (those
+   *  versions kept none, so its key stands in): a Mac's USB uid carries the product's name
+   *  ("AppleUSBAudioEngine:maker:product:serial:n"), anything else is "the output used before". */
+  function storedName(key: string, name: string | undefined): string {
+    if (name && name !== key) return name;
+    const usb = key.startsWith("AppleUSBAudioEngine:") ? key.split(":") : [];
+    return (usb.length === 5 && usb[2].trim()) || t("enh.earlierOutput");
+  }
   /** The picked output's name, as the list has it or as it was last seen. */
-  let dspDeviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? dspByDevice[selectedKey]?.name ?? null);
+  let dspDeviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? (dspByDevice[selectedKey] ? storedName(selectedKey, dspByDevice[selectedKey].name) : null));
   /** The other outputs with settings of their own, to copy from. */
   let dspOthers = $derived(
     Object.entries(dspByDevice)
       .filter(([k]) => k !== selectedKey)
-      .map(([key, e]) => ({ key, name: e.name }))
+      .map(([key, e]) => ({ key, name: storedName(key, e.name) }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
   /** The settings of the picked output have been sent to the backend since start-up. */

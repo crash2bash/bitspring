@@ -180,6 +180,7 @@
   "enh.forDevice": "Para {device}",
   "enh.perDevice": "Cada saída tem seu próprio processamento. Uma nova começa sem nenhum.",
   "enh.copyFrom": "Copiar de…",
+  "enh.earlierOutput": "Saída usada antes",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "saída DSD",
   "enh.on.eq": "equalizador",

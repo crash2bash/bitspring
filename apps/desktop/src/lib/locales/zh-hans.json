@@ -180,6 +180,7 @@
   "enh.forDevice": "用于 {device}",
   "enh.perDevice": "每个输出设备都有自己的处理设置。新设备开始时不做任何处理。",
   "enh.copyFrom": "复制自…",
+  "enh.earlierOutput": "之前使用的输出设备",
   "enh.on.upsampling": "升频",
   "enh.on.dsd": "DSD 输出",
   "enh.on.eq": "均衡器",

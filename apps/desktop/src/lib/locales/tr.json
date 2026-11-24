@@ -180,6 +180,7 @@
   "enh.forDevice": "{device} için",
   "enh.perDevice": "Her çıkışın kendi işlemesi vardır. Yeni bir çıkış işlemesiz başlar.",
   "enh.copyFrom": "Şuradan kopyala…",
+  "enh.earlierOutput": "Önceden kullanılan çıkış",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "DSD çıkışı",
   "enh.on.eq": "ekolayzır",

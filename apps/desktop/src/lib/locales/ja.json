@@ -180,6 +180,7 @@
   "enh.forDevice": "{device} 用",
   "enh.perDevice": "出力先ごとに処理を設定できます。新しい出力先は処理なしで始まります。",
   "enh.copyFrom": "コピー元…",
+  "enh.earlierOutput": "以前の出力先",
   "enh.on.upsampling": "アップサンプリング",
   "enh.on.dsd": "DSD出力",
   "enh.on.eq": "イコライザー",

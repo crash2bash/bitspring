@@ -180,6 +180,7 @@
   "enh.forDevice": "För {device}",
   "enh.perDevice": "Varje utgång har sin egen bearbetning. En ny börjar utan.",
   "enh.copyFrom": "Kopiera från…",
+  "enh.earlierOutput": "Tidigare använd utgång",
   "enh.on.upsampling": "uppsampling",
   "enh.on.dsd": "DSD-utmatning",
   "enh.on.eq": "equalizer",

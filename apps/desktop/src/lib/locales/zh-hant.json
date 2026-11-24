@@ -180,6 +180,7 @@
   "enh.forDevice": "用於 {device}",
   "enh.perDevice": "每個輸出裝置都有自己的處理設定。新裝置開始時不做任何處理。",
   "enh.copyFrom": "複製自…",
+  "enh.earlierOutput": "先前使用的輸出裝置",
   "enh.on.upsampling": "升頻",
   "enh.on.dsd": "DSD 輸出",
   "enh.on.eq": "等化器",

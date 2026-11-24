@@ -180,6 +180,7 @@
   "enh.forDevice": "Pour {device}",
   "enh.perDevice": "Chaque sortie a son propre traitement. Une nouvelle sortie commence sans traitement.",
   "enh.copyFrom": "Copier depuis…",
+  "enh.earlierOutput": "Sortie utilisée auparavant",
   "enh.on.upsampling": "suréchantillonnage",
   "enh.on.dsd": "sortie DSD",
   "enh.on.eq": "égaliseur",

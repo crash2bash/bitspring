@@ -180,6 +180,7 @@
   "enh.forDevice": "Für {device}",
   "enh.perDevice": "Jede Ausgabe hat ihre eigene Klangbearbeitung. Eine neue beginnt ohne.",
   "enh.copyFrom": "Übernehmen von…",
+  "enh.earlierOutput": "Zuvor genutzte Ausgabe",
   "enh.on.upsampling": "Upsampling",
   "enh.on.dsd": "DSD-Ausgabe",
   "enh.on.eq": "Equalizer",

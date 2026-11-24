@@ -180,6 +180,7 @@
   "enh.forDevice": "Pro {device}",
   "enh.perDevice": "Každý výstup má vlastní zpracování. Nový začíná bez něj.",
   "enh.copyFrom": "Kopírovat z…",
+  "enh.earlierOutput": "Dříve používaný výstup",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "výstup DSD",
   "enh.on.eq": "ekvalizér",
