@@ -73,10 +73,15 @@ class MainActivity : TauriActivity() {
   }
 
   /** The shared Music folder (and folder.jpg covers) needs the media permissions; the media
-   *  notification needs the notification one on Android 13+. */
+   *  notification needs the notification one on Android 13+. The Google Play build goes without
+   *  the images one (see build.gradle.kts): embedded art and the app's own folder still work. */
   private fun requestAccess() {
     val wanted = if (Build.VERSION.SDK_INT >= 33) {
-      arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS)
+      listOfNotNull(
+        Manifest.permission.READ_MEDIA_AUDIO,
+        if (BuildConfig.PLAY_STORE) null else Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.POST_NOTIFICATIONS,
+      ).toTypedArray()
     } else {
       arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
