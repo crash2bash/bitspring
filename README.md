@@ -47,6 +47,10 @@ them, and off means bit-perfect again.
   at DSD64 with the seventh order, 160 dB at DSD256). The equalizer and the rest of the processing
   run ahead of the modulator. Off by default; if the processor can't keep up, the player moves to
   a lighter setting and says so.
+- **Every output has its own sound:** the equalizer, crossfeed, upsampling and the rest are kept
+  per output device, so the correction made for the headphones on the DAC doesn't play on the
+  speakers or on a device plugged in for the first time. A new output starts bit-perfect; for
+  Bluetooth headphones the player knows, it offers their correction profiles.
 - **Volume levelling** by track or by album: one fixed gain per track towards −18 LUFS, nothing
   compressed. The player reads ReplayGain tags, measures the files that have none (EBU R128), and
   can write the result into their tags. Off by default.
