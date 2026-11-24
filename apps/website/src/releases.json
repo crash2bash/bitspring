@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.24.0",
+    "name": "BitSpring 0.24.0",
+    "date": "2026-11-24T17:33:58Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.24.0",
+    "notes": "- **Every output has its own sound.** The equalizer, crossfeed, upsampling, DSD output and the rest of the processing are now kept per output device. What you set up for the headphones on the DAC no longer plays on the speakers, or on a device plugged in for the first time.\n- **A new output starts bit-perfect**: nothing is on there until you turn it on. \"Copy from…\" in the processing panel takes another output's settings.\n- **After the update** your equalizer preset and your processing stay with the output that was picked. The other outputs start without them.\n- **Correction profiles for Bluetooth headphones.** When the output is a pair of Bluetooth headphones BitSpring knows, it offers their profiles from the AutoEQ list. Nothing is switched on by itself.\n- **The output picker shows the rate that plays**, such as 192 kHz or DSD256, not the one read when the app started.\n- **Library**: long album titles on Android now end in \"…\" instead of running under the next tile. Folder art named \"Cover 1.jpg\" or \"Folder 2.png\" is found. The album page on a phone has the cover and the title side by side, and its buttons in even rows."
+  },
+  {
     "version": "0.23.0",
     "name": "BitSpring 0.23.0",
     "date": "2026-11-23T17:07:50Z",
