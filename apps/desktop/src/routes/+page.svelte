@@ -18,11 +18,12 @@
   import Equalizer from "$lib/Equalizer.svelte";
   import UpdateNotice from "$lib/UpdateNotice.svelte";
   import CrashNotice from "$lib/CrashNotice.svelte";
+  import EqHint from "$lib/EqHint.svelte";
   import RemoteButton from "$lib/RemoteButton.svelte";
   import { loadRemote } from "$lib/remote.svelte";
   import { abx } from "$lib/abx.svelte";
   import AbxDialog from "$lib/AbxDialog.svelte";
-  import { startUpdateChecks } from "$lib/updates.svelte";
+  import { startUpdateChecks, updateNoticeShown } from "$lib/updates.svelte";
   import { look } from "$lib/look.svelte";
   import { fade } from "svelte/transition";
   import { liquidPill } from "$lib/liquid";
@@ -97,6 +98,11 @@
   // unplugged at the first start after the update must not lose them to the speakers picked in
   // its place). Its uid is its settings key everywhere but on Android, where the saved uid says
   // nothing after a replug: there they wait for the device list. The name comes with the list.
+  function sameDsp(a: DspSettings, b: DspSettings): boolean {
+    return (Object.keys(DSP_DEFAULTS) as (keyof DspSettings)[]).every((k) => a[k] === b[k]);
+  }
+  // (Settings nobody ever changed are nobody's: every output starts with those anyway.)
+  if (legacyDsp && sameDsp(legacyDsp, DSP_DEFAULTS)) legacyDsp = null;
   if (legacyDsp && untrack(() => selected) && !untrack(() => selected).startsWith("android:")) {
     dspByDevice[untrack(() => selected)] = { name: untrack(() => selected), settings: legacyDsp };
     legacyDsp = null;
@@ -106,9 +112,6 @@
   function dspOf(key: string): DspSettings {
     const e = dspByDevice[key];
     return e ? { ...DSP_DEFAULTS, ...e.settings } : DSP_DEFAULTS;
-  }
-  function sameDsp(a: DspSettings, b: DspSettings): boolean {
-    return (Object.keys(DSP_DEFAULTS) as (keyof DspSettings)[]).every((k) => a[k] === b[k]);
   }
   /** Keep `settings` as the output `key`'s own. */
   function storeDsp(key: string, settings: DspSettings) {
@@ -152,6 +155,55 @@
     const id = b ? (b.mode === "preset" ? b.id : null) : !eqState.perDevice && eqState.enabled ? eqState.activeId : null;
     return eqState.presets.find((p) => p.id === id)?.name ?? null;
   });
+
+  // ---- the headphone hint: Bluetooth headphones we have correction profiles for ----
+  /** Outputs (by settings key) not to offer headphone profiles for again. */
+  const savedHintDismissed = load<unknown>("eqHintDismissed", []);
+  let eqHintDismissed = $state<string[]>(Array.isArray(savedHintDismissed) ? savedHintDismissed.filter((k) => typeof k === "string") : []);
+  function dismissEqHint(key: string) {
+    if (eqHintDismissed.includes(key)) return;
+    eqHintDismissed = [...eqHintDismissed, key];
+    save("eqHintDismissed", eqHintDismissed);
+  }
+  /** The picked output, when profiles may be offered for it: in the list, on Bluetooth, its EQ
+   *  never set up there (no binding and nothing it last played: an output that was ever switched
+   *  on or off has been seen to), and not declined. Only once the EQ state is in and adopted, so
+   *  the state of an earlier version isn't taken for an output that never had one. */
+  let eqHintFor = $derived.by((): Device | null => {
+    if (!eqAdopted || !eqState) return null;
+    const d = devices.find((d) => d.uid === selected);
+    if (!d || d.transport !== "Bluetooth") return null;
+    if (eqState.devices[d.key] || eqState.last[d.key] || eqHintDismissed.includes(d.key)) return null;
+    return d;
+  });
+  /** The backend's answer for an output: the model to search the profiles for, if any. */
+  let eqHintAnswer = $state<{ key: string; model: string | null } | null>(null);
+  let eqHintAsked = 0;
+  $effect(() => {
+    const d = eqHintFor;
+    // A later question makes the earlier answer stale, whenever it comes.
+    const seq = ++eqHintAsked;
+    if (!d) return;
+    api.eqSuggest(d.name, d.transport).then(
+      (model) => {
+        if (seq === eqHintAsked) eqHintAnswer = { key: d.key, model };
+      },
+      () => {},
+    );
+  });
+  /** What the notice offers: shown only while every condition holds, for the output it was asked for. */
+  let eqHint = $derived(eqHintFor && eqHintAnswer?.key === eqHintFor.key ? eqHintAnswer.model : null);
+  /** The model to open the headphone picker with, on the EQ screen (cleared once it's open). */
+  let eqPick = $state<string | null>(null);
+  function pickFromHint(model: string) {
+    // It has done its job: whatever is picked (or not), it isn't offered here again.
+    dismissEqHint(selectedKey);
+    eqPick = model;
+    screen = "eq";
+  }
+  /** The crash notice is up (the headphone hint waits for it and for the update notice). */
+  let crashShowing = $state(false);
+
   let error = $state<string | null>(null);
   let loading = $state(false);
   let testing = $state(false);
@@ -1015,7 +1067,7 @@
   {:else if screen === "eq"}
     <main class="lib">
       {#key eqAdopted}
-        <Equalizer {devices} device={selected} deviceName={dspDeviceName} convolution={ir} onsignal={eqSignal} onstate={(s) => (eqState = s)} onpickir={pickIr} onclearir={() => applyDsp({ ...dsp, convolution: null })} />
+        <Equalizer {devices} device={selected} deviceName={dspDeviceName} convolution={ir} pick={eqPick} onpickopened={() => (eqPick = null)} onsignal={eqSignal} onstate={(s) => (eqState = s)} onpickir={pickIr} onclearir={() => applyDsp({ ...dsp, convolution: null })} />
       {/key}
     </main>
   {:else if screen === "settings"}
@@ -1093,7 +1145,12 @@
   {#if abx.request}
     <AbxDialog request={abx.request} device={selected} {exclusive} onclose={endAbx} />
   {/if}
-  <CrashNotice />
+  <CrashNotice bind:showing={crashShowing} />
+  <!-- One offer at a time, after the notices that matter more: so none covers another. -->
+  {#if eqHint && !crashShowing && !updateNoticeShown()}
+    {@const model = eqHint}
+    <EqHint {model} onpick={() => pickFromHint(model)} ondismiss={() => dismissEqHint(selectedKey)} />
+  {/if}
 
   {#if dragOver}
     <div class="drop-hint" aria-hidden="true"><p>{t("queue.drop")}</p></div>

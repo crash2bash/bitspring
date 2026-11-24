@@ -408,6 +408,9 @@ const CATALOG_FRESH: std::time::Duration = std::time::Duration::from_secs(30 * 8
 /// The file is about 2 MB; anything far bigger isn't ours.
 const CATALOG_MAX: u64 = 16 << 20;
 
+/// The downloaded catalog's copy, in the app's folder.
+const CATALOG_FILE: &str = "autoeq-catalog.json";
+
 fn catalog_failed(e: impl std::fmt::Display) -> UserError {
     UserError::CatalogUnavailable { detail: e.to_string() }
 }
@@ -426,7 +429,7 @@ fn download_catalog() -> Result<String, UserError> {
 /// The catalog: the copy kept in the app's folder while it's fresh (or `refresh` isn't asked),
 /// else downloaded anew, falling back to the old copy when that fails.
 fn load_catalog(dir: Option<PathBuf>, refresh: bool) -> Result<std::sync::Arc<Vec<eq_io::CatalogEntry>>, UserError> {
-    let path = dir.map(|d| d.join("autoeq-catalog.json"));
+    let path = dir.map(|d| d.join(CATALOG_FILE));
     let cached = path.as_ref().and_then(|p| {
         let age = std::fs::metadata(p).and_then(|m| m.modified()).ok()?.elapsed().unwrap_or_default();
         let text = std::fs::read_to_string(p).ok()?;
@@ -453,6 +456,47 @@ fn load_catalog(dir: Option<PathBuf>, refresh: bool) -> Result<std::sync::Arc<Ve
         (Err(_), Some((all, _))) => Ok(std::sync::Arc::new(all)),
         (Err(e), None) => Err(e),
     }
+}
+
+/// The catalog if it is at hand without going online: the one in memory, else the copy in the
+/// app's folder, of any age (it is only for the hint, which may as well miss the newest
+/// headphones). The copy is read once; what it holds stays in memory (as `CATALOG`, which
+/// `eq_catalog` replaces with whatever it loads). Never downloads: the hint asks for nothing,
+/// and App Store builds go online only when the listener asks them to.
+fn cached_catalog(dir: Option<PathBuf>) -> Option<std::sync::Arc<Vec<eq_io::CatalogEntry>>> {
+    static READ: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if let Some(all) = CATALOG.lock().unwrap().clone() {
+        return Some(all);
+    }
+    if READ.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    let text = std::fs::read_to_string(dir?.join(CATALOG_FILE)).ok()?;
+    let all = std::sync::Arc::new(eq_io::parse_catalog(&text).ok()?);
+    // `eq_catalog` may have put one in meanwhile: that one stays (its indices are what the
+    // picker lists).
+    Some(CATALOG.lock().unwrap().get_or_insert(all).clone())
+}
+
+/// The model of headphones a Bluetooth output named `name` is, when we have correction profiles
+/// for it, as the profiles write it (see `headphone_hint`): what the UI offers to search the
+/// profiles for. None for any other `transport` (as `DeviceDto` gives it), and when unsure.
+/// Looks in the built-in profiles and in the full catalog only if that is at hand already.
+#[tauri::command]
+pub async fn eq_suggest(app: AppHandle, name: String, transport: String) -> Option<String> {
+    if transport != "Bluetooth" {
+        return None;
+    }
+    let dir = app.path().app_data_dir().ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let catalog = cached_catalog(dir);
+        let built_in = eq_io::headphone_profiles().iter().map(|p| p.name.as_str());
+        let more = catalog.iter().flat_map(|all| all.iter().map(|e| e.name.as_str()));
+        crate::headphone_hint::suggest(&name, built_in.chain(more))
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 #[derive(Serialize)]

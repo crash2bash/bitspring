@@ -628,6 +628,9 @@
   "eq.editorLabel": "Ekolayzır eğrisi",
   "eq.editorHelp": "Frekansını ve kazancını değiştirmek için bir noktayı sürükle; Q'yu değiştirmek için üzerinde kaydır. Bant eklemek için grafiğe çift tıkla. Bir nokta odaktayken ok tuşları onu taşır (daha büyük adımlar için Shift), [ ve ] Q'yu değiştirir, Delete onu siler.",
   "eq.preampTick": "ön kazanç {db} dB",
+  "eqHint.text": "{model} için hazır düzeltme profilleri var.",
+  "eqHint.pick": "Seç",
+  "eqHint.dismiss": "Önerme",
 
   "menu.about": "{app} Hakkında",
   "menu.services": "Servisler",

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { isAndroid } from "./api";
   import { num, t } from "./i18n.svelte";
-  import { installUpdate, plainNotes, updates } from "./updates.svelte";
+  import { installUpdate, plainNotes, updateNoticeShown, updates } from "./updates.svelte";
 
   let { playing }: { playing: boolean } = $props();
 
   let notesOpen = $state(false);
-  let show = $derived(!!updates.update && updates.dismissed !== updates.update.version);
+  let show = $derived(updateNoticeShown());
   let notes = $derived(plainNotes(updates.update?.notes ?? null));
 </script>
 

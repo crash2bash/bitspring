@@ -103,7 +103,7 @@ let mockRemote = false;
 const devices: Device[] = [
   { uid: "q7", key: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, network: false, model: null, protocol: null },
   { uid: "spk", key: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, network: false, model: null, protocol: null },
-  { uid: "air", key: "air", name: "Bluetooth Headphones", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, network: false, model: null, protocol: null },
+  { uid: "air", key: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, network: false, model: null, protocol: null },
   { uid: "upnp:wiim", key: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "WiiM Pro Plus", protocol: "UPnP" },
   { uid: "upnp:sonos", key: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "Sonos Era 100", protocol: "UPnP" },
   { uid: "cast:shield", key: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
@@ -684,6 +684,10 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       return eqChanged() as T;
     case "eq_headphones":
       return MOCK_HEADPHONES.map(([name, source]) => ({ name, source })) as T;
+    case "eq_suggest":
+      // The backend matches the name against every profile name (see headphone_hint.rs); the
+      // sample only needs the AirPods, so the notice can be seen here.
+      return (args.transport === "Bluetooth" && /airpods/i.test(String(args.name)) ? "AirPods Pro" : null) as T;
     case "eq_catalog":
       await new Promise((r) => setTimeout(r, 600));
       return mockCatalog() as T;
@@ -787,6 +791,8 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
 }
 
 const MOCK_HEADPHONES: [string, string][] = [
+  ["Apple AirPods Pro", "Rtings"],
+  ["Apple AirPods Pro2", "Rtings"],
   ["Audeze LCD-2", "oratory1990"],
   ["Audeze LCD-X", "oratory1990"],
   ["HIFIMAN Sundara", "oratory1990"],

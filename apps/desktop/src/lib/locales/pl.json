@@ -633,6 +633,9 @@
   "eq.editorLabel": "Krzywa korektora",
   "eq.editorHelp": "Przeciągnij punkt, aby zmienić częstotliwość i wzmocnienie; przewiń nad nim, aby zmienić Q. Kliknij dwukrotnie wykres, aby dodać pasmo. Gdy punkt ma fokus, strzałki go przesuwają (z Shift większymi krokami), [ i ] zmieniają Q, Delete go usuwa.",
   "eq.preampTick": "przedwzmocnienie {db} dB",
+  "eqHint.text": "Dla {model} są gotowe profile korekcji słuchawek.",
+  "eqHint.pick": "Wybierz",
+  "eqHint.dismiss": "Nie proponuj",
 
   "menu.about": "{app} – informacje",
   "menu.services": "Usługi",

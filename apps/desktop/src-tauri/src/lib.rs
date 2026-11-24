@@ -18,6 +18,7 @@ mod device_key;
 mod dsd_out;
 mod eq;
 mod folders;
+mod headphone_hint;
 mod library;
 mod loudness;
 mod lyrics;
@@ -1715,6 +1716,7 @@ pub fn run() {
             eq::eq_add_headphone,
             eq::eq_catalog,
             eq::eq_add_catalog,
+            eq::eq_suggest,
             eq::eq_export,
             eq::eq_export_text,
             library::library_status,

@@ -628,6 +628,9 @@
   "eq.editorLabel": "イコライザーカーブ",
   "eq.editorHelp": "点をドラッグすると周波数とゲインが変わり、点の上でスクロールするとQが変わります。グラフをダブルクリックするとバンドを追加できます。点にフォーカスがあるときは、矢印キーで移動（Shiftで大きく）、[ と ] でQを変更、Deleteで削除します。",
   "eq.preampTick": "プリアンプ {db} dB",
+  "eqHint.text": "{model} には既製の補正プロファイルがあります。",
+  "eqHint.pick": "選択",
+  "eqHint.dismiss": "表示しない",
 
   "menu.about": "{app}について",
   "menu.services": "サービス",

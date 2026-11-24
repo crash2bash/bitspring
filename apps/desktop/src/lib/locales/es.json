@@ -628,6 +628,9 @@
   "eq.editorLabel": "Curva del ecualizador",
   "eq.editorHelp": "Arrastra un punto para cambiar su frecuencia y ganancia; desplaza la rueda sobre él para cambiar Q. Haz doble clic en el gráfico para añadir una banda. Con un punto enfocado, las flechas lo mueven (Mayús para pasos más grandes), [ y ] cambian Q, Supr lo elimina.",
   "eq.preampTick": "preamplificación {db} dB",
+  "eqHint.text": "Hay perfiles de corrección listos para {model}.",
+  "eqHint.pick": "Elegir",
+  "eqHint.dismiss": "No ofrecer",
 
   "menu.about": "Acerca de {app}",
   "menu.services": "Servicios",

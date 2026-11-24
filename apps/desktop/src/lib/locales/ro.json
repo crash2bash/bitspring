@@ -628,6 +628,9 @@
   "eq.editorLabel": "Curba egalizatorului",
   "eq.editorHelp": "Trage un punct ca să-i schimbi frecvența și câștigul; derulează deasupra lui ca să schimbi Q. Dublu clic pe grafic adaugă o bandă. Cu un punct selectat, săgețile îl mută (Shift pentru pași mai mari), [ și ] schimbă Q, Delete îl elimină.",
   "eq.preampTick": "preamplificare {db} dB",
+  "eqHint.text": "Pentru {model} există profiluri de corecție gata făcute.",
+  "eqHint.pick": "Alege",
+  "eqHint.dismiss": "Nu propune",
 
   "menu.about": "Despre {app}",
   "menu.services": "Servicii",

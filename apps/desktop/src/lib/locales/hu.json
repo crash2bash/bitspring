@@ -628,6 +628,9 @@
   "eq.editorLabel": "Hangszínszabályzó-görbe",
   "eq.editorHelp": "Húzz egy pontot a frekvencia és az erősítés módosításához; görgess fölötte a Q módosításához. Dupla kattintás a grafikonon új sávot ad hozzá. Ha egy pont fókuszban van, a nyílbillentyűk mozgatják (Shifttel nagyobb lépésekben), a [ és ] a Q-t változtatja, a Delete törli.",
   "eq.preampTick": "előerősítés {db} dB",
+  "eqHint.text": "Kész korrekciós profilok érhetők el ehhez: {model}.",
+  "eqHint.pick": "Kiválasztás",
+  "eqHint.dismiss": "Ne ajánlja",
 
   "menu.about": "A(z) {app} névjegye",
   "menu.services": "Szolgáltatások",

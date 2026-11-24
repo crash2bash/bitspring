@@ -628,6 +628,9 @@
   "eq.editorLabel": "Equalizer curve",
   "eq.editorHelp": "Drag a point to change its frequency and gain; scroll over it to change Q. Double-click the graph to add a band. With a point focused, the arrow keys move it (Shift for bigger steps), [ and ] change Q, Delete removes it.",
   "eq.preampTick": "preamp {db} dB",
+  "eqHint.text": "There are ready-made correction profiles for {model}.",
+  "eqHint.pick": "Choose",
+  "eqHint.dismiss": "Don't offer",
 
   "menu.about": "About {app}",
   "menu.services": "Services",

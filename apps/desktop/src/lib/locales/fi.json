@@ -628,6 +628,9 @@
   "eq.editorLabel": "Taajuuskorjaimen käyrä",
   "eq.editorHelp": "Vedä pistettä muuttaaksesi sen taajuutta ja vahvistusta; vieritä sen päällä muuttaaksesi Q:ta. Lisää kaista kaksoisnapsauttamalla kuvaajaa. Kun piste on valittuna, nuolinäppäimet siirtävät sitä (Vaihto suuremmin askelin), [ ja ] muuttavat Q:ta, Delete poistaa sen.",
   "eq.preampTick": "esivahvistus {db} dB",
+  "eqHint.text": "Kuulokkeille {model} on valmiita korjausprofiileja.",
+  "eqHint.pick": "Valitse",
+  "eqHint.dismiss": "Älä tarjoa",
 
   "menu.about": "Tietoja: {app}",
   "menu.services": "Palvelut",

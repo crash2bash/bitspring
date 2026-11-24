@@ -628,6 +628,9 @@
   "eq.editorLabel": "等化器曲線",
   "eq.editorHelp": "拖曳點可改變頻率與增益；在點上捲動可改變 Q。在圖上按兩下可新增頻段。選取一個點後，方向鍵可移動它（按住 Shift 步幅更大），[ 和 ] 改變 Q，Delete 刪除它。",
   "eq.preampTick": "前級增益 {db} dB",
+  "eqHint.text": "{model} 有現成的耳機校正設定檔。",
+  "eqHint.pick": "選擇",
+  "eqHint.dismiss": "不再提示",
 
   "menu.about": "關於{app}",
   "menu.services": "服務",

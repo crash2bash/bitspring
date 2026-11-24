@@ -628,6 +628,9 @@
   "eq.editorLabel": "均衡器曲线",
   "eq.editorHelp": "拖动点可改变频率和增益；在点上滚动可改变 Q。在图上双击可添加频段。选中一个点后，方向键可移动它（按住 Shift 步长更大），[ 和 ] 改变 Q，Delete 删除它。",
   "eq.preampTick": "预放大 {db} dB",
+  "eqHint.text": "{model} 有现成的耳机校正配置文件。",
+  "eqHint.pick": "选择",
+  "eqHint.dismiss": "不再提示",
 
   "menu.about": "关于{app}",
   "menu.services": "服务",

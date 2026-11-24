@@ -628,6 +628,9 @@
   "eq.editorLabel": "이퀄라이저 곡선",
   "eq.editorHelp": "점을 드래그하면 주파수와 게인이, 점 위에서 스크롤하면 Q가 바뀝니다. 그래프를 더블클릭하면 밴드가 추가됩니다. 점에 포커스가 있을 때 화살표 키로 이동(Shift는 더 크게), [ 와 ]로 Q 변경, Delete로 삭제합니다.",
   "eq.preampTick": "프리앰프 {db} dB",
+  "eqHint.text": "{model}용으로 준비된 보정 프로필이 있습니다.",
+  "eqHint.pick": "선택",
+  "eqHint.dismiss": "제안하지 않기",
 
   "menu.about": "{app}에 관하여",
   "menu.services": "서비스",

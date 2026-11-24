@@ -7,8 +7,14 @@
    *  they paste the text themselves. */
   const ISSUES = "https://github.com/crash2bash/bitspring/issues/new";
 
+  /** The notice is up: other notices wait (see `EqHint`), so none covers another. */
+  let { showing = $bindable(false) }: { showing?: boolean } = $props();
+
   // Reports from earlier runs, kept on this device (see src-tauri/src/crash.rs).
   let report = $state<string | null>(null);
+  $effect(() => {
+    showing = !!report;
+  });
   let shown = $state(false);
   let copied = $state(false);
 

@@ -25,6 +25,11 @@ export const updates = $state({
   dismissed: null as string | null,
 });
 
+/** The update notice is up: an update found and not put off with "Later". */
+export function updateNoticeShown(): boolean {
+  return !!updates.update && updates.dismissed !== updates.update.version;
+}
+
 export async function checkUpdates(manual = false) {
   if (updates.checking || updates.installing) return;
   updates.checking = true;

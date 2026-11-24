@@ -633,6 +633,9 @@
   "eq.editorLabel": "Křivka ekvalizéru",
   "eq.editorHelp": "Tažením bodu změníte jeho frekvenci a zisk; kolečkem nad ním změníte Q. Dvojklikem do grafu přidáte pásmo. Když má bod fokus, šipky ho posouvají (se Shiftem po větších krocích), [ a ] mění Q, Delete ho odstraní.",
   "eq.preampTick": "předzesílení {db} dB",
+  "eqHint.text": "Pro {model} existují hotové korekční profily sluchátek.",
+  "eqHint.pick": "Vybrat",
+  "eqHint.dismiss": "Nenabízet",
 
   "menu.about": "O aplikaci {app}",
   "menu.services": "Služby",

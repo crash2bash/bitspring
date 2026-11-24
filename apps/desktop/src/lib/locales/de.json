@@ -628,6 +628,9 @@
   "eq.editorLabel": "Equalizer-Kurve",
   "eq.editorHelp": "Zieh einen Punkt, um Frequenz und Verstärkung zu ändern; scrolle darüber, um Q zu ändern. Doppelklicke in die Grafik, um ein Band hinzuzufügen. Ist ein Punkt fokussiert, bewegen ihn die Pfeiltasten (mit Shift in größeren Schritten), [ und ] ändern Q, Entf entfernt ihn.",
   "eq.preampTick": "Vorverstärkung {db} dB",
+  "eqHint.text": "Für {model} gibt es fertige Korrekturprofile.",
+  "eqHint.pick": "Auswählen",
+  "eqHint.dismiss": "Nicht anbieten",
 
   "menu.about": "Über {app}",
   "menu.services": "Dienste",

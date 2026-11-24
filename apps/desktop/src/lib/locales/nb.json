@@ -628,6 +628,9 @@
   "eq.editorLabel": "Equalizerkurve",
   "eq.editorHelp": "Dra et punkt for å endre frekvens og forsterkning; rull over det for å endre Q. Dobbeltklikk i grafen for å legge til et bånd. Når et punkt har fokus, flytter piltastene det (Shift for større steg), [ og ] endrer Q, Delete fjerner det.",
   "eq.preampTick": "forforsterkning {db} dB",
+  "eqHint.text": "Det finnes ferdige korreksjonsprofiler for {model}.",
+  "eqHint.pick": "Velg",
+  "eqHint.dismiss": "Ikke tilby",
 
   "menu.about": "Om {app}",
   "menu.services": "Tjenester",

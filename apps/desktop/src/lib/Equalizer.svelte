@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import {
     api,
     deviceLabel,
@@ -31,6 +31,8 @@
     device,
     deviceName: knownName = null,
     convolution,
+    pick = null,
+    onpickopened,
     onsignal,
     onstate,
     onpickir,
@@ -42,6 +44,10 @@
     /** Its name as last seen, for when it isn't in the list now. */
     deviceName?: string | null;
     convolution: IrInfo | null;
+    /** Open the headphone picker with this typed in its search (the model the headphone hint found
+     *  in the output's name); `onpickopened` says it's open, so the caller can let go of it. */
+    pick?: string | null;
+    onpickopened?: () => void;
     onsignal: (s: Signal) => void;
     /** Every new EQ state, for summaries elsewhere. */
     onstate?: (s: EqState) => void;
@@ -80,7 +86,13 @@
   /** Seconds for one round trip: ~40 px/s each way, plus the pauses at both ends. */
   let nameDur = $derived(Math.max(6, (2 * nameOverflow) / 40 / 0.64));
   let pasting = $state(false);
-  let pickingHeadphones = $state(false);
+  /** The headphone picker is open, with this in its search at first (null: closed). */
+  let pickingHeadphones = $state<string | null>(null);
+  $effect(() => {
+    if (pick === null) return;
+    pickingHeadphones = pick;
+    untrack(() => onpickopened?.());
+  });
   let pasteText = $state("");
   let pasteName = $state("");
   let confirmDelete = $state(false);
@@ -438,7 +450,7 @@
           <button class="tool" onclick={() => (menu = menu === "import" ? null : "import")} aria-expanded={menu === "import"}>{t("eq.import")}</button>
           {#if menu === "import"}
             <div class="menu" role="menu">
-              <button role="menuitem" onclick={() => ((menu = null), (pickingHeadphones = true))}>{t("eq.importHeadphones")}</button>
+              <button role="menuitem" onclick={() => ((menu = null), (pickingHeadphones = ""))}>{t("eq.importHeadphones")}</button>
               {#if !isAndroid}<button role="menuitem" onclick={importFile}>{t("eq.importFile")}</button>{/if}
               <button role="menuitem" onclick={() => ((menu = null), (pasting = true))}>{t("eq.importPaste")}</button>
               <p class="menu-note">{t("eq.importHelp")}</p>
@@ -488,7 +500,7 @@
           {/each}
         </div>
         <div class="empty-actions">
-          <button class="primary" onclick={() => (pickingHeadphones = true)}>{t("eq.importHeadphones")}</button>
+          <button class="primary" onclick={() => (pickingHeadphones = "")}>{t("eq.importHeadphones")}</button>
           {#if !isAndroid}<button class="ghost" onclick={importFile}>{t("eq.importFile")}</button>{/if}
           <button class="ghost" onclick={() => (pasting = true)}>{t("eq.importPaste")}</button>
         </div>
@@ -728,8 +740,8 @@
   </section>
 </div>
 
-{#if pickingHeadphones}
-  <HeadphonePicker device={target} onpicked={afterImport} onclose={() => (pickingHeadphones = false)} />
+{#if pickingHeadphones !== null}
+  <HeadphonePicker device={target} query={pickingHeadphones} onpicked={afterImport} onclose={() => (pickingHeadphones = null)} />
 {/if}
 
 {#if pasting}

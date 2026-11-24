@@ -752,6 +752,10 @@ export const api = {
   eqAddHeadphone: (name: string, deviceUid: string | null) => call<EqChanged & { ids: string[] }>("eq_add_headphone", { name, deviceUid }),
   /** AutoEQ's whole catalog, downloaded from our site once a month (`refresh`: now). */
   eqCatalog: (refresh: boolean) => call<{ name: string; source: string; rig: string | null }[]>("eq_catalog", { refresh }),
+  /** The headphone model a Bluetooth output named `name` is, when there are correction profiles for
+   *  it, as the profiles write it ("AirPods Pro", "WH-1000XM4"): to offer them, typed into the
+   *  headphone picker's search. Null for other transports and when unsure. Never goes online. */
+  eqSuggest: (name: string, transport: string) => call<string | null>("eq_suggest", { name, transport }),
   /** Catalog entry `index` as eqCatalog listed it; name and source check it's still that one. */
   eqAddCatalog: (index: number, name: string, source: string, deviceUid: string | null) => call<EqChanged & { ids: string[] }>("eq_add_catalog", { index, name, source, deviceUid }),
   eqExport: (ids: string[], format: EqFormat, path: string | null) => call<string>("eq_export", { ids, format, path }),

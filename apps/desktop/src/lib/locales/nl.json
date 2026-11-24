@@ -628,6 +628,9 @@
   "eq.editorLabel": "Equalizercurve",
   "eq.editorHelp": "Sleep een punt om de frequentie en versterking te wijzigen; scrol erboven om Q te wijzigen. Dubbelklik in de grafiek om een band toe te voegen. Met een punt in focus verplaatsen de pijltjestoetsen het (Shift voor grotere stappen), [ en ] wijzigen Q, Delete verwijdert het.",
   "eq.preampTick": "voorversterking {db} dB",
+  "eqHint.text": "Voor {model} zijn kant-en-klare correctieprofielen beschikbaar.",
+  "eqHint.pick": "Kiezen",
+  "eqHint.dismiss": "Niet aanbieden",
 
   "menu.about": "Over {app}",
   "menu.services": "Voorzieningen",
