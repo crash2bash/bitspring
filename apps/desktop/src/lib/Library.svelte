@@ -571,25 +571,25 @@
                 openAlbum.hiRes && "hi-res",
               ])}
             </p>
-            <div class="album-actions">
-              <button class="primary" onclick={() => playAlbum(openAlbum!)}>{t("common.play")}</button>
-              <button class="ghost" onclick={() => onshuffle(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("common.shuffle")}</button>
-              <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("lib.enqueue")}</button>
-              <AddToPlaylist entries={() => albumTracks.map(entryFromTrack)} />
-              {#if !isIOS && !isAndroid}
-                <button class="ghost" onclick={() => (editingTags = true)}>{t("tags.edit")}</button>
-              {/if}
-              {#if !albumChecked}
-                <button class="ghost" onclick={checkQuality} disabled={!!checking}>
-                  {checking?.album === openAlbum.id ? t("q.checking", { done: num(checking.done), total: num(checking.total) }) : t("q.check")}
-                </button>
-              {/if}
-              {#if ripOffer}
-                <button class="ghost" onclick={() => (ripAsking = true)} disabled={!!ripping || ripAsking}>
-                  {ripping?.album === openAlbum.id ? t("rip.reading", { done: num(ripping.done), total: num(ripping.total) }) : t("rip.check")}
-                </button>
-              {/if}
-            </div>
+          </div>
+          <div class="album-actions">
+            <button class="primary" onclick={() => playAlbum(openAlbum!)}>{t("common.play")}</button>
+            <button class="ghost" onclick={() => onshuffle(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("common.shuffle")}</button>
+            <button class="ghost" onclick={() => onenqueue(openAlbum!.tracks.map((i) => tracks[i].path))}>{t("lib.enqueue")}</button>
+            <AddToPlaylist entries={() => albumTracks.map(entryFromTrack)} />
+            {#if !isIOS && !isAndroid}
+              <button class="ghost" onclick={() => (editingTags = true)}>{t("tags.edit")}</button>
+            {/if}
+            {#if !albumChecked}
+              <button class="ghost" onclick={checkQuality} disabled={!!checking}>
+                {checking?.album === openAlbum.id ? t("q.checking", { done: num(checking.done), total: num(checking.total) }) : t("q.check")}
+              </button>
+            {/if}
+            {#if ripOffer}
+              <button class="ghost" onclick={() => (ripAsking = true)} disabled={!!ripping || ripAsking}>
+                {ripping?.album === openAlbum.id ? t("rip.reading", { done: num(ripping.done), total: num(ripping.total) }) : t("rip.check")}
+              </button>
+            {/if}
           </div>
         </div>
         {#if fileFacts}
@@ -999,11 +999,13 @@
     color: var(--porcelain);
   }
   /* The cover keeps to the top; the buttons sit on its bottom edge while the text beside it is
-     shorter than the cover, and simply come last when it is longer (a narrow window, a phone). */
+     shorter than the cover, and simply come last when it is longer (a narrow window). On a
+     phone they leave the column and run under cover and text alike (see the media query). */
   .album-head {
     display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 28px;
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 28px;
     margin-bottom: 24px;
   }
   .album-info {
@@ -1013,6 +1015,7 @@
     align-items: flex-start;
   }
   .album-art {
+    grid-row: 1 / 3;
     align-self: start;
     aspect-ratio: 1;
     border-radius: var(--r-md);
@@ -1088,11 +1091,11 @@
     color: var(--porcelain);
   }
   .album-actions {
+    grid-column: 2;
+    align-self: end;
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    align-self: stretch;
-    margin-top: auto;
     padding-top: 16px;
   }
   /* Under the head, across the page: what was measured in the files, and where they are. */
@@ -1292,9 +1295,52 @@
     .album {
       padding: 12px 12px 24px;
     }
+    /* Cover and words side by side, the buttons under both in an even grid: two to a row,
+       Play first, an odd last one across the whole width. */
     .album-head {
-      grid-template-columns: 112px minmax(0, 1fr);
-      gap: 16px;
+      grid-template-columns: 120px minmax(0, 1fr);
+      grid-template-rows: auto;
+      gap: 20px 16px;
+    }
+    .album-art {
+      grid-row: 1;
+    }
+    .album-art .initial {
+      font-size: 3rem;
+    }
+    .album-title {
+      gap: 4px;
+      width: 100%;
+      justify-content: space-between;
+    }
+    .album-info h2 {
+      font-size: var(--t-xl);
+      line-height: 1.12;
+      overflow-wrap: anywhere;
+    }
+    .album-heart {
+      width: 36px;
+      height: 36px;
+      margin: -4px -6px 0 0;
+    }
+    .artist-link {
+      font-size: var(--t-md);
+      text-align: start;
+    }
+    .album-actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding-top: 0;
+    }
+    .album-actions > :global(*),
+    .album-actions :global(.atp > button) {
+      width: 100%;
+      min-height: 44px;
+    }
+    .album-actions > :global(:last-child:nth-child(odd)) {
+      grid-column: 1 / -1;
     }
   }
 </style>
