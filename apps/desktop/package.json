@@ -13,6 +13,7 @@
     "tauri": "tauri",
     "check:locales": "node scripts/check-locales.mjs",
     "build:appstore": "tauri build --config src-tauri/tauri.appstore.conf.json -- --no-default-features",
+    "build:play": "BITSPRING_PLAY=1 tauri android build --aab --target aarch64 -- --no-default-features",
     "build:msstore": "tauri build --no-bundle --config src-tauri/tauri.msstore.conf.json -- --no-default-features && node scripts/msstore-pack.mjs --exe ../../target/release/hifi-desktop.exe --arch x64 --out ../../target/msstore"
   },
   "license": "MIT",

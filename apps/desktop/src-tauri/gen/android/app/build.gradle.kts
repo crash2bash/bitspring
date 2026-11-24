@@ -14,12 +14,20 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// The Google Play build (`npm run build:play` sets BITSPRING_PLAY=1): its own package, no
+// self-update (Play forbids it) and no photo permission (Play allows READ_MEDIA_IMAGES only for
+// gallery-like apps, so folder.jpg covers in the shared Music folder go unread there). The
+// website APK stays dev.local.hifi so it keeps updating over installed copies. The Kotlin
+// namespace stays dev.local.hifi in both: the JNI names in src/android_media.rs depend on it.
+val playStore = System.getenv("BITSPRING_PLAY") == "1"
+
 android {
     compileSdk = 37
     namespace = "dev.local.hifi"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "dev.local.hifi"
+        applicationId = if (playStore) "app.bitspring.player" else "dev.local.hifi"
+        buildConfigField("boolean", "PLAY_STORE", playStore.toString())
         minSdk = 28
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
@@ -49,6 +57,9 @@ android {
                 }.files.toTypedArray()
             )
         }
+    }
+    if (playStore) {
+        sourceSets.getByName("release").manifest.srcFile("src/play/AndroidManifest.xml")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
