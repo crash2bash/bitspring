@@ -4,9 +4,12 @@
   import { num, t, tn } from "./i18n.svelte";
 
   let {
+    device,
     onpicked,
     onclose,
   }: {
+    /** The output the EQ screen shows: the new preset plays there, and only there (null: no output, only added). */
+    device: string | null;
     /** A profile became a preset. */
     onpicked: (res: EqChanged & { ids: string[] }) => void;
     onclose: () => void;
@@ -164,7 +167,7 @@
     busy = true;
     error = null;
     try {
-      const res = measure.index !== undefined ? await api.eqAddCatalog(measure.index, m.name, measure.source) : await api.eqAddHeadphone(m.name);
+      const res = measure.index !== undefined ? await api.eqAddCatalog(measure.index, m.name, measure.source, device) : await api.eqAddHeadphone(m.name, device);
       onpicked(res);
       onclose();
     } catch (e) {

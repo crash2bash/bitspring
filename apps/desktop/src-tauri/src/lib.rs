@@ -700,7 +700,7 @@ fn default_dsp() -> DspSettings {
 fn wanted_dsp(state: &AppState, device: &Output) -> DspSettings {
     let mut dsp = state.dsp.lock().unwrap().get(&device_key::of(device)).cloned().unwrap_or_else(default_dsp);
     let eq = state.eq.lock().unwrap();
-    dsp.eq = eq.effective(device.uid());
+    dsp.eq = eq.effective(&device_key::of(device));
     dsp.eq_bypass = eq.bypass;
     dsp
 }
@@ -1540,12 +1540,12 @@ fn step_down(state: &AppState) {
 /// (the usual case: an edit, another preset of the same kind, compare), else by a restart.
 /// Returns the new signal path when it changed.
 fn apply_eq(state: &AppState) -> CmdResult<Option<SignalDto>> {
-    let Some(device_uid) = state.current.lock().unwrap().as_ref().map(|c| c.device_uid.clone()) else {
+    let Some(key) = state.current.lock().unwrap().as_ref().map(|c| c.key.clone()) else {
         return Ok(None);
     };
     let (want, bypass) = {
         let s = state.eq.lock().unwrap();
-        (s.effective(&device_uid), s.bypass)
+        (s.effective(&key), s.bypass)
     };
     {
         let mut player = state.player.lock().unwrap();
@@ -1706,8 +1706,7 @@ pub fn run() {
             eq::eq_state,
             eq::eq_save,
             eq::eq_delete,
-            eq::eq_activate,
-            eq::eq_set_enabled,
+            eq::eq_adopt,
             eq::eq_set_bypass,
             eq::eq_bind_device,
             eq::eq_import_file,

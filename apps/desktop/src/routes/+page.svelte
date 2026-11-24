@@ -47,6 +47,9 @@
 
   let devices = $state<Device[]>([]);
   let selected = $state<string>(load("device", ""));
+  /** The output that was picked when the app was last left, as saved: whose the EQ of an earlier
+   *  version is (see `adoptEq`), even if it isn't connected now. */
+  const launchDevice = untrack(() => selected);
   // iOS has no shared/exclusive choice: our playback session never mixes with other apps.
   let exclusive = $state<boolean>(isIOS ? true : load("exclusive", true));
   /** The settings key of output `uid` (see `Device.key`): the list's, else the uid itself. */
@@ -138,11 +141,15 @@
   let dsdStepped = $state<{ dsdOut: number | null; order: number | null; kind: "rate" | "order" | "off" } | null>(null);
   let ir = $state<IrInfo | null>(null);
   let eqState = $state<EqState | null>(null);
-  /** The EQ preset that plays on the picked output (null = EQ off there). */
+  /** The start-up adoption of an earlier version's EQ has run: the EQ screen, if it was up
+   *  already, is put up anew so it shows the state after it, not the one it read before. */
+  let eqAdopted = $state(false);
+  /** The EQ preset that plays on the picked output (null = EQ off there). An output without a
+   *  binding plays without, except in an earlier version's state before `adoptEq`. */
   let eqName = $derived.by(() => {
     if (!eqState) return null;
-    const b = eqState.devices[selected];
-    const id = b ? (b.mode === "preset" ? b.id : null) : eqState.enabled ? eqState.activeId : null;
+    const b = eqState.devices[selectedKey];
+    const id = b ? (b.mode === "preset" ? b.id : null) : !eqState.perDevice && eqState.enabled ? eqState.activeId : null;
     return eqState.presets.find((p) => p.id === id)?.name ?? null;
   });
   let error = $state<string | null>(null);
@@ -521,12 +528,28 @@
     }
   }
 
-  async function loadEq() {
+  /** Earlier versions had one EQ for every output: it becomes the EQ of the output that was picked
+   *  when it was set up, connected now or not, as the processing settings do (see `legacyDsp`).
+   *  On Android the saved uid says nothing after a replug: there it goes to the output picked now.
+   *  The backend does this once; every later start it does nothing. Call with the device list in.
+   *  Returns the output it went to (null: no output at all, nothing done). */
+  async function adoptEq(): Promise<string | null> {
+    const uid = launchDevice && !launchDevice.startsWith("android:") ? launchDevice : selected;
+    if (!uid) return null;
     try {
-      // Earlier versions kept one AutoEQ file: it becomes the first preset.
+      eqState = (await api.eqAdopt(uid)).state;
+    } catch {}
+    return uid;
+  }
+
+  /** The EQ state for the summaries; `owner` is the output `adoptEq` gave the earlier EQ to. */
+  async function loadEq(owner: string | null) {
+    try {
+      // The versions before those kept one AutoEQ file: it becomes the first preset, playing on
+      // the same output.
       if (legacyEqPath && inTauri) {
         const s = await api.eqState();
-        if (!s.presets.length) await api.eqImportFile(legacyEqPath).catch(() => null);
+        if (!s.presets.length) await api.eqImportFile(legacyEqPath, owner).catch(() => null);
         // The old settings as they were, without the file: imported once.
         save("dsp", savedDsp);
       }
@@ -718,6 +741,10 @@
     // while no page was there to see it.
     (async () => {
       await refreshDevices();
+      // The EQ of an earlier version needs the device list too; nothing here waits for it.
+      void adoptEq()
+        .then(loadEq)
+        .finally(() => (eqAdopted = true));
       const s = await api.status().catch(() => null);
       if (s) {
         adoptFilterStep(s.filterStep);
@@ -729,7 +756,6 @@
     refreshStreaming();
     if (!untrack(() => fades)) api.setFades(false).catch(() => {});
     loadRemote();
-    loadEq();
     loadMarks();
     const stopUpdateChecks = startUpdateChecks();
     const timer = setInterval(async () => {
@@ -988,7 +1014,9 @@
   </main>
   {:else if screen === "eq"}
     <main class="lib">
-      <Equalizer {devices} device={selected} convolution={ir} onsignal={eqSignal} onstate={(s) => (eqState = s)} onpickir={pickIr} onclearir={() => applyDsp({ ...dsp, convolution: null })} />
+      {#key eqAdopted}
+        <Equalizer {devices} device={selected} deviceName={dspDeviceName} convolution={ir} onsignal={eqSignal} onstate={(s) => (eqState = s)} onpickir={pickIr} onclearir={() => applyDsp({ ...dsp, convolution: null })} />
+      {/key}
     </main>
   {:else if screen === "settings"}
     <main class="lib">

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import {
     api,
+    deviceLabel,
     errorText,
     inTauri,
     isAndroid,
@@ -28,6 +29,7 @@
   let {
     devices,
     device,
+    deviceName: knownName = null,
     convolution,
     onsignal,
     onstate,
@@ -35,8 +37,10 @@
     onclearir,
   }: {
     devices: Device[];
-    /** The output picked in the device menu: what "this device" means here. */
+    /** The output picked in the device menu: whose EQ this screen shows and sets (each output has its own). */
     device: string;
+    /** Its name as last seen, for when it isn't in the list now. */
+    deviceName?: string | null;
     convolution: IrInfo | null;
     onsignal: (s: Signal) => void;
     /** Every new EQ state, for summaries elsewhere. */
@@ -81,16 +85,26 @@
   let pasteName = $state("");
   let confirmDelete = $state(false);
 
-  let deviceName = $derived(devices.find((d) => d.uid === device)?.name ?? "");
-  let binding = $derived<DeviceEq | undefined>(eqs?.devices[device]);
-  /** The preset this output plays — and the one the editor shows. */
+  let deviceName = $derived(devices.find((d) => d.uid === device)?.name ?? knownName ?? device);
+  /** This output's settings key: what its EQ is kept under. */
+  let deviceKey = $derived(devices.find((d) => d.uid === device)?.key ?? device);
+  /** What this output plays. None: it plays without the EQ. */
+  let binding = $derived<DeviceEq | undefined>(eqs?.devices[deviceKey]);
+  /** The preset the editor shows: the one this output plays, else the one it played last, else
+   *  the one chosen last anywhere. Switching the EQ on here plays it. */
   let editId = $derived.by(() => {
     if (!eqs) return null;
     if (binding?.mode === "preset") return binding.id;
+    const own = eqs.last[deviceKey];
+    if (own && eqs.presets.some((p) => p.id === own)) return own;
     return eqs.activeId ?? eqs.presets[0]?.id ?? null;
   });
   let editing = $derived(eqs?.presets.find((p) => p.id === editId) ?? null);
-  let heard = $derived(!!eqs && !!editing && (binding ? binding.mode === "preset" : eqs.enabled));
+  // (No binding but the earlier versions' switch on: the moment before the start-up adoption,
+  // when the backend still plays the shared preset everywhere.)
+  let heard = $derived(!!eqs && !!editing && (binding ? binding.mode === "preset" : !eqs.perDevice && eqs.enabled));
+  /** The uid to hand the backend for this output; null when there is no output at all. */
+  let target = $derived(device || null);
 
   // ---- eqs from the backend ---------------------------------------------------------------
   /** A plain deep copy (state proxies can't be structured-cloned). */
@@ -165,7 +179,7 @@
     }
     inflight = true;
     try {
-      applyChanged(await api.eqSave(editId, p, persist), false);
+      applyChanged(await api.eqSave(editId, p, persist, target), false);
       error = null;
     } catch (e) {
       error = errorText(e);
@@ -227,27 +241,15 @@
   }
 
   // ---- presets ------------------------------------------------------------------------------
+  /** A preset picked in the list starts playing on this output. */
   async function choose(id: string) {
-    if (binding?.mode === "preset") await run(() => api.eqBindDevice(device, { mode: "preset", id }));
-    else {
-      if (binding?.mode === "off") await run(() => api.eqBindDevice(device, null));
-      await run(() => api.eqActivate(id));
-    }
+    await run(() => api.eqBindDevice(device, { mode: "preset", id }));
   }
 
-  /** Make `preset` and show it on this output. */
+  /** Make `preset`: it starts playing on this output, and only here. */
   async function create(preset: EqPreset) {
     menu = null;
-    const before = new Set(eqs?.presets.map((p) => p.id));
-    try {
-      const res = await api.eqSave(null, preset, true);
-      const made = res.state.presets.find((p) => !before.has(p.id));
-      applyChanged(res);
-      if (made && binding?.mode === "preset") await run(() => api.eqBindDevice(device, { mode: "preset", id: made.id }));
-      error = null;
-    } catch (e) {
-      error = errorText(e);
-    }
+    await run(() => api.eqSave(null, preset, true, target));
   }
 
   function uniqueName(base: string) {
@@ -269,42 +271,34 @@
     }
     confirmDelete = false;
     const id = editId;
-    if (binding?.mode === "preset") await run(() => api.eqBindDevice(device, null));
+    // (The outputs that played it go to off.)
     await run(() => api.eqDelete(id));
   }
 
+  /** This output's EQ on (the preset the editor shows) or off. */
   async function toggleOn() {
-    if (!eqs) return;
-    if (binding?.mode === "off") {
-      await run(() => api.eqBindDevice(device, null));
-      if (!eqs.enabled) await run(() => api.eqSetEnabled(true));
-    } else if (binding?.mode === "preset") await run(() => api.eqBindDevice(device, { mode: "off" }));
-    else await run(() => api.eqSetEnabled(!eqs!.enabled));
-  }
-
-  async function setBinding(v: string) {
-    const b: DeviceEq | null = v === "off" ? { mode: "off" } : v === "own" && editId ? { mode: "preset", id: editId } : null;
-    await run(() => api.eqBindDevice(device, b));
+    if (!eqs || !editId) return;
+    await run(() => api.eqBindDevice(device, heard ? { mode: "off" } : { mode: "preset", id: editId! }));
   }
 
   // ---- import / export ----------------------------------------------------------------------
-  async function afterImport(res: EqChanged & { ids: string[] }) {
+  /** New presets came in; the backend has the first playing on this output already. */
+  function afterImport(res: EqChanged & { ids: string[] }) {
     applyChanged(res);
-    if (res.ids[0] && binding?.mode === "preset") await run(() => api.eqBindDevice(device, { mode: "preset", id: res.ids[0] }));
     note = tn("eq.imported", res.ids.length);
   }
 
   async function importFile() {
     menu = null;
     try {
-      if (!inTauri) return await afterImport(await api.eqImportFile("/Users/me/AutoEq/My Headphones ParametricEQ.txt"));
+      if (!inTauri) return afterImport(await api.eqImportFile("/Users/me/AutoEq/My Headphones ParametricEQ.txt", target));
       const { open } = await import("@tauri-apps/plugin-dialog");
       const picked = await open({
         multiple: true,
         ...(isIOS ? {} : { filters: [{ name: t("eq.title"), extensions: ["txt", "cfg", "json", "csv", "tsv", "feq"] }] }),
       });
       if (!picked) return;
-      for (const p of Array.isArray(picked) ? picked : [picked]) await afterImport(await api.eqImportFile(p));
+      for (const p of Array.isArray(picked) ? picked : [picked]) afterImport(await api.eqImportFile(p, target));
       error = null;
     } catch (e) {
       error = errorText(e);
@@ -313,7 +307,7 @@
 
   async function importText() {
     try {
-      await afterImport(await api.eqImportText(pasteText, pasteName.trim() || t("eq.defaultName")));
+      afterImport(await api.eqImportText(pasteText, pasteName.trim() || t("eq.defaultName"), target));
       pasting = false;
       pasteText = "";
       pasteName = "";
@@ -503,10 +497,12 @@
     {:else if draft}
       <div class="head">
         <label class="switch">
-          <input type="checkbox" role="switch" checked={heard} onchange={toggleOn} />
+          <input type="checkbox" role="switch" checked={heard} disabled={!device} aria-describedby={deviceName ? "eq-whose" : undefined} onchange={toggleOn} />
           <span class="knob" aria-hidden="true"></span>
           <span class="sr">{t("eq.switch")}</span>
         </label>
+        <!-- Whose EQ this is: each output has its own. -->
+        {#if deviceName}<span class="whose" id="eq-whose" title={deviceLabel(deviceName)}>{t("enh.forDevice", { device: deviceLabel(deviceName) })}</span>{/if}
         <span class="name-wrap" class:running={nameOverflow > 0 && !nameFocused}>
           <input
             class="name"
@@ -576,7 +572,7 @@
         </div>
         <p class="status" class:bypassing={eqs?.bypass && heard} class:off={!heard} role="status">
           {#if !heard}
-            {binding?.mode === "off" ? t("eq.offForDevice", { device: deviceName }) : t("eq.offAll")}
+            {t("eq.offForDevice", { device: deviceLabel(deviceName) })}
           {:else if eqs?.bypass}
             {t("eq.comparing")}
           {:else}
@@ -632,16 +628,6 @@
             {/each}
           </div>
         </div>
-        {#if deviceName}
-          <div class="field device">
-            <span class="label" id="eq-dev">{t("eq.device", { device: deviceName })}</span>
-            <select aria-labelledby="eq-dev" value={binding?.mode === "off" ? "off" : binding?.mode === "preset" ? "own" : "follow"} onchange={(e) => setBinding(e.currentTarget.value)}>
-              <option value="follow">{t("eq.dev.follow")}</option>
-              <option value="own">{t("eq.dev.own")}</option>
-              <option value="off">{t("eq.dev.off")}</option>
-            </select>
-          </div>
-        {/if}
       </div>
       {#if clips}<p class="warn">{t("eq.clipWarn")}</p>{/if}
 
@@ -743,7 +729,7 @@
 </div>
 
 {#if pickingHeadphones}
-  <HeadphonePicker onpicked={afterImport} onclose={() => (pickingHeadphones = false)} />
+  <HeadphonePicker device={target} onpicked={afterImport} onclose={() => (pickingHeadphones = false)} />
 {/if}
 
 {#if pasting}
@@ -950,6 +936,17 @@
     margin-inline-start: -6px;
     user-select: text;
     -webkit-user-select: text;
+  }
+  /* The output whose EQ this is, by its switch: kept short so the preset's name keeps the room. */
+  .whose {
+    flex: 0 1 auto;
+    max-width: 14em;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--t-xs);
+    color: var(--mist);
   }
   .name-wrap {
     position: relative;
@@ -1251,18 +1248,6 @@
     font-size: var(--t-sm);
     border-radius: var(--r-sm);
     padding: 4px 8px;
-  }
-  /* Beside the scale's segmented row: its height and its shape. */
-  .device select {
-    box-sizing: border-box;
-    height: 29px;
-    padding: 0 10px;
-    border-radius: var(--r-md);
-  }
-  :global(html[data-look="glass"]) .device select {
-    height: 31px;
-    padding: 0 12px;
-    border-radius: 999px;
   }
   .warn {
     margin: 0;

@@ -143,7 +143,9 @@ const LCD2: EqPreset = {
     { enabled: true, kind: "highShelf", freq: 10000, gain: 3, q: 0.7, slope: 12, channels: "both" },
   ],
 };
-const eq: { presets: StoredPreset[]; activeId: string | null; enabled: boolean; bypass: boolean; devices: Record<string, DeviceEq> } = {
+// Like the backend: the EQ belongs to each output (by settings key). The sample has it on the USB
+// DAC only; the speakers had the room preset and were switched off, so switching them on brings it back.
+const eq: { presets: StoredPreset[]; activeId: string | null; enabled: boolean; perDevice: boolean; bypass: boolean; devices: Record<string, DeviceEq>; last: Record<string, string> } = {
   presets: [
     { ...structuredClone(LCD2), id: "p1", updated: 1 },
     {
@@ -155,14 +157,26 @@ const eq: { presets: StoredPreset[]; activeId: string | null; enabled: boolean; 
       ],
     },
   ],
-  activeId: "p1", enabled: true, bypass: false, devices: { spk: { mode: "preset", id: "p2" } },
+  activeId: "p1", enabled: false, perDevice: true, bypass: false,
+  devices: { q7: { mode: "preset", id: "p1" }, spk: { mode: "off" } },
+  last: { q7: "p1", spk: "p2" },
 };
 let eqSeq = 3;
+/** The settings key of output `uid`, as the backend's `settings_key_of_uid`. */
+const eqKey = (uid: string) => devices.find((d) => d.uid === uid)?.key ?? uid;
 function eqSnapshot(): EqState {
-  const playingOn = lastDevice?.uid ?? null;
+  const playingOn = lastDevice?.key ?? null;
   const b = playingOn ? eq.devices[playingOn] : undefined;
-  const effectiveId = b ? (b.mode === "preset" ? b.id : null) : eq.enabled ? eq.activeId : null;
+  const effectiveId = b ? (b.mode === "preset" ? b.id : null) : !eq.perDevice && eq.enabled ? eq.activeId : null;
   return structuredClone({ ...eq, playingOn, effectiveId });
+}
+/** Output `uid` plays `b`; a preset is also what it comes back to, and the one chosen last. */
+function eqBind(uid: string | null | undefined, b: DeviceEq) {
+  if (b.mode === "preset") eq.activeId = b.id;
+  if (!uid) return;
+  const key = eqKey(uid);
+  if (b.mode === "preset") eq.last[key] = b.id;
+  eq.devices[key] = b;
 }
 function eqOn(): string | null {
   const s = eqSnapshot();
@@ -648,8 +662,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       else {
         const id = `p${eqSeq++}`;
         eq.presets.push({ ...structuredClone(args.preset as EqPreset), id, updated: Date.now() });
-        eq.activeId = id;
-        eq.enabled = true;
+        eqBind(args.deviceUid as string | null, { mode: "preset", id });
       }
       return eqChanged() as T;
     }
@@ -657,20 +670,17 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       eq.presets = eq.presets.filter((p) => p.id !== args.id);
       if (eq.activeId === args.id) eq.activeId = eq.presets[0]?.id ?? null;
       for (const [k, v] of Object.entries(eq.devices)) if (v.mode === "preset" && v.id === args.id) delete eq.devices[k];
+      for (const [k, v] of Object.entries(eq.last)) if (v === args.id) delete eq.last[k];
       return eqChanged() as T;
-    case "eq_activate":
-      eq.activeId = args.id as string;
-      eq.enabled = true;
-      return eqChanged() as T;
-    case "eq_set_enabled":
-      eq.enabled = !!args.enabled && !!eq.activeId;
+    case "eq_adopt":
+      // The sample is no earlier version's file: only the flag, as the backend does for a fresh install.
+      eq.perDevice = true;
       return eqChanged() as T;
     case "eq_set_bypass":
       eq.bypass = !!args.bypass;
       return eqChanged() as T;
     case "eq_bind_device":
-      if (args.binding) eq.devices[args.deviceUid as string] = args.binding as DeviceEq;
-      else delete eq.devices[args.deviceUid as string];
+      eqBind(args.deviceUid as string, args.binding as DeviceEq);
       return eqChanged() as T;
     case "eq_headphones":
       return MOCK_HEADPHONES.map(([name, source]) => ({ name, source })) as T;
@@ -682,8 +692,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       const id = `p${eqSeq++}`;
       const name = cmd === "eq_add_catalog" ? `${args.name} (${args.source})` : (args.name as string);
       eq.presets.push({ ...structuredClone(LCD2), name, id, updated: Date.now() });
-      eq.activeId = id;
-      eq.enabled = true;
+      eqBind(args.deviceUid as string | null, { mode: "preset", id });
       return { ...eqChanged(), ids: [id] } as T;
     }
     case "eq_import_file":
@@ -691,8 +700,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       const id = `p${eqSeq++}`;
       const name = cmd === "eq_import_text" ? (args.name as string) : "My headphones (imported)";
       eq.presets.push({ ...structuredClone(LCD2), name, id, updated: Date.now() });
-      eq.activeId = id;
-      eq.enabled = true;
+      eqBind(args.deviceUid as string | null, { mode: "preset", id });
       return { ...eqChanged(), ids: [id] } as T;
     }
     case "eq_export":

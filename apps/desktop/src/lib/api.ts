@@ -176,15 +176,24 @@ export interface StoredPreset extends EqPreset {
   updated: number;
 }
 
-/** What an output does with the EQ (absent: follows the active preset). */
+/** What an output does with the EQ. An output without one plays without the EQ (but see `EqState.enabled`). */
 export type DeviceEq = { mode: "off" } | { mode: "preset"; id: string };
 
 export interface EqState {
   presets: StoredPreset[];
+  /** The preset chosen last, on any output: what the editor shows on an output with none of its own. */
   activeId: string | null;
+  /** Earlier versions' one switch for every output: while `perDevice` is false, `activeId` plays on
+   *  every output without a binding. The adoption at start-up (`eqAdopt`) switches it off for good. */
   enabled: boolean;
+  /** The EQ belongs to each output: set by the adoption. */
+  perDevice: boolean;
   bypass: boolean;
+  /** Each output's binding, by settings key (`Device.key`). */
   devices: Record<string, DeviceEq>;
+  /** The preset each output last played, by settings key: what switching it on again comes back to. */
+  last: Record<string, string>;
+  /** The settings key of the output that plays now, and the preset in effect there. */
   playingOn: string | null;
   effectiveId: string | null;
 }
@@ -726,21 +735,25 @@ export const api = {
   /** Fade over a few ms at pause, seek, stop and a change of track (applies at once). */
   setFades: (on: boolean) => call<void>("set_fades", { on }),
   eqState: () => call<EqState>("eq_state"),
-  eqSave: (id: string | null, preset: EqPreset, persist: boolean) => call<EqChanged>("eq_save", { id, preset, persist }),
+  /** Take over the EQ of an earlier version, once (later calls do nothing): its one preset goes to
+   *  output `deviceUid`, the one picked when it was set up, and every other output starts without. */
+  eqAdopt: (deviceUid: string) => call<EqChanged>("eq_adopt", { deviceUid }),
+  /** Edit preset `id`; an unknown or null id makes a new one, which plays on output `deviceUid` only. */
+  eqSave: (id: string | null, preset: EqPreset, persist: boolean, deviceUid: string | null) => call<EqChanged>("eq_save", { id, preset, persist, deviceUid }),
   eqDelete: (id: string) => call<EqChanged>("eq_delete", { id }),
-  eqActivate: (id: string) => call<EqChanged>("eq_activate", { id }),
-  eqSetEnabled: (enabled: boolean) => call<EqChanged>("eq_set_enabled", { enabled }),
   eqSetBypass: (bypass: boolean) => call<EqChanged>("eq_set_bypass", { bypass }),
-  eqBindDevice: (deviceUid: string, binding: DeviceEq | null) => call<EqChanged>("eq_bind_device", { deviceUid, binding }),
-  eqImportFile: (path: string) => call<EqChanged & { ids: string[] }>("eq_import_file", { path }),
-  eqImportText: (text: string, name: string) => call<EqChanged & { ids: string[] }>("eq_import_text", { text, name }),
+  /** What output `deviceUid` plays: off, or a preset (which then starts playing there). */
+  eqBindDevice: (deviceUid: string, binding: DeviceEq) => call<EqChanged>("eq_bind_device", { deviceUid, binding }),
+  // New presets: the first plays on output `deviceUid` and only there (null: only added).
+  eqImportFile: (path: string, deviceUid: string | null) => call<EqChanged & { ids: string[] }>("eq_import_file", { path, deviceUid }),
+  eqImportText: (text: string, name: string, deviceUid: string | null) => call<EqChanged & { ids: string[] }>("eq_import_text", { text, name, deviceUid }),
   /** Built-in headphone profiles (AutoEQ): name and whose measurement. */
   eqHeadphones: () => call<{ name: string; source: string }[]>("eq_headphones"),
-  eqAddHeadphone: (name: string) => call<EqChanged & { ids: string[] }>("eq_add_headphone", { name }),
+  eqAddHeadphone: (name: string, deviceUid: string | null) => call<EqChanged & { ids: string[] }>("eq_add_headphone", { name, deviceUid }),
   /** AutoEQ's whole catalog, downloaded from our site once a month (`refresh`: now). */
   eqCatalog: (refresh: boolean) => call<{ name: string; source: string; rig: string | null }[]>("eq_catalog", { refresh }),
   /** Catalog entry `index` as eqCatalog listed it; name and source check it's still that one. */
-  eqAddCatalog: (index: number, name: string, source: string) => call<EqChanged & { ids: string[] }>("eq_add_catalog", { index, name, source }),
+  eqAddCatalog: (index: number, name: string, source: string, deviceUid: string | null) => call<EqChanged & { ids: string[] }>("eq_add_catalog", { index, name, source, deviceUid }),
   eqExport: (ids: string[], format: EqFormat, path: string | null) => call<string>("eq_export", { ids, format, path }),
   eqExportText: (ids: string[], format: EqFormat) => call<string>("eq_export_text", { ids, format }),
   channelTest: (deviceUid: string) => call<Signal>("channel_test", { deviceUid }),
