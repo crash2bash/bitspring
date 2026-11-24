@@ -466,13 +466,43 @@ pub fn album_id(t: &TrackInfo) -> String {
     stable_id(&format!("{}\u{1f}{}", artist.to_lowercase(), title.to_lowercase()))
 }
 
-/// Picture files rippers commonly leave next to the tracks.
+/// Picture files rippers commonly leave next to the tracks: cover.jpg and the like first,
+/// else a numbered or suffixed one ("Cover 1.jpg", "folder-01.png", "Front (Large).jpg").
 pub fn folder_image(track_path: &Path) -> Option<PathBuf> {
     let dir = track_path.parent()?;
     ["cover", "folder", "front", "Cover", "Folder", "Front", "AlbumArt"]
         .iter()
         .flat_map(|n| ["jpg", "jpeg", "png"].map(|e| dir.join(format!("{n}.{e}"))))
         .find(|p| p.is_file())
+        .or_else(|| loose_folder_image(dir))
+}
+
+/// The best picture in `dir` whose name starts with cover, folder or front followed by
+/// nothing, a space, a digit or punctuation (so "Coverage.jpg" is not one), in any case.
+/// Cover beats folder beats front; a back or inlay scan comes last; then the lowest number.
+fn loose_folder_image(dir: &Path) -> Option<PathBuf> {
+    const WORDS: [&str; 3] = ["cover", "folder", "front"];
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            let ext = p.extension()?.to_str()?.to_ascii_lowercase();
+            if !matches!(ext.as_str(), "jpg" | "jpeg" | "png") {
+                return None;
+            }
+            let stem = p.file_stem()?.to_string_lossy().to_lowercase();
+            let (rank, rest) = WORDS.iter().enumerate().find_map(|(i, w)| Some((i, stem.strip_prefix(w)?)))?;
+            if rest.chars().next().is_some_and(|c| c.is_alphabetic()) {
+                return None;
+            }
+            let other_side = ["back", "inlay", "inside", "rear", "tray"].iter().any(|w| rest.contains(w));
+            let digits: String = rest.chars().skip_while(|c| !c.is_ascii_digit()).take_while(char::is_ascii_digit).collect();
+            let number = if digits.is_empty() { 0 } else { digits.parse::<u64>().unwrap_or(u64::MAX) };
+            p.is_file().then(|| ((other_side, rank, number, stem), p))
+        })
+        .min_by(|a, b| a.0.cmp(&b.0))
+        .map(|(_, p)| p)
 }
 
 pub fn group_albums(tracks: &[TrackInfo]) -> Vec<Album> {
@@ -618,6 +648,27 @@ mod tests {
         assert!(t.wait_for(usize::MAX, std::time::Duration::from_secs(10)));
         assert_eq!(t.frames(), 6 * 44_100);
         assert_eq!(t.meta.title.as_deref(), Some("Two"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn numbered_folder_art_is_found_lowest_number_first() {
+        let dir = std::env::temp_dir().join(format!("bitspring-folder-art-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let track = dir.join("01.flac");
+        let touch = |names: &[&str]| names.iter().for_each(|n| std::fs::write(dir.join(n), b"x").unwrap());
+        let pick = || folder_image(&track).map(|p| p.file_name().unwrap().to_string_lossy().into_owned());
+        touch(&["01.flac", "Coverage.jpg", "Frontier.png", "notes.txt"]);
+        assert_eq!(pick(), None);
+        // The "9 (2006)" case: only numbered scans, back scans among them.
+        touch(&["Cover 5.jpg", "Cover 12.jpg", "Cover 2.jpg", "Cover 1 (Back).jpg", "Folder-1.jpg"]);
+        assert_eq!(pick().as_deref(), Some("Cover 2.jpg"));
+        touch(&["COVER 1.JPG"]);
+        assert_eq!(pick().as_deref(), Some("COVER 1.JPG"));
+        // An exact name still wins.
+        touch(&["folder.jpg"]);
+        assert_eq!(pick().as_deref(), Some("folder.jpg"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -55,6 +55,9 @@
   .tile {
     display: flex;
     flex-direction: column;
+    /* explicit: Android's WebView gives a <button> align-items: flex-start, which sizes a
+       long title to its own width (past the tile) so its ellipsis never shows */
+    align-items: stretch;
     text-align: start;
     min-width: 0;
     gap: 2px;
