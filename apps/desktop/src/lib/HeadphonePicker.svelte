@@ -1,12 +1,18 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { api, errorText, type EqChanged } from "./api";
   import { num, t, tn } from "./i18n.svelte";
 
   let {
+    device,
+    query: typed = "",
     onpicked,
     onclose,
   }: {
+    /** The output the EQ screen shows: the new preset plays there, and only there (null: no output, only added). */
+    device: string | null;
+    /** What the search starts with (the model the headphone hint found in an output's name). */
+    query?: string;
     /** A profile became a preset. */
     onpicked: (res: EqChanged & { ids: string[] }) => void;
     onclose: () => void;
@@ -47,7 +53,8 @@
   let models = $state<Model[]>([]);
   let catalog = $state<"loading" | "ready" | "failed">("loading");
   let catalogError = $state<string | null>(null);
-  let query = $state("");
+  // Only the start: from then on the field is the listener's.
+  let query = $state(untrack(() => typed));
   let active = $state(0);
   /** The model whose measurements are being chosen from. */
   let chosen = $state<Model | null>(null);
@@ -164,7 +171,7 @@
     busy = true;
     error = null;
     try {
-      const res = measure.index !== undefined ? await api.eqAddCatalog(measure.index, m.name, measure.source) : await api.eqAddHeadphone(m.name);
+      const res = measure.index !== undefined ? await api.eqAddCatalog(measure.index, m.name, measure.source, device) : await api.eqAddHeadphone(m.name, device);
       onpicked(res);
       onclose();
     } catch (e) {

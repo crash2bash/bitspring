@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, dsdOutNoteText, isAndroid, isIOS, type Crossfeed, type DsdOrder, type DsdOut, type DspSettings, type IrInfo, type LevelMode, type LoudnessStatus, type Signal, type UpsampleFilter, type UpsampleTaps } from "./api";
+  import { api, deviceLabel, dsdOutNoteText, isAndroid, isIOS, type Crossfeed, type DsdOrder, type DsdOut, type DspSettings, type IrInfo, type LevelMode, type LoudnessStatus, type Signal, type UpsampleFilter, type UpsampleTaps } from "./api";
   import { list, num, sentences, t } from "./i18n.svelte";
   import { liquidPill } from "./liquid";
   import { startAbx } from "./abx.svelte";
@@ -13,9 +13,13 @@
     load = null,
     stepped = null,
     dsdStepped = null,
+    device = null,
+    others = [],
     onchange,
+    oncopy,
     onopeneq,
   }: {
+    /** The picked output's settings: every output has its own. */
     settings: DspSettings;
     /** The EQ preset playing on the picked output (null = off). */
     eqName: string | null;
@@ -30,7 +34,13 @@
     stepped?: { filter: UpsampleFilter | null; taps: number | null } | null;
     /** What an automatic step down of the DSD output left on, and which step it was. */
     dsdStepped?: { dsdOut: number | null; order: number | null; kind: "rate" | "order" | "off" } | null;
+    /** The picked output's name, whose settings these are (null: not known yet). */
+    device?: string | null;
+    /** The other outputs with settings of their own, to copy from (settings key, name as last seen). */
+    others?: { key: string; name: string }[];
     onchange: (s: DspSettings) => void;
+    /** Copy the settings of the output with this settings key to the picked one. */
+    oncopy: (key: string) => void;
     onopeneq: () => void;
   } = $props();
 
@@ -195,6 +205,32 @@
 
   {#if open}
     <div class="panel" role="dialog" aria-label={t("enh.dialog")}>
+      <!-- Whose settings these are: each output keeps its own. -->
+      <div class="whose">
+        <div class="whose-row">
+          {#if device}<span class="whose-name">{t("enh.forDevice", { device: deviceLabel(device) })}</span>{/if}
+          {#if others.length}
+            <select
+              class="copy"
+              aria-label={t("enh.copyFrom")}
+              value=""
+              onchange={(e) => {
+                const key = e.currentTarget.value;
+                // Back to the prompt: the list is an action, not a setting.
+                e.currentTarget.value = "";
+                if (key) oncopy(key);
+              }}
+            >
+              <option value="" disabled>{t("enh.copyFrom")}</option>
+              {#each others as o (o.key)}
+                <option value={o.key}>{deviceLabel(o.name)}</option>
+              {/each}
+            </select>
+          {/if}
+        </div>
+        <p class="help">{t("enh.perDevice")}</p>
+      </div>
+
       <fieldset>
         <legend>{t("enh.upsampling")}</legend>
         <div class="seg" role="radiogroup" aria-label={t("enh.upsampling")} use:liquidPill={settings.upsampleKhz}>
@@ -459,6 +495,43 @@
     border-radius: var(--r-lg);
     padding: 6px 18px 14px;
     box-shadow: 0 18px 40px rgba(5, 12, 15, 0.55);
+  }
+  /* Whose settings these are: a block of its own above the first one, with its line. */
+  .whose {
+    border-bottom: 1px solid var(--slate-600);
+    padding: 14px 0 16px;
+  }
+  .whose-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+    flex-wrap: wrap;
+  }
+  .whose-name {
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .whose .help {
+    margin-top: 6px;
+  }
+  .copy {
+    flex: none;
+    max-width: 100%;
+    margin-inline-start: auto;
+    box-sizing: border-box;
+    height: 27px;
+    padding: 0 10px;
+    font-size: var(--t-xs);
+    color: var(--mist);
+  }
+  .copy:hover,
+  .copy:focus-visible {
+    color: var(--porcelain);
+  }
+  :global(html[data-look="glass"]) .enh .copy {
+    border-radius: 999px;
   }
   fieldset {
     border: 0;

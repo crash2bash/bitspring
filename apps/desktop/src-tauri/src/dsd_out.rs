@@ -136,13 +136,15 @@ pub fn resolve(want: Option<DsdOut>, device: &Output, exclusive: bool, dop: bool
 }
 
 /// An automatic step down of the DSD output, for the UI to show and adopt. `seq` grows with
-/// every step; `dsd_out: None` = DSD output is now off (PCM plays).
+/// every step; `dsd_out: None` = DSD output is now off (PCM plays). `device_key`: the output
+/// whose settings it changed (see `device_key`), the one that played.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DsdStep {
     pub seq: u64,
     pub dsd_out: Option<u32>,
     pub order: Option<u32>,
+    pub device_key: String,
 }
 
 /// One step down, when the processor can't keep up.
@@ -294,9 +296,9 @@ mod tests {
         assert_eq!(json[3], r#"{"kind":"network"}"#);
         assert_eq!(json[4], r#"{"kind":"rate","device":"DAC","dsd":"DSD64","khz":176.4}"#);
         assert_eq!(json[5], r#"{"kind":"refused","device":"DAC","dsd":"DSD256","khz":705.6}"#);
-        let step = serde_json::to_string(&DsdStep { seq: 2, dsd_out: Some(64), order: Some(5) }).unwrap();
+        let step = serde_json::to_string(&DsdStep { seq: 2, dsd_out: Some(64), order: Some(5), device_key: "dac".into() }).unwrap();
         println!("{step}");
-        assert_eq!(step, r#"{"seq":2,"dsdOut":64,"order":5}"#);
+        assert_eq!(step, r#"{"seq":2,"dsdOut":64,"order":5,"deviceKey":"dac"}"#);
     }
 
     #[test]
