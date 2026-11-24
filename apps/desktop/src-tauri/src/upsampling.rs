@@ -44,13 +44,15 @@ pub fn names(spec: Option<FilterSpec>) -> (Option<String>, Option<u32>) {
 }
 
 /// An automatic step down to a cheaper filter, for the UI to show and adopt. `seq` grows with
-/// every step; `filter: None` = now on the standard resampler.
+/// every step; `filter: None` = now on the standard resampler. `device_key`: the output whose
+/// settings it changed (see `device_key`), the one that played.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FilterStep {
     pub seq: u64,
     pub filter: Option<String>,
     pub taps: Option<u32>,
+    pub device_key: String,
 }
 
 /// Seconds the next track is lined up earlier than usual behind a long filter. The render
@@ -145,6 +147,15 @@ mod tests {
         for (kind, taps) in [("linear", 65_536), ("minimum", 65_536)] {
             assert_eq!(names(parse(Some(kind), Some(taps))), (Some(kind.into()), Some(taps)));
         }
+    }
+
+    /// What the UI reads (`FilterStep` in api.ts).
+    #[test]
+    fn a_filter_step_on_the_wire() {
+        let step = FilterStep { seq: 3, filter: Some("linear".into()), taps: Some(65_536), device_key: "android:Usb:FiiO Q7".into() };
+        assert_eq!(serde_json::to_string(&step).unwrap(), r#"{"seq":3,"filter":"linear","taps":65536,"deviceKey":"android:Usb:FiiO Q7"}"#);
+        let standard = FilterStep { seq: 4, filter: None, taps: None, device_key: "dac".into() };
+        assert_eq!(serde_json::to_string(&standard).unwrap(), r#"{"seq":4,"filter":null,"taps":null,"deviceKey":"dac"}"#);
     }
 
     #[test]

@@ -177,6 +177,9 @@
 
   "enh.button": "Parannukset",
   "enh.dialog": "Äänenkäsittely",
+  "enh.forDevice": "Laitteelle {device}",
+  "enh.perDevice": "Jokaisella ulostulolla on oma äänenkäsittelynsä. Uusi aloittaa ilman sitä.",
+  "enh.copyFrom": "Kopioi laitteelta…",
   "enh.on.upsampling": "ylinäytteistys",
   "enh.on.dsd": "DSD-lähtö",
   "enh.on.eq": "taajuuskorjain",

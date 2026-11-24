@@ -177,6 +177,9 @@
 
   "enh.button": "Обработка",
   "enh.dialog": "Обработка звука",
+  "enh.forDevice": "Для {device}",
+  "enh.perDevice": "У каждого устройства вывода своя обработка. Новое устройство начинает без неё.",
+  "enh.copyFrom": "Скопировать с…",
   "enh.on.upsampling": "апсэмплинг",
   "enh.on.dsd": "вывод в DSD",
   "enh.on.eq": "эквалайзер",

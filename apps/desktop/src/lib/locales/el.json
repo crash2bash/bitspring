@@ -177,6 +177,9 @@
 
   "enh.button": "Βελτιώσεις",
   "enh.dialog": "Επεξεργασία ήχου",
+  "enh.forDevice": "Για {device}",
+  "enh.perDevice": "Κάθε έξοδος έχει τη δική της επεξεργασία. Μια νέα ξεκινά χωρίς.",
+  "enh.copyFrom": "Αντιγραφή από…",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "έξοδος DSD",
   "enh.on.eq": "ισοσταθμιστής",

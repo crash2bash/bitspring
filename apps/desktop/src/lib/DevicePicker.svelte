@@ -13,6 +13,7 @@
     devices: Device[];
     selected: string;
     exclusive: boolean;
+    /** The settings keys of the devices DoP is switched on for. */
     dopDevices: string[];
     onrefresh: () => void;
     onchanneltest: () => void;
@@ -59,11 +60,12 @@
     open = false;
   }
 
-  let dop = $derived(current ? dopDevices.includes(current.uid) : false);
+  // By settings key: on Android the uid changes each time the DAC is plugged in, the key doesn't.
+  let dop = $derived(current ? dopDevices.includes(current.key) : false);
   function setDop(on: boolean) {
     if (!current) return;
-    const uid = current.uid;
-    dopDevices = on ? [...dopDevices.filter((u) => u !== uid), uid] : dopDevices.filter((u) => u !== uid);
+    const key = current.key;
+    dopDevices = on ? [...dopDevices.filter((k) => k !== key), key] : dopDevices.filter((k) => k !== key);
   }
 
   function maxRate(d: Device) {

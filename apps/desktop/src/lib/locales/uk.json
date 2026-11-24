@@ -177,6 +177,9 @@
 
   "enh.button": "Покращення",
   "enh.dialog": "Обробка звуку",
+  "enh.forDevice": "Для {device}",
+  "enh.perDevice": "У кожного пристрою виводу своя обробка. Новий пристрій починає без неї.",
+  "enh.copyFrom": "Скопіювати з…",
   "enh.on.upsampling": "апсемплінг",
   "enh.on.dsd": "виведення в DSD",
   "enh.on.eq": "еквалайзер",

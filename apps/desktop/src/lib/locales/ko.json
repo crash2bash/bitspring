@@ -177,6 +177,9 @@
 
   "enh.button": "사운드 조정",
   "enh.dialog": "사운드 처리",
+  "enh.forDevice": "{device}용",
+  "enh.perDevice": "출력 장치마다 처리 설정이 따로 있습니다. 새 장치는 처리 없이 시작합니다.",
+  "enh.copyFrom": "복사해 올 장치…",
   "enh.on.upsampling": "업샘플링",
   "enh.on.dsd": "DSD 출력",
   "enh.on.eq": "이퀄라이저",

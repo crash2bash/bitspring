@@ -14,7 +14,7 @@ const storeBuild = new URLSearchParams(location.search).has("store");
 let mockCrash = new URLSearchParams(location.search).has("crash");
 /** ?stepdown: a few seconds into a track with a long upsampling filter, the pretend processor falls behind and the filter steps down once. */
 let mockStepDown = new URLSearchParams(location.search).has("stepdown");
-let mockStep: { seq: number; filter: DspSettings["upsampleFilter"]; taps: number | null } | null = null;
+let mockStep: { seq: number; filter: DspSettings["upsampleFilter"]; taps: number | null; deviceKey: string } | null = null;
 let mockStepSeq = 0;
 // DSD output (Enhancers → DSD output) runs whenever it is chosen, on the USB DAC in exclusive
 // mode, without the device's DoP switch. These give its other states:
@@ -25,7 +25,7 @@ const mockDsdLimit = new URLSearchParams(location.search).has("dsdlimit") ? 128 
 /** ?dsdstep: a few seconds into a track, the pretend processor falls behind and the DSD output
  *  steps down once: 256 → 128 → 64 at the same modulator, then 64 with the 5th order, then off. */
 let mockDsdStepDown = new URLSearchParams(location.search).has("dsdstep");
-let mockDsdStep: { seq: number; dsdOut: number | null; order: number | null } | null = null;
+let mockDsdStep: { seq: number; dsdOut: number | null; order: number | null; deviceKey: string } | null = null;
 let mockDsdStepSeq = 0;
 /** The DoP word rate that carries each DSD rate. */
 const DOP_WIRE: Record<number, number> = { 64: 176400, 128: 352800, 256: 705600 };
@@ -101,15 +101,20 @@ const libUnder = (dir: string, parent: string) => dir === parent || dir.startsWi
 let mockVolume = 35;
 let mockRemote = false;
 const devices: Device[] = [
-  { uid: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, network: false, model: null, protocol: null },
-  { uid: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, network: false, model: null, protocol: null },
-  { uid: "air", name: "Bluetooth Headphones", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, network: false, model: null, protocol: null },
-  { uid: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "WiiM Pro Plus", protocol: "UPnP" },
-  { uid: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "Sonos Era 100", protocol: "UPnP" },
-  { uid: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
+  { uid: "q7", key: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, network: false, model: null, protocol: null },
+  { uid: "spk", key: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, network: false, model: null, protocol: null },
+  { uid: "air", key: "air", name: "Bluetooth Headphones", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, network: false, model: null, protocol: null },
+  { uid: "upnp:wiim", key: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "WiiM Pro Plus", protocol: "UPnP" },
+  { uid: "upnp:sonos", key: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "Sonos Era 100", protocol: "UPnP" },
+  { uid: "cast:shield", key: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
 ];
 
-let dsp: DspSettings = { upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, dsdOut: null, dsdOrder: 7 };
+/** Like the backend: each output's processing by settings key; one with none has the defaults. */
+const DSP_DEFAULTS: DspSettings = { upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, dsdOut: null, dsdOrder: 7 };
+const dspByKey: Record<string, DspSettings> = {};
+function dspOf(dev: Device | null): DspSettings {
+  return (dev && dspByKey[dev.key]) || DSP_DEFAULTS;
+}
 /** The pretend library analysis: when it started (null: not running) and how much was done before. */
 let measuring: number | null = null;
 let measured = 0;
@@ -117,7 +122,7 @@ let tagging: number | null = null;
 let tagged = 0;
 let tagLast: [number, number] | null = null;
 /** What volume levelling does to the pretend track. */
-function mockLevel(): Pick<Signal, "levelDb" | "levelBasis" | "levelLimited"> {
+function mockLevel(dsp: DspSettings): Pick<Signal, "levelDb" | "levelBasis" | "levelLimited"> {
   if (dsp.level) return { levelDb: dsp.level === "album" ? -6.1 : -7.3, levelBasis: dsp.level, levelLimited: false };
   const reshapes = !!(dsp.upsampleKhz || dsp.dsdOut || dsp.crossfeed || dsp.convolution || eqOn());
   if (dsp.peakHeadroom && reshapes) return { levelDb: -0.8, levelBasis: "peak", levelLimited: true };
@@ -167,12 +172,13 @@ function eqChanged() {
   return { state: eqSnapshot(), signal: duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null };
 }
 
-const convName = () => (dsp.convolution ? dsp.convolution.split("/").pop()!.replace(/\.[^.]+$/, "") : null);
+const convName = (dsp: DspSettings) => (dsp.convolution ? dsp.convolution.split("/").pop()!.replace(/\.[^.]+$/, "") : null);
 
 let lastPath = "";
 let lastDop = false;
 
 function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = false): Signal {
+  const dsp = dspOf(dev);
   const air = dev.transport === "Bluetooth";
   if (/\.(dsf|dff)$/i.test(path)) {
     const dsdRate = 2822400;
@@ -184,9 +190,9 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
     return {
       sourceRate: 176400, sourceBits: dop ? 1 : null, deviceRate, dacBits: 32, dacFloat: air, integerMode: !air,
       exclusive, transport: dev.transport, resampled: deviceRate !== 176400,
-      eq: dop ? null : eqOn(), eqLinear: false, convolution: dop ? null : convName(), crossfeed: dop ? null : dsp.crossfeed,
+      eq: dop ? null : eqOn(), eqLinear: false, convolution: dop ? null : convName(dsp), crossfeed: dop ? null : dsp.crossfeed,
       sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
-      ...(dop ? { levelDb: null, levelBasis: null, levelLimited: false } : mockLevel()),
+      ...(dop ? { levelDb: null, levelBasis: null, levelLimited: false } : mockLevel(dsp)),
       dsdRate, dop, dsdNote, layout: "Stereo", downmix: null, upsampleFilter: null, upsampleTaps: null,
       dsdOut: null, dsdOutOrder: null, dsdOutNote: null, bitPerfect: dop,
     };
@@ -204,9 +210,9 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
     upsampleFilter: long, upsampleTaps: long && long !== "apodizing" ? phoneTaps : null,
     sourceRate: src, sourceBits: 16, deviceRate: rate, dacBits: 32, dacFloat: air, integerMode: !air,
     exclusive, transport: dev.transport, resampled: rate !== src,
-    eq: eqOn(), eqLinear: eqSnapshot().presets.find((p) => p.name === eqOn())?.phase === "linear", convolution: convName(), crossfeed: dsp.crossfeed,
+    eq: eqOn(), eqLinear: eqSnapshot().presets.find((p) => p.name === eqOn())?.phase === "linear", convolution: convName(dsp), crossfeed: dsp.crossfeed,
     sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
-    ...mockLevel(),
+    ...mockLevel(dsp),
     dsdRate: null, dop: false, dsdNote: null, ...dsd,
     layout: surround ? "5.1" : "Stereo", downmix: surround ? { to: "Stereo", gainDb: -7.7 } : null,
     bitPerfect: !surround && !air && exclusive && rate === src && !eqOn() && !dsp.convolution && !dsp.crossfeed && !dsp.level && !dsd.dsdOut,
@@ -215,6 +221,7 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
 
 /** DSD output for a PCM track on `dev`: what runs of the one chosen, or why nothing does. */
 function mockDsdOut(dev: Device, exclusive: boolean): Pick<Signal, "dsdOut" | "dsdOutOrder" | "dsdOutNote"> {
+  const dsp = dspOf(dev);
   const want = dsp.dsdOut;
   if (!want) return { dsdOut: null, dsdOutOrder: null, dsdOutNote: null };
   const off = (note: NonNullable<Signal["dsdOutNote"]>) => ({ dsdOut: null, dsdOutOrder: null, dsdOutNote: note });
@@ -537,6 +544,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         const next = mockRepeat === "one" ? mockIndex : mockRepeat === "all" && mockQueue.length ? (mockIndex + 1) % mockQueue.length : mockIndex + 1;
         if (next < mockQueue.length) await mock("play_file", { path: mockQueue[next], deviceUid: lastDevice.uid, exclusive: lastExclusive, dop: lastDop, index: next });
       }
+      const dsp = dspOf(lastDevice);
       const processing = !!(dsp.upsampleKhz || dsp.dsdOut || eqOn() || dsp.convolution || dsp.crossfeed);
       const long = duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null;
       const filter = long?.upsampleFilter ?? null;
@@ -545,8 +553,8 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       if (mockStepDown && filter && now() > 4 && mockNow) {
         mockStepDown = false;
         const next = filter !== "apodizing" && long?.upsampleTaps === 1048576 ? { filter, taps: 65536 } : { filter: null, taps: null };
-        dsp = { ...dsp, upsampleFilter: next.filter, upsampleTaps: next.taps === 65536 ? 65536 : dsp.upsampleTaps };
-        mockStep = { seq: ++mockStepSeq, ...next };
+        dspByKey[lastDevice!.key] = { ...dsp, upsampleFilter: next.filter, upsampleTaps: next.taps === 65536 ? 65536 : dsp.upsampleTaps };
+        mockStep = { seq: ++mockStepSeq, ...next, deviceKey: lastDevice!.key };
         mockNow = { ...mockNow, signal: mockSignal(lastDevice!, lastExclusive, lastPath, lastDop) };
       }
       const encoding = long?.dsdOut ?? null;
@@ -556,8 +564,9 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         const order = long!.dsdOutOrder ?? 7;
         const next: { dsdOut: number | null; order: number | null } =
           encoding > 64 ? { dsdOut: encoding / 2, order } : order === 7 ? { dsdOut: 64, order: 5 } : { dsdOut: null, order: null };
-        dsp = { ...dsp, dsdOut: next.dsdOut as DspSettings["dsdOut"], dsdOrder: next.order === 5 ? 5 : dsp.dsdOrder };
-        mockDsdStep = { seq: ++mockDsdStepSeq, ...next };
+        const stepped = dspOf(lastDevice);
+        dspByKey[lastDevice!.key] = { ...stepped, dsdOut: next.dsdOut as DspSettings["dsdOut"], dsdOrder: next.order === 5 ? 5 : stepped.dsdOrder };
+        mockDsdStep = { seq: ++mockDsdStepSeq, ...next, deviceKey: lastDevice!.key };
         mockNow = { ...mockNow, signal: mockSignal(lastDevice!, lastExclusive, lastPath, lastDop) };
       }
       // The encoder's pretend cost: more at the higher rates and with the 7th order.
@@ -594,9 +603,14 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "set_fades":
       return undefined as T;
     case "set_dsp": {
-      mockStep = null;
-      mockDsdStep = null;
-      dsp = {
+      // Like the backend: kept for that output; what plays restarts only if it plays there.
+      const key = devices.find((d) => d.uid === args.deviceUid)?.key ?? (args.deviceUid as string);
+      const here = duration > 0 && lastDevice?.key === key;
+      if (here) {
+        mockStep = null;
+        mockDsdStep = null;
+      }
+      const dsp: DspSettings = (dspByKey[key] = {
         upsampleKhz: args.upsampleKhz as number | null,
         upsampleFilter: (["linear", "minimum", "apodizing"].includes(args.upsampleFilter as string) ? args.upsampleFilter : null) as DspSettings["upsampleFilter"],
         upsampleTaps: args.upsampleTaps === 1048576 ? 1048576 : 65536,
@@ -606,10 +620,10 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         // Like the backend: 64, 128 or 256 (phones keep 64), anything else is off; order 5 or 7.
         dsdOut: args.dsdOut === 64 || args.dsdOut === 128 || args.dsdOut === 256 ? (phone.has("android") || phone.has("ios") ? 64 : args.dsdOut) : null,
         dsdOrder: args.dsdOrder === 5 ? 5 : 7,
-      };
+      });
       return {
-        signal: duration > 0 && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null,
-        convolution: dsp.convolution ? { name: convName(), channels: 2, rate: 48000, seconds: 0.68 } : null,
+        signal: here && lastDevice ? mockSignal(lastDevice, lastExclusive, lastPath, lastDop) : null,
+        convolution: dsp.convolution ? { name: convName(dsp), channels: 2, rate: 48000, seconds: 0.68 } : null,
       } as T;
     }
     case "set_menu_labels":

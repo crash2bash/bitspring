@@ -177,6 +177,9 @@
 
   "enh.button": "Verbeteringen",
   "enh.dialog": "Geluidsbewerking",
+  "enh.forDevice": "Voor {device}",
+  "enh.perDevice": "Elke uitgang heeft zijn eigen bewerking. Een nieuwe begint zonder.",
+  "enh.copyFrom": "Kopiëren van…",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "DSD-uitvoer",
   "enh.on.eq": "equalizer",

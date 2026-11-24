@@ -177,6 +177,9 @@
 
   "enh.button": "Mejoras",
   "enh.dialog": "Procesamiento del sonido",
+  "enh.forDevice": "Para {device}",
+  "enh.perDevice": "Cada salida tiene su propio procesamiento. Una nueva empieza sin ninguno.",
+  "enh.copyFrom": "Copiar de…",
   "enh.on.upsampling": "sobremuestreo",
   "enh.on.dsd": "salida DSD",
   "enh.on.eq": "ecualizador",

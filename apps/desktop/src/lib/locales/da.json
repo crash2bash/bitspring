@@ -177,6 +177,9 @@
 
   "enh.button": "Forbedringer",
   "enh.dialog": "Lydbehandling",
+  "enh.forDevice": "Til {device}",
+  "enh.perDevice": "Hver udgang har sin egen behandling. En ny starter uden.",
+  "enh.copyFrom": "Kopiér fra…",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "DSD-udgang",
   "enh.on.eq": "equalizer",

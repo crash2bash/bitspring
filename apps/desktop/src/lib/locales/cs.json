@@ -177,6 +177,9 @@
 
   "enh.button": "Vylepšení",
   "enh.dialog": "Zpracování zvuku",
+  "enh.forDevice": "Pro {device}",
+  "enh.perDevice": "Každý výstup má vlastní zpracování. Nový začíná bez něj.",
+  "enh.copyFrom": "Kopírovat z…",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "výstup DSD",
   "enh.on.eq": "ekvalizér",

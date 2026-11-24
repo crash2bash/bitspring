@@ -14,6 +14,7 @@ mod linux_media;
 mod abx;
 mod bookmarks;
 mod crash;
+mod device_key;
 mod dsd_out;
 mod eq;
 mod folders;
@@ -75,6 +76,8 @@ struct Current {
     track: Arc<Track>,
     path: PathBuf,
     device_uid: String,
+    /// The settings key of that device (see `device_key`): whose processing plays.
+    key: String,
     exclusive: bool,
     /// The user wants DSD sent as DoP on this device.
     dop: bool,
@@ -114,8 +117,10 @@ struct AdvanceError {
 struct AppState {
     player: Mutex<Option<Player>>,
     current: Mutex<Option<Current>>,
-    /// Processing for every output; the EQ in it comes from `eq`, per output.
-    dsp: Mutex<DspSettings>,
+    /// Each output's processing, by settings key (see `device_key`), as the UI last sent it;
+    /// an output with none plays with [`default_dsp`]. The EQ in them comes from `eq`, per
+    /// output. Kept in memory only: the UI saves the settings and sends them at start-up.
+    dsp: Mutex<std::collections::HashMap<String, DspSettings>>,
     eq: Mutex<eq::EqStore>,
     /// The last impulse response loaded (path, response), so settings changes don't reload it.
     ir: Mutex<Option<(String, Arc<ImpulseResponse>)>>,
@@ -137,7 +142,7 @@ struct AppState {
     /// The queue entry (index, path) that failed to open ahead: not tried again every tick.
     line_up_failed: Mutex<Option<(usize, String)>>,
     /// The last automatic step down of the upsampling filter (see `step_down`), until
-    /// the UI sends settings of its own.
+    /// the UI sends settings of its own for the output that plays.
     filter_step: Mutex<Option<upsampling::FilterStep>>,
     filter_step_seq: AtomicU64,
     /// The last automatic step down of the DSD output (see `step_down`), likewise.
@@ -202,6 +207,8 @@ fn err(e: impl Into<anyhow::Error>) -> UserError {
 #[serde(rename_all = "camelCase")]
 struct DeviceDto {
     uid: String,
+    /// What the output's processing settings are remembered under (see `device_key`).
+    key: String,
     name: String,
     transport: String,
     channels: u32,
@@ -225,6 +232,7 @@ impl From<&Output> for DeviceDto {
         let transport = d.transport();
         Self {
             uid: d.uid().to_string(),
+            key: device_key::of(d),
             name: d.name().trim().to_string(),
             transport: format!("{transport:?}"),
             channels: d.output_channels(),
@@ -675,13 +683,24 @@ fn set_output_volume(uid: String, volume: u32) {
     }
 }
 
-/// The processing asked for on `device_uid`: the shared settings plus that output's EQ. Its
-/// `dsd_out` is a wish, not yet what can run: never hand this to the engine or to `set_level`
-/// as it is, go through [`dsp_for`] (a playback) or [`dsp_offline`] (none).
-fn wanted_dsp(state: &AppState, device_uid: &str) -> DspSettings {
-    let mut dsp = state.dsp.lock().unwrap().clone();
+/// The processing of an output the UI has sent no settings for: what the UI starts every
+/// output with. Nothing that changes the signal; the lossy headroom (lossy files only, which
+/// are never bit-perfect) and the peak headroom (only while other processing runs) are on.
+fn default_dsp() -> DspSettings {
+    DspSettings {
+        lossy: LossySettings { headroom: true, restore_highs: false },
+        level: LevelSettings { mode: LevelMode::Off, headroom: true },
+        ..Default::default()
+    }
+}
+
+/// The processing asked for on `device`: its own settings plus its EQ. Its `dsd_out` is a
+/// wish, not yet what can run: never hand this to the engine or to `set_level` as it is, go
+/// through [`dsp_for`] (a playback) or [`dsp_offline`] (none).
+fn wanted_dsp(state: &AppState, device: &Output) -> DspSettings {
+    let mut dsp = state.dsp.lock().unwrap().get(&device_key::of(device)).cloned().unwrap_or_else(default_dsp);
     let eq = state.eq.lock().unwrap();
-    dsp.eq = eq.effective(device_uid);
+    dsp.eq = eq.effective(device.uid());
     dsp.eq_bypass = eq.bypass;
     dsp
 }
@@ -698,16 +717,16 @@ fn wanted_dsp(state: &AppState, device_uid: &str) -> DspSettings {
 /// (The engine itself falls back to PCM silently.) A DSD file sent as DoP ignores `dsd_out`
 /// in the engine and gets no note (`start` drops it).
 fn dsp_for(state: &AppState, device: &Output, exclusive: bool, dop: bool) -> (DspSettings, Option<DsdOutNote>) {
-    let mut dsp = wanted_dsp(state, device.uid());
+    let mut dsp = wanted_dsp(state, device);
     let (out, note) = dsd_out::resolve(dsp.dsd_out, device, exclusive, dop);
     dsp.dsd_out = out;
     (dsp, note)
 }
 
-/// The processing asked for on `device_uid`, for work that plays nothing through a device
-/// (an offline render): no DSD output.
-fn dsp_offline(state: &AppState, device_uid: &str) -> DspSettings {
-    DspSettings { dsd_out: None, ..wanted_dsp(state, device_uid) }
+/// The processing asked for on `device`, for work that plays nothing through it (an offline
+/// render): no DSD output.
+fn dsp_offline(state: &AppState, device: &Output) -> DspSettings {
+    DspSettings { dsd_out: None, ..wanted_dsp(state, device) }
 }
 
 /// Set the gain `track` plays at with these settings (volume levelling, peak headroom): call
@@ -758,6 +777,7 @@ fn begin(
         track,
         path: file,
         device_uid: device.uid().to_string(),
+        key: device_key::of(device),
         exclusive,
         dop,
         dsd_note,
@@ -1093,6 +1113,7 @@ fn took_over(state: &AppState) {
         track: heard,
         path: PathBuf::from(&e.path),
         device_uid: cur.device_uid.clone(),
+        key: cur.key.clone(),
         exclusive: cur.exclusive,
         dop: cur.dop,
         dsd_note: e.dsd_note,
@@ -1280,11 +1301,15 @@ fn set_fades(state: State<'_, AppState>, on: bool) {
     }
 }
 
-/// Replace the processing settings. Everything off = bit-perfect. If a track is loaded it
-/// continues from the same position (and pause state) with the new chain.
+/// Replace the processing settings of the output `device_uid`. Everything off = bit-perfect.
+/// If a track is loaded on that output it continues from the same position (and pause state)
+/// with the new chain. Settings for another output are only kept, for when it plays: the UI
+/// sends the new output's settings on a switch while the old one still plays, and that one
+/// must not restart with them.
 #[tauri::command]
 async fn set_dsp(
     app: tauri::AppHandle,
+    device_uid: String,
     upsample_khz: Option<f64>,
     crossfeed: Option<String>,
     convolution: Option<String>,
@@ -1330,7 +1355,7 @@ async fn set_dsp(
         rate: r.rate,
         seconds: r.len() as f64 / r.rate as f64,
     });
-    *state.dsp.lock().unwrap() = DspSettings {
+    let settings = DspSettings {
         upsample: upsample_khz.map_or(Upsample::Off, |k| Upsample::UpTo(k * 1000.0)),
         upsample_filter: filter,
         eq: None,
@@ -1350,13 +1375,36 @@ async fn set_dsp(
         // What the user wants: each playback runs what its device can take of it (`dsp_for`).
         dsd_out,
     };
+    let key = settings_key_of_uid(&state, &device_uid);
+    state.dsp.lock().unwrap().insert(key.clone(), settings);
+    // (Under play_lock: what plays can't change between the look and the restart.)
+    let _one = state.play_lock.lock().unwrap();
+    let here = state.current.lock().unwrap().as_ref().is_some_and(|c| c.key == key);
+    if !here {
+        return Ok(DspResult { signal: None, convolution: ir_dto });
+    }
     // The UI's own choice now: an earlier automatic step is no longer news.
     *state.filter_step.lock().unwrap() = None;
     *state.dsd_step.lock().unwrap() = None;
     // What was lined up carries a gain from the old settings: it is opened again.
     state.lined_up.lock().unwrap().clear();
-    let signal = restart(&state)?;
+    let signal = restart_locked(&state, None)?;
     Ok(DspResult { signal, convolution: ir_dto })
+}
+
+/// The settings key of the output `uid`. On Android that takes the device itself; one that
+/// has just gone away is known still if it is what plays. Failing that, the uid: settings kept
+/// under it are never read (a playback looks its device's key up), and no error spoils the
+/// rest of what the UI sent.
+fn settings_key_of_uid(state: &AppState, uid: &str) -> String {
+    if let Some(key) = device_key::of_uid(uid) {
+        return key;
+    }
+    if let Ok(device) = find_device(uid) {
+        return device_key::of(&device);
+    }
+    let playing = state.current.lock().unwrap().as_ref().filter(|c| c.device_uid == uid).map(|c| c.key.clone());
+    playing.unwrap_or_else(|| uid.to_string())
 }
 
 /// Restart what plays in place (same position and pause state) with the current settings.
@@ -1451,11 +1499,12 @@ fn step_down(state: &AppState) {
     // Still the same playing, and still what the settings ask for? Settings sent meanwhile
     // restart playback themselves.
     let same = state.player.lock().unwrap().as_ref().is_some_and(|p| (p.path.upsample_filter, p.path.dsd_out) == playing);
+    // The step goes into the settings of the output that plays, and only its.
+    let Some(device_key) = state.current.lock().unwrap().as_ref().map(|c| c.key.clone()) else { return };
     {
-        let mut dsp = state.dsp.lock().unwrap();
-        if !same {
-            return;
-        }
+        let mut all = state.dsp.lock().unwrap();
+        // (No settings of its own: it plays the defaults, which have nothing to step down.)
+        let Some(dsp) = all.get_mut(&device_key).filter(|_| same) else { return };
         match step {
             dsd_out::Step::Filter(next) => {
                 if dsp.upsample_filter.map(|f| f.effective()) != filter {
@@ -1475,12 +1524,12 @@ fn step_down(state: &AppState) {
         dsd_out::Step::Filter(next) => {
             let (filter, taps) = upsampling::names(next);
             let seq = state.filter_step_seq.fetch_add(1, Ordering::AcqRel) + 1;
-            *state.filter_step.lock().unwrap() = Some(upsampling::FilterStep { seq, filter, taps });
+            *state.filter_step.lock().unwrap() = Some(upsampling::FilterStep { seq, filter, taps, device_key });
         }
         dsd_out::Step::Dsd(next) => {
             let (dsd_out, order) = dsd_out::names(next);
             let seq = state.dsd_step_seq.fetch_add(1, Ordering::AcqRel) + 1;
-            *state.dsd_step.lock().unwrap() = Some(dsd_out::DsdStep { seq, dsd_out, order });
+            *state.dsd_step.lock().unwrap() = Some(dsd_out::DsdStep { seq, dsd_out, order, device_key });
         }
     }
     // (A failure shows as the next status's error, as for any restart.)
@@ -1743,6 +1792,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An output the UI has sent nothing for plays as the UI shows a new one: the two headroom
+    /// switches on, nothing that changes the signal (bit-perfect where the source allows).
+    #[test]
+    fn an_output_without_settings_plays_the_uis_defaults() {
+        let d = default_dsp();
+        assert!(d.lossy.headroom && !d.lossy.restore_highs);
+        assert!(d.level.headroom);
+        assert_eq!(d.level.mode, LevelMode::Off);
+        assert!(!d.reshapes() && !d.is_active());
+        assert_eq!((d.upsample_filter, d.dsd_out, d.crossfeed), (None, None, None));
+        assert!(AppState::default().dsp.lock().unwrap().is_empty());
+    }
 
     /// Levelling by album holds while albums play through; a shuffled queue is levelled
     /// track by track. Nothing else in the settings moves, and "by track" and "off" stay.

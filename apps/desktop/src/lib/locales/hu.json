@@ -177,6 +177,9 @@
 
   "enh.button": "Hangfeldolgozás",
   "enh.dialog": "Hangfeldolgozás",
+  "enh.forDevice": "{device} beállításai",
+  "enh.perDevice": "Minden kimenetnek saját hangfeldolgozása van. Egy új kimenet anélkül indul.",
+  "enh.copyFrom": "Másolás innen…",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "DSD-kimenet",
   "enh.on.eq": "hangszínszabályzó",

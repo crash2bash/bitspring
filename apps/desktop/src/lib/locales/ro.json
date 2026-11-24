@@ -177,6 +177,9 @@
 
   "enh.button": "Îmbunătățiri",
   "enh.dialog": "Procesarea sunetului",
+  "enh.forDevice": "Pentru {device}",
+  "enh.perDevice": "Fiecare ieșire are propria procesare. Una nouă pornește fără.",
+  "enh.copyFrom": "Copiază de la…",
   "enh.on.upsampling": "upsampling",
   "enh.on.dsd": "ieșire DSD",
   "enh.on.eq": "egalizator",

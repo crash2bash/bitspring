@@ -49,9 +49,15 @@
   let selected = $state<string>(load("device", ""));
   // iOS has no shared/exclusive choice: our playback session never mixes with other apps.
   let exclusive = $state<boolean>(isIOS ? true : load("exclusive", true));
-  /** Devices the user switched DoP on for (by UID): DSD goes to them as DoP, not PCM. */
+  /** The settings key of output `uid` (see `Device.key`): the list's, else the uid itself. */
+  function keyOf(uid: string): string {
+    return devices.find((d) => d.uid === uid)?.key ?? uid;
+  }
+  let selectedKey = $derived(keyOf(selected));
+  /** Devices the user switched DoP on for (by settings key, which is the UID but on Android):
+   *  DSD goes to them as DoP, not PCM. */
   let dopDevices = $state<string[]>(load("dopDevices", []));
-  let dop = $derived(dopDevices.includes(selected));
+  let dop = $derived(dopDevices.includes(selectedKey));
 
   let queue = $state<string[]>([]);
   let index = $state(-1);
@@ -67,11 +73,61 @@
   /** The backend's nowRev we are showing; when it moves, the queue went on by itself. */
   let knownRev = 0;
   let lastOutputError: string | null = null;
-  // `eqPath` is the single AutoEQ file of earlier versions: moved into the preset store on start.
+  // `dsp` is the one set of processing settings of earlier versions (now each output has its
+  // own, under `dspByDevice`). Its `eqPath` is their single AutoEQ file: moved into the preset
+  // store on start.
   const savedDsp = load<Partial<DspSettings> & { eqPath?: string | null }>("dsp", {});
   const legacyEqPath = savedDsp.eqPath ?? null;
   delete savedDsp.eqPath;
-  let dsp = $state<DspSettings>({ upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, dsdOut: null, dsdOrder: 7, ...savedDsp });
+  /** What an output starts with: nothing that changes the signal (the two headroom switches act
+   *  only on lossy files, or while other processing runs). The backend has the same. */
+  const DSP_DEFAULTS: DspSettings = { upsampleKhz: null, upsampleFilter: null, upsampleTaps: 65536, crossfeed: null, convolution: null, headroom: true, restoreHighs: false, level: null, peakHeadroom: true, dsdOut: null, dsdOrder: 7 };
+  type DspEntry = { name: string; settings: DspSettings };
+  /** Each output's processing, by settings key, with the output's name as last seen (to offer
+   *  the settings of an output that isn't connected now). An output without one has the defaults. */
+  const savedByDevice = load<Record<string, DspEntry> | null>("dspByDevice", null);
+  let dspByDevice = $state<Record<string, DspEntry>>(savedByDevice ?? {});
+  /** The earlier versions' settings, until they become the picked output's (once, when the
+   *  device list is in and the picked output is in it). The old item stays as it was. */
+  let legacyDsp: DspSettings | null = savedByDevice === null && load<unknown>("dsp", null) !== null ? { ...DSP_DEFAULTS, ...savedDsp } : null;
+  // They belong to the output that was picked when they were made, connected now or not (a DAC
+  // unplugged at the first start after the update must not lose them to the speakers picked in
+  // its place). Its uid is its settings key everywhere but on Android, where the saved uid says
+  // nothing after a replug: there they wait for the device list. The name comes with the list.
+  if (legacyDsp && untrack(() => selected) && !untrack(() => selected).startsWith("android:")) {
+    dspByDevice[untrack(() => selected)] = { name: untrack(() => selected), settings: legacyDsp };
+    legacyDsp = null;
+    save("dspByDevice", $state.snapshot(dspByDevice));
+  }
+  /** The settings of the output with settings key `key`. */
+  function dspOf(key: string): DspSettings {
+    const e = dspByDevice[key];
+    return e ? { ...DSP_DEFAULTS, ...e.settings } : DSP_DEFAULTS;
+  }
+  function sameDsp(a: DspSettings, b: DspSettings): boolean {
+    return (Object.keys(DSP_DEFAULTS) as (keyof DspSettings)[]).every((k) => a[k] === b[k]);
+  }
+  /** Keep `settings` as the output `key`'s own. */
+  function storeDsp(key: string, settings: DspSettings) {
+    const name = devices.find((d) => d.key === key)?.name ?? dspByDevice[key]?.name ?? key;
+    dspByDevice[key] = { name, settings: { ...settings } };
+    // Settings of their own now: the earlier versions' must not land on top of them.
+    legacyDsp = null;
+    save("dspByDevice", $state.snapshot(dspByDevice));
+  }
+  /** What the processing panel shows and edits: the picked output's. */
+  let dsp = $derived(dspOf(selectedKey));
+  /** The picked output's name, as the list has it or as it was last seen. */
+  let dspDeviceName = $derived(devices.find((d) => d.uid === selected)?.name ?? dspByDevice[selectedKey]?.name ?? null);
+  /** The other outputs with settings of their own, to copy from. */
+  let dspOthers = $derived(
+    Object.entries(dspByDevice)
+      .filter(([k]) => k !== selectedKey)
+      .map(([key, e]) => ({ key, name: e.name }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
+  /** The settings of the picked output have been sent to the backend since start-up. */
+  let dspPushed = false;
   /** The backend's last automatic filter step taken over (its seq). */
   let stepSeen: number | null = null;
   /** The filter that step left on, until the user picks one: the panel says why it changed. */
@@ -208,6 +264,24 @@
       if (!devices.some((d) => d.uid === selected) && !isNetworkUid(selected)) {
         selected = (devices.find((d) => d.isDefault) ?? devices[0])?.uid ?? "";
       }
+      // An update from a version with one set of settings, where they couldn't be given to an
+      // output at once (Android): they become the picked output's.
+      // (Sent at once if the start-up has sent the picked output's settings already.)
+      if (legacyDsp && devices.some((d) => d.uid === selected)) {
+        storeDsp(keyOf(selected), legacyDsp);
+        if (dspPushed) applyDsp(dspOf(keyOf(selected)));
+      }
+      // Settings kept for an output take its name as the list has it now (they may have been
+      // stored while it was away, or it was renamed).
+      let renamed = false;
+      for (const d of devices) {
+        const e = dspByDevice[d.key];
+        if (e && e.name !== d.name) {
+          e.name = d.name;
+          renamed = true;
+        }
+      }
+      if (renamed) save("dspByDevice", $state.snapshot(dspByDevice));
     } catch (e) {
       error = t("err.devices", { error: errorText(e) });
     }
@@ -396,15 +470,23 @@
     }
   }
 
-  /** Apply processing settings; a playing track continues in place with the new chain. */
-  async function applyDsp(next: DspSettings) {
-    if (next.upsampleFilter !== dsp.upsampleFilter || next.upsampleTaps !== dsp.upsampleTaps) filterStepped = null;
-    if (next.dsdOut !== dsp.dsdOut || next.dsdOrder !== dsp.dsdOrder) dsdStepped = null;
+  /** Apply processing settings to output `uid` (the picked one unless said) and keep them as
+   *  its own; a track playing there continues in place with the new chain. */
+  async function applyDsp(next: DspSettings, uid = selected) {
+    // No output at all: nothing to apply them to.
+    if (!uid) return;
+    const key = keyOf(uid);
+    const before = dspOf(key);
+    if (key === selectedKey) {
+      if (next.upsampleFilter !== before.upsampleFilter || next.upsampleTaps !== before.upsampleTaps) filterStepped = null;
+      if (next.dsdOut !== before.dsdOut || next.dsdOrder !== before.dsdOrder) dsdStepped = null;
+    }
     try {
-      const res = await api.setDsp(next);
-      dsp = next;
-      ir = res.convolution;
-      save("dsp", next);
+      const res = await api.setDsp(uid, next);
+      // An output that has only ever had the defaults gets no entry: nothing to copy from it.
+      if (dspByDevice[key] || !sameDsp(next, DSP_DEFAULTS)) storeDsp(key, next);
+      // The impulse response shown is the picked output's (it may have changed meanwhile).
+      if (keyOf(selected) === key) ir = res.convolution;
       if (res.signal && now && !testing) {
         now = { ...now, signal: res.signal };
         sweepKey++;
@@ -413,9 +495,15 @@
     } catch (e) {
       error = t("err.dsp", { error: errorText(e) });
       // An unreadable impulse response shouldn't take the rest of the settings down with it.
-      if (next.convolution && next.convolution !== dsp.convolution) return;
-      if (next.convolution) await applyDsp({ ...next, convolution: null });
+      if (next.convolution && next.convolution !== before.convolution) return;
+      if (next.convolution) await applyDsp({ ...next, convolution: null }, uid);
     }
+  }
+
+  /** Copy another output's processing (not its EQ) to the picked one. */
+  function copyDspFrom(key: string) {
+    const from = dspByDevice[key];
+    if (from) applyDsp({ ...DSP_DEFAULTS, ...$state.snapshot(from.settings) });
   }
 
   async function pickIr() {
@@ -439,7 +527,8 @@
       if (legacyEqPath && inTauri) {
         const s = await api.eqState();
         if (!s.presets.length) await api.eqImportFile(legacyEqPath).catch(() => null);
-        save("dsp", $state.snapshot(dsp));
+        // The old settings as they were, without the file: imported once.
+        save("dsp", savedDsp);
       }
       eqState = await api.eqState();
     } catch {
@@ -469,14 +558,15 @@
   });
 
   /** The processor couldn't keep up and the backend moved to a cheaper upsampling filter, already
-   *  playing: take it into the settings as they are kept (not sent back: nothing to restart). */
+   *  playing: take it into the settings of the output it played on, as they are kept (not sent
+   *  back: nothing to restart). The panel says why only if that output is the picked one. */
   function adoptFilterStep(step: FilterStep | null) {
     if (!step || step.seq === stepSeen) return;
     stepSeen = step.seq;
-    const next: DspSettings = { ...dsp, upsampleFilter: step.filter, upsampleTaps: step.taps === 1048576 ? 1048576 : step.taps === 65536 ? 65536 : dsp.upsampleTaps };
-    dsp = next;
-    save("dsp", next);
-    filterStepped = { filter: step.filter, taps: step.taps };
+    const cur = dspOf(step.deviceKey);
+    const next: DspSettings = { ...cur, upsampleFilter: step.filter, upsampleTaps: step.taps === 1048576 ? 1048576 : step.taps === 65536 ? 65536 : cur.upsampleTaps };
+    storeDsp(step.deviceKey, next);
+    if (step.deviceKey === selectedKey) filterStepped = { filter: step.filter, taps: step.taps };
     // The track restarted with it: show its new signal path.
     api
       .nowPlaying()
@@ -491,15 +581,15 @@
   function adoptDsdStep(step: DsdStep | null) {
     if (!step || step.seq === dsdStepSeen) return;
     dsdStepSeen = step.seq;
+    const cur = dspOf(step.deviceKey);
     // A lower rate keeps the modulator, so a change of order means the order was the step. What
     // played before tells it (with the setting for a step taken while no page was there).
-    const before = now?.signal.dsdOutOrder ?? dsp.dsdOrder;
+    const before = now?.signal.dsdOutOrder ?? cur.dsdOrder;
     const kind = step.dsdOut === null ? "off" : step.order !== null && step.order !== before ? "order" : "rate";
     const dsdOut = step.dsdOut === 64 || step.dsdOut === 128 || step.dsdOut === 256 ? step.dsdOut : null;
-    const next: DspSettings = { ...dsp, dsdOut, dsdOrder: step.order === 5 ? 5 : step.order === 7 ? 7 : dsp.dsdOrder };
-    dsp = next;
-    save("dsp", next);
-    dsdStepped = { dsdOut, order: step.order, kind };
+    const next: DspSettings = { ...cur, dsdOut, dsdOrder: step.order === 5 ? 5 : step.order === 7 ? 7 : cur.dsdOrder };
+    storeDsp(step.deviceKey, next);
+    if (step.deviceKey === selectedKey) dsdStepped = { dsdOut, order: step.order, kind };
     api
       .nowPlaying()
       .then((n) => {
@@ -526,25 +616,46 @@
 
   // Switching device or access mode mid-track: continue the same track on the new output.
   let lastOutput = untrack(() => `${selected}|${exclusive}`);
+  let lastSelected = untrack(() => selected);
   $effect(() => {
     const key = `${selected}|${exclusive}`;
     save("device", selected);
     save("exclusive", exclusive);
     if (key !== lastOutput) {
       lastOutput = key;
-      // Same position, same pause state: switching outputs while paused stays paused.
-      if (status.active && !testing && index >= 0) playIndex(index, status.position, status.paused);
+      const moved = selected !== lastSelected;
+      lastSelected = selected;
+      untrack(() => switchOutput(selected, moved));
     }
   });
+  /** Bumped on every switch of output: only the latest one goes on to restart the track. */
+  let switches = 0;
+  /** Another output (`moved`) or access mode: on another output, its own processing goes in
+   *  first (the old output plays on meanwhile, untouched); then the track continues there. */
+  async function switchOutput(uid: string, moved: boolean) {
+    const mine = ++switches;
+    if (moved) {
+      filterStepped = null;
+      dsdStepped = null;
+      await applyDsp(dspOf(keyOf(uid)), uid);
+      if (mine !== switches) return;
+    }
+    // Same position, same pause state: switching outputs while paused stays paused.
+    if (status.active && !testing && index >= 0) playIndex(index, status.position, status.paused);
+  }
 
   // DoP switched for the current device: only a DSD track needs to restart, or any track while
-  // DSD output is chosen (it goes as DoP too).
+  // DSD output is chosen (it goes as DoP too). Not on a switch of output, which restarts the
+  // track itself once that output's settings are in.
   let lastDop = untrack(() => dop);
+  let lastDopDevice = untrack(() => selected);
   $effect(() => {
     save("dopDevices", dopDevices);
+    const sameDevice = selected === lastDopDevice;
+    lastDopDevice = selected;
     if (dop !== lastDop) {
       lastDop = dop;
-      if (untrack(() => status.active && !testing && index >= 0 && (now?.signal.dsdRate !== null || dsp.dsdOut !== null)))
+      if (sameDevice && untrack(() => status.active && !testing && index >= 0 && (now?.signal.dsdRate !== null || dsp.dsdOut !== null)))
         playIndex(index, untrack(() => status.position), untrack(() => status.paused));
     }
   });
@@ -601,18 +712,21 @@
   }
 
   onMount(() => {
-    refreshDevices();
-    refreshStreaming();
-    // Restore last session's processing (also loads and validates the impulse response) — with
-    // a filter step the backend took while no page was there to see it.
-    api
-      .status()
-      .then((s) => {
+    // Restore last session's processing (also loads and validates the impulse response): the
+    // devices first, so the picked output and whose settings to send are known (and the
+    // earlier versions' settings have become its own), and with a step down the backend took
+    // while no page was there to see it.
+    (async () => {
+      await refreshDevices();
+      const s = await api.status().catch(() => null);
+      if (s) {
         adoptFilterStep(s.filterStep);
         adoptDsdStep(s.dsdStep);
-      })
-      .catch(() => {})
-      .finally(() => applyDsp(untrack(() => dsp)));
+      }
+      await applyDsp(untrack(() => dsp));
+      dspPushed = true;
+    })();
+    refreshStreaming();
     if (!untrack(() => fades)) api.setFades(false).catch(() => {});
     loadRemote();
     loadEq();
@@ -728,7 +842,7 @@
       <button class:sel={screen === "eq"} aria-current={screen === "eq" ? "page" : undefined} data-label={t("nav.eq")} onclick={() => (screen = "eq")}>{t("nav.eq")}</button>
     </nav>
     <div class="controls">
-      <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} {dsdStepped} onchange={applyDsp} onopeneq={() => (screen = "eq")} />
+      <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} {dsdStepped} device={dspDeviceName} others={dspOthers} onchange={(s) => applyDsp(s)} oncopy={copyDspFrom} onopeneq={() => (screen = "eq")} />
       <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} />
       <RemoteButton />
       <button class="trigger gear" class:open={screen === "settings"} onclick={toggleSettings} aria-pressed={screen === "settings"} aria-label={t("settings.label")} title={t("settings.label")}>

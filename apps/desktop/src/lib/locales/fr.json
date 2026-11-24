@@ -177,6 +177,9 @@
 
   "enh.button": "Améliorations",
   "enh.dialog": "Traitement du son",
+  "enh.forDevice": "Pour {device}",
+  "enh.perDevice": "Chaque sortie a son propre traitement. Une nouvelle sortie commence sans traitement.",
+  "enh.copyFrom": "Copier depuis…",
   "enh.on.upsampling": "suréchantillonnage",
   "enh.on.dsd": "sortie DSD",
   "enh.on.eq": "égaliseur",

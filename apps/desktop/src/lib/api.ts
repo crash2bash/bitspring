@@ -7,6 +7,9 @@ import type { Repeat } from "./playOrder";
 
 export interface Device {
   uid: string;
+  /** What the output's processing settings (and DoP switch) are remembered under: the uid, but
+   *  on Android the connection and name (the uid there changes each time a device is plugged in). */
+  key: string;
   name: string;
   transport: string;
   channels: number;
@@ -307,6 +310,8 @@ export interface FilterStep {
   seq: number;
   filter: UpsampleFilter | null;
   taps: number | null;
+  /** The settings key of the output whose settings it changed (the one that played). */
+  deviceKey: string;
 }
 
 /** An automatic step down of the DSD output: a lower rate, or the 5th-order modulator (`order`
@@ -315,6 +320,8 @@ export interface DsdStep {
   seq: number;
   dsdOut: number | null;
   order: number | null;
+  /** The settings key of the output whose settings it changed (the one that played). */
+  deviceKey: string;
 }
 
 export interface LibraryStatus {
@@ -714,7 +721,8 @@ export const api = {
   lyrics: (now: Pick<NowPlaying, "path" | "title" | "artist" | "album" | "duration">, online: boolean) =>
     call<Lyrics | null>("lyrics", { path: now.path, title: now.title, artist: now.artist, album: now.album, duration: now.duration, online }),
   importFiles: (paths: string[]) => call<string[]>("import_files", { paths }),
-  setDsp: (s: DspSettings) => call<DspResult>("set_dsp", { ...s }),
+  /** The processing of output `deviceUid`; what plays restarts with it only if it plays there. */
+  setDsp: (deviceUid: string, s: DspSettings) => call<DspResult>("set_dsp", { ...s, deviceUid }),
   /** Fade over a few ms at pause, seek, stop and a change of track (applies at once). */
   setFades: (on: boolean) => call<void>("set_fades", { on }),
   eqState: () => call<EqState>("eq_state"),
