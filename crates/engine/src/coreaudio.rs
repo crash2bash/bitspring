@@ -374,6 +374,11 @@ impl Device {
                 .is_ok_and(|f| f.iter().any(|(f, r)| !f.float && f.bits >= 24 && r.contains(hz)))
     }
 
+    /// Never: Core Audio has no native DSD format, so DSD reaches a DAC here only as DoP.
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
+
     /// The formats our IOProc will actually be handed (per output stream).
     fn virtual_formats(&self) -> Result<Vec<ca::AudioStreamBasicDescription>> {
         self.output_streams()?

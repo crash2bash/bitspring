@@ -321,6 +321,11 @@ impl Device {
             i.bit_perfect.iter().any(|b| b.rate == dsd_rate / 16 && matches!(b.encoding, ENCODING_PCM_32BIT | ENCODING_PCM_24BIT_PACKED))
         })
     }
+
+    /// Never: AAudio has no native DSD format, so DSD reaches a DAC here only as DoP.
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

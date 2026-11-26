@@ -245,7 +245,6 @@ pub(crate) enum OutFormat {
     ///
     /// Positions, seeks, joins and the ring all go on counting our 16-bit frames, whatever
     /// the container: see [`OutFormat::frame_bytes`].
-    #[cfg_attr(not(test), allow(dead_code))] // made by the native DSD backends (ALSA, ASIO)
     Dsd { bytes: u8, big_endian: bool, lsb_first: bool },
 }
 
@@ -398,7 +397,6 @@ pub(crate) struct DsdSupport {
 /// The DSD bit rate per channel (2 822 400 for DSD64) behind a native DSD playback's word
 /// rate: [`Plan::target`], the rate `Playback::new` is given, counts our 16-bit words, one
 /// every 16 DSD bits. What an ASIO driver is set to (its sample rate is the DSD bit rate).
-#[cfg_attr(not(test), allow(dead_code))] // for the native DSD backends
 pub(crate) fn dsd_rate_of_words(word_rate: f64) -> u32 {
     (word_rate * 16.0).round() as u32
 }
@@ -408,7 +406,6 @@ pub(crate) fn dsd_rate_of_words(word_rate: f64) -> u32 {
 /// the DSD bit rate / (8 · `bytes`) — ALSA's rate for DSD_U8, DSD_U16 and DSD_U32 (DSD64:
 /// 352.8, 176.4 and 88.2 kHz). None for a PCM format. `Playback::new` still gets `word_rate`
 /// itself, never this.
-#[cfg_attr(not(test), allow(dead_code))] // for the native DSD backends
 pub(crate) fn native_device_rate(word_rate: f64, format: OutFormat) -> Option<f64> {
     match format {
         OutFormat::Dsd { bytes, .. } if bytes > 0 => Some(dsd_rate_of_words(word_rate) as f64 / (8.0 * bytes as f64)),

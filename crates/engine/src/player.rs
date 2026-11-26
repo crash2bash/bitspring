@@ -78,6 +78,16 @@ impl Output {
         }
     }
 
+    /// The output takes DSD at `dsd_rate` natively, as raw DSD without DoP's markers (so far
+    /// only a Linux card the kernel gives a DSD format; network players never). Where both
+    /// work, the engine sends it natively.
+    pub fn supports_native_dsd(&self, dsd_rate: u32) -> bool {
+        match self {
+            Self::Device(d) => d.device.supports_native_dsd(dsd_rate),
+            Self::Network(_) => false,
+        }
+    }
+
     pub fn is_network(&self) -> bool {
         matches!(self, Self::Network(_))
     }

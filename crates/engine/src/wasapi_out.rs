@@ -142,6 +142,12 @@ impl Device {
         let Ok(client) = d.get_iaudioclient() else { return false };
         exclusive_format(&client, dsd_rate / 16, 2, None, true).is_some()
     }
+
+    /// Never through WASAPI, which has no native DSD format: DSD goes as DoP (ASIO, which has
+    /// one, comes as an output of its own).
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
 }
 
 /// The best exclusive format at `hz` with `channels` (placed as `mask` says, else the usual

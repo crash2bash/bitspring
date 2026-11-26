@@ -201,6 +201,11 @@ impl Device {
             && dev_rate <= MAX_DOP_RATE
             && !failed_dop().lock().unwrap().get(&self.uid).is_some_and(|v| v.contains(&dev_rate))
     }
+
+    /// Never: iOS has no native DSD format, so DSD reaches a DAC here only as DoP.
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
 }
 
 pub fn output_devices() -> Result<Vec<DeviceInfo>> {
