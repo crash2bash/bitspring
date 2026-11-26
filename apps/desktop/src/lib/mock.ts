@@ -593,6 +593,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
         load: processing && duration > 0 ? ((filter ? cost : 0.002) + dsdCost) * (1 + 0.08 * Math.sin(performance.now() / 900)) : null,
         filterStep: mockStep,
         dsdStep: mockDsdStep,
+        crossfading: false,
       };
       return s as T;
     }
@@ -615,6 +616,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       duration = 0;
       return undefined as T;
     case "set_fades":
+    case "set_crossfade":
       return undefined as T;
     case "set_dsp": {
       // Like the backend: kept for that output; what plays restarts only if it plays there.

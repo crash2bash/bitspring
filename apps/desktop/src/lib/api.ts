@@ -312,6 +312,8 @@ export interface Status {
   filterStep: FilterStep | null;
   /** The processor couldn't keep up: the backend stepped the DSD output down and plays on with it. */
   dsdStep: DsdStep | null;
+  /** A crossfade is under way: the end of the track before still sounds under this one. */
+  crossfading: boolean;
 }
 
 /** An automatic step down of the upsampling filter. `seq` grows with each; `filter: null` = the standard one now. */
@@ -734,6 +736,8 @@ export const api = {
   setDsp: (deviceUid: string, s: DspSettings) => call<DspResult>("set_dsp", { ...s, deviceUid }),
   /** Fade over a few ms at pause, seek, stop and a change of track (applies at once). */
   setFades: (on: boolean) => call<void>("set_fades", { on }),
+  /** Crossfades between tracks of different albums, `secs` long; 0 = off. */
+  setCrossfade: (secs: number) => call<void>("set_crossfade", { secs }),
   eqState: () => call<EqState>("eq_state"),
   /** Take over the EQ of an earlier version, once (later calls do nothing): its one preset goes to
    *  output `deviceUid`, the one picked when it was set up, and every other output starts without. */

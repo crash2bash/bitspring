@@ -495,10 +495,79 @@ struct Slots {
     /// `Playback::swap`). Taken by the side that reads the source, which moves it to `cur`
     /// and `heard`.
     swap: AtomicPtr<Track>,
+    /// How many frames the track in `next` is to overlap the end of `cur` by (see
+    /// [`Playback::queue_next_crossfading`]); 0 = it joins on gapless. Set before `next`.
+    next_overlap: AtomicUsize,
+    /// A crossfade under way: the track that went before `cur`, whose last `xf_len` frames,
+    /// from `xf_from`, sound under the first `xf_len` frames of `cur`, fading out as `cur`
+    /// fades in. Moved here from `cur` (before `cur` moves on) by the side that reads the
+    /// source, which also clears it once the overlap is through, or at a seek or a swap.
+    /// `xf_from` and `xf_len` are stored before it, and are read only by that side.
+    fading: AtomicPtr<Track>,
+    xf_from: AtomicUsize,
+    xf_len: AtomicUsize,
 }
 
 fn ptr(t: &Arc<Track>) -> *mut Track {
     Arc::as_ptr(t) as *mut Track
+}
+
+/// The end of the track before, under the start of the one now read (see `Slots::fading`).
+struct Tail<'a> {
+    track: &'a Track,
+    from: usize,
+    len: usize,
+}
+
+impl<'a> Tail<'a> {
+    /// The crossfade under way, if there is one. Only the side that reads the source calls
+    /// this: the one that set it up.
+    #[inline(always)]
+    fn load(slots: &'a Slots) -> Option<Tail<'a>> {
+        let p = slots.fading.load(Ordering::Acquire);
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: a track in a slot is owned by the Playback (see `Slots`).
+        let track = unsafe { &*p };
+        Some(Tail { track, from: slots.xf_from.load(Ordering::Relaxed), len: slots.xf_len.load(Ordering::Relaxed) })
+    }
+}
+
+/// How many frames `next` can overlap the end of `out` by, of the `want` asked for: none
+/// unless `out` has decoded to its end (so where the overlap starts is known) and `next` has
+/// that much decoded already; never more than half of either track.
+#[inline(always)]
+fn overlap_for(out: &Track, next: &Track, want: usize) -> usize {
+    if want == 0 || !out.is_complete() {
+        return 0;
+    }
+    let half_next = if next.is_complete() { next.frames() / 2 } else { usize::MAX };
+    let n = want.min(out.frames() / 2).min(half_next);
+    if next.ready_frames() < n { 0 } else { n }
+}
+
+/// The gains `pos` frames into an overlap of `len`: (the track going out, the one coming in).
+/// Equal power — a quarter of a cosine and of a sine — so two unrelated pieces of music keep
+/// their loudness through the middle instead of dipping.
+#[inline(always)]
+fn crossfade_gains(pos: usize, len: usize) -> (f32, f32) {
+    let t = (pos as f32 + 0.5) / len as f32 * std::f32::consts::FRAC_PI_2;
+    (t.cos(), t.sin())
+}
+
+/// Frame `frame` of `track` for `device_channel`, with the end of the track before under it
+/// while a crossfade is under way.
+#[inline(always)]
+fn heard_sample(track: &Track, tail: Option<&Tail<'_>>, route: &Route, frame: usize, device_channel: usize) -> f32 {
+    let s = track_sample(track, route, frame, device_channel);
+    match tail {
+        Some(t) if frame < t.len => {
+            let (out, inn) = crossfade_gains(frame, t.len);
+            s * inn + track_sample(t.track, route, t.from + frame, device_channel) * out
+        }
+        _ => s,
+    }
 }
 
 /// State shared with the realtime thread. Only atomics and immutable data: the callback
@@ -652,6 +721,10 @@ impl Playback {
             seek_req: AtomicUsize::new(NO_SEEK),
             seek_track: AtomicPtr::new(std::ptr::null_mut()),
             swap: AtomicPtr::new(std::ptr::null_mut()),
+            next_overlap: AtomicUsize::new(0),
+            fading: AtomicPtr::new(std::ptr::null_mut()),
+            xf_from: AtomicUsize::new(0),
+            xf_len: AtomicUsize::new(0),
         });
         let (ring, render) = if plan.processing {
             // What runs is what the plan decided, not what was asked for (see `effective`).
@@ -777,12 +850,15 @@ impl Playback {
         let mut tracks = self.tracks.lock().unwrap_or_else(|p| p.into_inner());
         let s = &self.shared.slots;
         // next (or swap) → cur → heard: the order tracks move in, so one moving while we read
-        // is seen in its old slot or its new one.
+        // is seen in its old slot or its new one. A track that starts fading out is put in
+        // `fading` before it leaves `cur`, and leaves `heard` (processed path) after it: read
+        // after `cur` and before `heard`, it is seen in one of them.
         let swap = s.swap.load(Ordering::Acquire);
         let next = s.next.load(Ordering::Acquire);
         let cur = s.cur.load(Ordering::Acquire);
+        let fading = s.fading.load(Ordering::Acquire);
         let heard = s.heard.load(Ordering::Acquire);
-        tracks.retain(|t| [swap, next, cur, heard].contains(&ptr(t)));
+        tracks.retain(|t| [swap, next, cur, fading, heard].contains(&ptr(t)));
         (tracks, [heard, cur, next])
     }
 
@@ -831,6 +907,27 @@ impl Playback {
     /// current track end and start the next one anew), or it is too late (the current track
     /// has already been handed to the device in full and the one after it is on its way).
     pub fn queue_next(&self, track: Arc<Track>) -> bool {
+        self.line_up(track, 0)
+    }
+
+    /// [`Playback::queue_next`], with the two tracks overlapping by `secs`: the end of the
+    /// current one fades out as `track` fades in, and `track` is what plays (the title, the
+    /// position from 0) from the start of the overlap on. The rest of both tracks plays as it
+    /// would without (bit for bit on the direct path). Where an overlap can't be made it joins
+    /// on gapless instead: DSD sent as DoP (its bits can't be mixed), the current track not
+    /// decoded to its end when the overlap is due (a stream still loading), `track` not
+    /// decoded that far by then. Never longer than half of either track.
+    pub fn queue_next_crossfading(&self, track: Arc<Track>, secs: f64) -> bool {
+        let frames = if self.shared.dop || track.is_dop() { 0 } else { (secs.max(0.0) * track.sample_rate as f64) as usize };
+        self.line_up(track, frames)
+    }
+
+    /// A crossfade is under way: the end of the track before still sounds under this one.
+    pub fn crossfading(&self) -> bool {
+        !self.shared.slots.fading.load(Ordering::Acquire).is_null()
+    }
+
+    fn line_up(&self, track: Arc<Track>, overlap: usize) -> bool {
         let (mut tracks, [heard, cur, _]) = self.tidy();
         let tail_out = self.shared.ring.as_ref().is_some_and(|rs| rs.tail_out.load(Ordering::Acquire));
         if cur != heard || tail_out || self.is_finished() {
@@ -843,6 +940,7 @@ impl Playback {
         let p = ptr(&track);
         tracks.push(track);
         // The one it replaces, if still waiting, is freed by the next tidy.
+        self.shared.slots.next_overlap.store(overlap, Ordering::Release);
         let next = &self.shared.slots.next;
         next.store(p, Ordering::SeqCst);
         // The render thread may have reached the end meanwhile. It sets `tail_out` and then
@@ -1126,6 +1224,8 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
     let mut out: Vec<f32> = Vec::new();
     // The track folded down to the program, when the route folds it.
     let mut folded: Vec<f32> = Vec::new();
+    // Two tracks mixed, under a crossfade.
+    let mut mixed: Vec<f32> = Vec::new();
     let mut sent = 0usize;
     let nap = || std::thread::sleep(Duration::from_millis(2));
     let mut load = Load::default();
@@ -1141,6 +1241,8 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
             src = seek.min(track.frames());
             stretch = src;
             flushed = false;
+            // A jump ends a crossfade: from there on only this track.
+            slots.fading.store(std::ptr::null_mut(), Ordering::Release);
             rs.tail_out.store(false, Ordering::Release);
             chain.reset();
             if let Some(e) = &mut encode {
@@ -1173,6 +1275,7 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
             src = (at.round() as usize).min(unsafe { &*cur }.frames());
             stretch = src;
             flushed = false;
+            slots.fading.store(std::ptr::null_mut(), Ordering::Release);
             rs.tail_out.store(false, Ordering::Release);
             chain.reset();
             // (`Playback::swap` refuses while encoding; should one get here, it starts over
@@ -1208,7 +1311,26 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
         src = track.claim(src);
         // Read `complete` before the slice: if it was already complete, the slice is final.
         let complete = track.is_complete();
-        let input = track.slice(src, BLOCK);
+        // A crossfade into the next track (one join at a time): this one is read up to where
+        // the overlap starts, and the next one takes over from there.
+        let xf_next = slots.next.load(Ordering::Acquire);
+        let overlap = if complete && !xf_next.is_null() && rs.boundary.load(Ordering::Acquire) == NO_BOUNDARY && slots.fading.load(Ordering::Acquire).is_null() {
+            // SAFETY: in a slot, so owned by the Playback.
+            let n = overlap_for(track, unsafe { &*xf_next }, slots.next_overlap.load(Ordering::Acquire));
+            // (Lined up later than the overlap was due: what is left of this track.)
+            n.min(track.frames().saturating_sub(src))
+        } else {
+            0
+        };
+        let end = track.frames() - overlap;
+        // The start of this track, with the end of the one before under it: blocks that stop
+        // where the overlap does.
+        let under = Tail::load(&slots).filter(|t| src < t.len);
+        let max = match &under {
+            Some(t) => BLOCK.min(t.len - src),
+            None => BLOCK.min(end.saturating_sub(src)),
+        };
+        let input = if max == 0 { &[][..] } else { track.slice(src, max) };
         if input.is_empty() {
             if !complete {
                 rs.starved.store(true, Ordering::Relaxed);
@@ -1220,6 +1342,10 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
                 continue;
             } else if !flushed {
                 let next = slots.next.load(Ordering::Acquire);
+                if overlap > 0 && next != xf_next {
+                    // Stopped short for a crossfade into a track no longer lined up: read on.
+                    continue;
+                }
                 if next.is_null() {
                     // The end: let the chain's tail out (filter delay, resampler). From here
                     // a track lined up late can't join; queue_next says so.
@@ -1235,8 +1361,16 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
                 }
                 if rs.boundary.load(Ordering::Acquire) == NO_BOUNDARY {
                     // The next track joins on. Its first frame is heard once the device has
-                    // played this track's remaining frames (at the device rate).
-                    let rest = (track.frames().saturating_sub(stretch)) as f64 * rs.device_rate / rs.source_rate;
+                    // played this track's remaining frames (at the device rate) — up to where
+                    // the overlap starts, when they cross.
+                    let rest = (end.saturating_sub(stretch)) as f64 * rs.device_rate / rs.source_rate;
+                    if overlap > 0 {
+                        // This track's end goes on under the next one's start. Into `fading`
+                        // before it leaves `cur` (see `Slots`).
+                        slots.xf_from.store(end, Ordering::Relaxed);
+                        slots.xf_len.store(overlap, Ordering::Relaxed);
+                        slots.fading.store(cur, Ordering::Release);
+                    }
                     slots.cur.store(next, Ordering::Release);
                     let _ = slots.next.compare_exchange(next, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed);
                     rs.boundary.store(rest.round() as u64, Ordering::Release);
@@ -1253,8 +1387,30 @@ fn render_loop(slots: Arc<Slots>, rs: Arc<RingState>, mut chain: Chain, mut enco
             continue;
         }
         rs.starved.store(false, Ordering::Relaxed);
+        let mut gain = if leveled { track.gain() as f64 } else { 1.0 };
+        let input = match &under {
+            // Under a crossfade: the two mixed, each at its own gain, before the chain.
+            Some(t) => {
+                t.track.claim(t.from + src);
+                let out_gain = if leveled { t.track.gain() } else { 1.0 };
+                let in_gain = gain as f32;
+                mixed.clear();
+                for (i, frame) in input.chunks_exact(track.channels).enumerate() {
+                    let (g_out, g_in) = crossfade_gains(src + i, t.len);
+                    for (c, &s) in frame.iter().enumerate() {
+                        mixed.push(s * in_gain * g_in + t.track.sample(t.from + src + i, c) * out_gain * g_out);
+                    }
+                }
+                gain = 1.0;
+                &mixed[..]
+            }
+            None => input,
+        };
         src += input.len() / track.channels;
-        let gain = if leveled { track.gain() as f64 } else { 1.0 };
+        if under.as_ref().is_some_and(|t| src >= t.len) {
+            // Through: the track before is no longer read.
+            slots.fading.store(std::ptr::null_mut(), Ordering::Release);
+        }
         let t = Instant::now();
         let processed = if route.folds() {
             route.fold_block(input, &mut folded);
@@ -1404,6 +1560,18 @@ impl Load {
     }
 }
 
+/// What follows a stretch of frames in a direct-path callback.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum After {
+    /// Silence for the rest of the callback: the end, a pause, a track still loading.
+    Stop,
+    /// More of the same track: a crossfade's overlap ends here, or the one it was to cross
+    /// into is no longer lined up.
+    Again,
+    /// The next track, gapless or into a crossfade.
+    Join,
+}
+
 impl Shared {
     /// Fill the device's buffers for one callback. Realtime-safe: no locks, no allocation.
     /// Returns how many frames came from the music; the rest of the buffers (paused, still
@@ -1444,11 +1612,18 @@ impl Shared {
                     // SAFETY: `cur` is in a slot, so the Playback owns it.
                     let track = unsafe { &*cur };
                     let pos = track.claim(st.pos.load(Ordering::Relaxed));
+                    let tail = Tail::load(slots).filter(|t| pos < t.len);
+                    if let Some(t) = &tail {
+                        t.track.claim(t.from + pos);
+                    }
                     let want = (level as usize).min(frames);
                     let n = track.ready_frames().saturating_sub(pos).min(want);
                     let (route, from) = (&st.route, level);
-                    peaks = fill(buffers, 0..n, n, |f, dc| track_sample(track, route, pos + f, dc) * fade_gain(from - 1 - f as u32, fade_len));
+                    peaks = fill(buffers, 0..n, n, |f, dc| heard_sample(track, tail.as_ref(), route, pos + f, dc) * fade_gain(from - 1 - f as u32, fade_len));
                     st.pos.store(pos + n, Ordering::Relaxed);
+                    if tail.is_some_and(|t| pos + n >= t.len) {
+                        slots.fading.store(std::ptr::null_mut(), Ordering::Release);
+                    }
                     done = n;
                     // (Fewer than wanted: the track ended or is still decoding — silence anyway.)
                     level = if n < want { 0 } else { level - n as u32 };
@@ -1465,6 +1640,8 @@ impl Shared {
                     && slots.seek_track.load(Ordering::Acquire) == cur
                 {
                     st.pos.store(seek, Ordering::Relaxed);
+                    // A jump ends a crossfade: from there on only this track.
+                    slots.fading.store(std::ptr::null_mut(), Ordering::Release);
                     // Into the middle of the track: fade in. To its top: its first samples
                     // as they are.
                     if fade_len > 0 {
@@ -1478,6 +1655,7 @@ impl Shared {
                     slots.cur.store(swap, Ordering::Release);
                     slots.heard.store(swap, Ordering::Release);
                     let _ = slots.swap.compare_exchange(swap, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed);
+                    slots.fading.store(std::ptr::null_mut(), Ordering::Release);
                     cur = swap;
                     st.finished.store(false, Ordering::Relaxed);
                     if fade_len > 0 && was_sounding {
@@ -1493,12 +1671,47 @@ impl Shared {
                     // `complete` first: if decoding had finished, `ready` read after it is final.
                     let complete = track.is_complete();
                     let ready = track.ready_frames();
+                    // The start of this track, with the end of the one before under it.
+                    let tail = Tail::load(slots).filter(|t| pos < t.len);
+                    if let Some(t) = &tail {
+                        t.track.claim(t.from + pos);
+                    }
+                    // A crossfade into the next track (not while one is under way): this one
+                    // ends where the overlap starts, and the next takes over from there.
+                    let up = if complete && tail.is_none() { slots.next.load(Ordering::Acquire) } else { std::ptr::null_mut() };
+                    let overlap = if up.is_null() {
+                        0
+                    } else {
+                        // SAFETY: in a slot, so owned by the Playback.
+                        let n = overlap_for(track, unsafe { &*up }, slots.next_overlap.load(Ordering::Acquire));
+                        // (Lined up later than the overlap was due: what is left of this track.)
+                        n.min(ready.saturating_sub(pos))
+                    };
+                    let end = ready - overlap;
                     // Past `ready` on a track still decoding = buffering: play silence, keep position.
-                    let avail = if paused { 0 } else { ready.saturating_sub(pos).min(frames - done) };
-                    let ended = !paused && complete && pos + avail >= ready;
-                    let next = if ended { slots.next.load(Ordering::Acquire) } else { std::ptr::null_mut() };
-                    // Joining the next track: only this track's frames now, the rest from it.
-                    let to = if next.is_null() { frames } else { done + avail };
+                    let avail = if paused { 0 } else { end.saturating_sub(pos).min(frames - done) };
+                    // Under a crossfade, no further than its overlap: the rest plays as it is.
+                    let avail = match &tail {
+                        Some(t) => avail.min(t.len - pos),
+                        None => avail,
+                    };
+                    let at_end = !paused && complete && pos + avail >= end;
+                    let next = if at_end { slots.next.load(Ordering::Acquire) } else { std::ptr::null_mut() };
+                    // What follows these frames in this callback.
+                    let after = if !paused && tail.as_ref().is_some_and(|t| pos + avail >= t.len) {
+                        // The crossfade is through: this track on its own.
+                        After::Again
+                    } else if at_end && overlap > 0 && next != up {
+                        // Stopped short for a crossfade into a track no longer lined up: on
+                        // with this one (to its end, or into whatever is lined up now).
+                        After::Again
+                    } else if !next.is_null() {
+                        After::Join
+                    } else {
+                        After::Stop
+                    };
+                    // Only these frames now when more follow; else silence after them.
+                    let to = if after == After::Stop { frames } else { done + avail };
                     let route = &st.route;
                     let p = if st.dop {
                         fill_dop(buffers, done..to, avail, &st.dop_phase, |f, dc| dop_sample(track, route, pos + f, dc))
@@ -1506,7 +1719,9 @@ impl Shared {
                         // Picking up after a pause or a jump: fade in.
                         let from = level;
                         level = level.saturating_add(avail as u32).min(fade_len);
-                        fill(buffers, done..to, avail, |f, dc| track_sample(track, route, pos + f, dc) * fade_gain(from + 1 + f as u32, fade_len))
+                        fill(buffers, done..to, avail, |f, dc| heard_sample(track, tail.as_ref(), route, pos + f, dc) * fade_gain(from + 1 + f as u32, fade_len))
+                    } else if tail.is_some() {
+                        fill(buffers, done..to, avail, |f, dc| heard_sample(track, tail.as_ref(), route, pos + f, dc))
                     } else {
                         fill(buffers, done..to, avail, |f, dc| track_sample(track, route, pos + f, dc))
                     };
@@ -1516,7 +1731,7 @@ impl Shared {
                     }
                     // Ran out mid-track while playing (a stream still loading): the sound was
                     // cut off, so it fades in when it is back.
-                    if !paused && !ended && done + avail < frames {
+                    if after == After::Stop && !paused && !at_end && done + avail < frames {
                         if sounding {
                             level = 0;
                         }
@@ -1524,20 +1739,37 @@ impl Shared {
                     }
                     done += avail;
                     st.pos.store(pos + avail, Ordering::Relaxed);
-                    if next.is_null() {
-                        if ended {
-                            st.finished.store(true, Ordering::Relaxed);
+                    match after {
+                        After::Stop => {
+                            if at_end {
+                                st.finished.store(true, Ordering::Relaxed);
+                            }
+                            break;
                         }
-                        break;
+                        After::Again => {
+                            if tail.is_some() {
+                                // The track before is no longer read.
+                                slots.fading.store(std::ptr::null_mut(), Ordering::Release);
+                            }
+                        }
+                        After::Join => {
+                            if overlap > 0 {
+                                // This track's end goes on under the next one's start. Into
+                                // `fading` before it leaves `cur` (see `Slots`).
+                                slots.xf_from.store(end, Ordering::Relaxed);
+                                slots.xf_len.store(overlap, Ordering::Relaxed);
+                                slots.fading.store(cur, Ordering::Release);
+                            }
+                            // Store the new slot before clearing the old one (see `Slots`).
+                            slots.cur.store(next, Ordering::Release);
+                            slots.heard.store(next, Ordering::Release);
+                            let _ = slots.next.compare_exchange(next, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed);
+                            st.pos.store(0, Ordering::Relaxed);
+                            st.finished.store(false, Ordering::Relaxed);
+                            slots.switches.fetch_add(1, Ordering::AcqRel);
+                            cur = next;
+                        }
                     }
-                    // Store the new slot before clearing the old one (see `Slots`).
-                    slots.cur.store(next, Ordering::Release);
-                    slots.heard.store(next, Ordering::Release);
-                    let _ = slots.next.compare_exchange(next, std::ptr::null_mut(), Ordering::AcqRel, Ordering::Relaxed);
-                    st.pos.store(0, Ordering::Relaxed);
-                    st.finished.store(false, Ordering::Relaxed);
-                    slots.switches.fetch_add(1, Ordering::AcqRel);
-                    cur = next;
                     if done >= frames {
                         break;
                     }
@@ -2207,6 +2439,198 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(1));
             }
             assert!(!p.queue_next(ramp(48_000, 0, 1_000)));
+        }
+
+        /// The left channel of a crossfade from `a` into `b` over `n` frames: `a` up to the
+        /// overlap, the two mixed through it, then the rest of `b`.
+        fn crossed(a: &Track, b: &Track, n: usize) -> Vec<f32> {
+            let (af, bf) = (a.frames(), b.frames());
+            let mut v: Vec<f32> = (0..af - n).map(|i| a.sample(i, 0)).collect();
+            for i in 0..n {
+                let (out, inn) = crossfade_gains(i, n);
+                v.push(b.sample(i, 0) * inn + a.sample(af - n + i, 0) * out);
+            }
+            v.extend((n..bf).map(|i| b.sample(i, 0)));
+            v
+        }
+
+        #[test]
+        fn crossfade_gains_keep_the_power_and_end_where_they_should() {
+            for n in [1usize, 2, 441, 44_100] {
+                for i in 0..n {
+                    let (out, inn) = crossfade_gains(i, n);
+                    assert!((out * out + inn * inn - 1.0).abs() < 1e-5);
+                }
+                let (first_out, first_in) = crossfade_gains(0, n);
+                assert!(first_out >= first_in);
+                let (last_out, last_in) = crossfade_gains(n - 1, n);
+                assert!(last_in >= last_out);
+            }
+        }
+
+        #[test]
+        fn direct_path_crossfades_and_leaves_the_rest_bit_perfect() {
+            let (a, b) = (ramp(44_100, 0, 10_000), ramp(44_100, 50_000, 8_000));
+            let p = playback(a.clone(), false);
+            assert!(p.queue_next_crossfading(b.clone(), 2_000.0 / 44_100.0));
+            let mut out = Vec::new();
+            while out.len() < 20_000 {
+                out.extend(callback(&p, 997));
+                // B is what plays from the start of the overlap on, A only sounds under it.
+                assert_eq!(Arc::ptr_eq(&p.heard(), &b), out.len() > 8_000, "at {}", out.len());
+                assert_eq!(p.crossfading(), out.len() > 8_000 && out.len() < 10_000, "at {}", out.len());
+                if out.len() > 8_000 && out.len() < 16_000 {
+                    assert!((p.position_secs() - (out.len() - 8_000) as f64 / 44_100.0).abs() < 1e-9);
+                }
+            }
+            let want = crossed(&a, &b, 2_000);
+            assert_eq!(&out[..8_000], &want[..8_000]);
+            assert_eq!(&out[8_000..16_000], &want[8_000..16_000]);
+            assert_ne!(out[9_000], b.sample(1_000, 0), "the two are mixed");
+            assert!(out[16_000..].iter().all(|&v| v == 0.0));
+            assert!(p.is_finished());
+            assert_eq!(p.switches(), 1);
+            p.heard();
+            assert_eq!(Arc::strong_count(&a), 1, "A is no longer kept");
+        }
+
+        #[test]
+        fn processed_path_crossfades_and_switches_when_the_overlap_is_heard() {
+            // A is longer than the ring, so B is lined up before the render thread gets near
+            // the overlap.
+            let (a, b) = (ramp(48_000, 0, 60_000), ramp(48_000, 100_000, 30_000));
+            let p = playback(a.clone(), true);
+            assert!(p.queue_next_crossfading(b.clone(), 0.1));
+            let rs = p.shared().ring.as_ref().unwrap();
+            let mut out = Vec::new();
+            while out.len() < 100_000 {
+                while rs.ring.available() < 512 * 2 && !rs.render_done.load(Ordering::Acquire) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                out.extend(callback(&p, 512));
+                let heard_b = Arc::ptr_eq(&p.heard(), &b);
+                assert_eq!(heard_b, out.len() > 55_200, "at {}", out.len());
+                if heard_b && out.len() < 85_000 {
+                    assert!((p.position_secs() - (out.len() - 55_200) as f64 / 48_000.0).abs() < 1e-6);
+                }
+            }
+            let want = crossed(&a, &b, 4_800);
+            assert_eq!(&out[..85_200], &want[..]);
+            assert!(out[85_200..].iter().all(|&v| v == 0.0));
+            assert!(p.is_finished());
+            assert!(!p.crossfading());
+            assert_eq!(p.underruns(), 0);
+        }
+
+        #[test]
+        fn an_overlap_is_never_longer_than_half_of_either_track() {
+            let (a, b) = (ramp(44_100, 0, 3_000), ramp(44_100, 50_000, 1_000));
+            let p = playback(a.clone(), false);
+            assert!(p.queue_next_crossfading(b.clone(), 10.0));
+            let mut out = Vec::new();
+            while out.len() < 4_000 {
+                out.extend(callback(&p, 512));
+            }
+            let want = crossed(&a, &b, 500);
+            assert_eq!(&out[..want.len()], &want[..]);
+        }
+
+        #[test]
+        fn a_track_lined_up_late_crosses_over_what_is_left() {
+            let (a, b) = (ramp(44_100, 0, 10_000), ramp(44_100, 50_000, 8_000));
+            let p = playback(a.clone(), false);
+            let mut out = Vec::new();
+            while out.len() < 9_000 {
+                out.extend(callback(&p, 500));
+            }
+            assert!(p.queue_next_crossfading(b.clone(), 4_000.0 / 44_100.0));
+            while out.len() < 20_000 {
+                out.extend(callback(&p, 500));
+            }
+            let want = crossed(&a, &b, 1_000);
+            assert_eq!(&out[..want.len()], &want[..]);
+        }
+
+        #[test]
+        fn a_seek_during_the_overlap_leaves_only_the_new_track() {
+            let (a, b) = (ramp(44_100, 0, 10_000), ramp(44_100, 50_000, 8_000));
+            let p = playback(a, false);
+            p.set_fades(false);
+            assert!(p.queue_next_crossfading(b.clone(), 4_000.0 / 44_100.0));
+            let mut out = Vec::new();
+            while out.len() < 7_000 {
+                out.extend(callback(&p, 500));
+            }
+            assert!(p.crossfading());
+            assert!(p.seek(0.0));
+            let after = callback(&p, 500);
+            assert!(!p.crossfading());
+            let want: Vec<f32> = (0..500).map(|i| b.sample(i, 0)).collect();
+            assert_eq!(after, want);
+        }
+
+        #[test]
+        fn a_pause_in_the_overlap_fades_both_and_picks_the_mix_up_again() {
+            let (a, b) = (ramp(44_100, 0, 10_000), ramp(44_100, 50_000, 8_000));
+            let p = playback(a.clone(), false);
+            assert!(p.queue_next_crossfading(b.clone(), 4_000.0 / 44_100.0));
+            let mut out = Vec::new();
+            while out.len() < 7_000 {
+                out.extend(callback(&p, 500));
+            }
+            let want = crossed(&a, &b, 4_000);
+            let fade = (44_100.0 * FADE_SECS) as usize;
+            p.set_paused(true);
+            let down = callback(&p, 500);
+            // The mix goes on where it was, fading out (no jump to B alone).
+            assert!((down[0] - want[7_000]).abs() < 0.01 * want[7_000].abs(), "{} vs {}", down[0], want[7_000]);
+            assert!(down[fade..].iter().all(|&v| v == 0.0));
+            assert!(p.crossfading());
+            p.set_paused(false);
+            let up = callback(&p, 2_000);
+            let at = 7_000 + fade;
+            for (i, &v) in up.iter().enumerate().skip(fade) {
+                assert!((v - want[at + i]).abs() < 1e-6, "frame {}: {v} vs {}", at + i, want[at + i]);
+            }
+        }
+
+        #[test]
+        fn the_crossfade_follows_a_track_replaced_in_the_queue() {
+            let (a, b, c) = (ramp(44_100, 0, 10_000), ramp(44_100, 50_000, 8_000), ramp(44_100, 90_000, 8_000));
+            let p = playback(a.clone(), false);
+            assert!(p.queue_next_crossfading(b, 2_000.0 / 44_100.0));
+            let mut out = Vec::new();
+            while out.len() < 6_000 {
+                out.extend(callback(&p, 500));
+            }
+            // The queue changed: C now, gapless.
+            assert!(p.queue_next(c.clone()));
+            while out.len() < 20_000 {
+                out.extend(callback(&p, 500));
+            }
+            let mut want: Vec<f32> = (0..10_000).map(|i| a.sample(i, 0)).collect();
+            want.extend((0..8_000).map(|i| c.sample(i, 0)));
+            assert_eq!(&out[..18_000], &want[..]);
+        }
+
+        #[test]
+        fn dop_never_crossfades() {
+            fn dop(frames: usize, fill: u8) -> Arc<Track> {
+                let t = Track::new_dop(2_822_400, 2, TrackMeta::default(), frames);
+                t.push_dop(&vec![fill; frames * 4]);
+                t.finish(None);
+                Arc::new(t)
+            }
+            let p = playback(dop(1_001, 0x69), false);
+            assert!(p.queue_next_crossfading(dop(700, 0x96), 1.0));
+            let mut payload = Vec::new();
+            for _ in 0..4 {
+                let mut data = vec![0u8; 512 * 2 * 3];
+                p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: OutFormat::I24Packed }]);
+                payload.extend(data.chunks(6).map(|f| f[1]));
+            }
+            assert!(payload[..1_001].iter().all(|&b| b == 0x69));
+            assert!(payload[1_001..1_701].iter().all(|&b| b == 0x96));
         }
     }
 

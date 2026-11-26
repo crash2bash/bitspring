@@ -81,6 +81,8 @@
     if (!signal) return { tone: "off", text: t("lamp.noSignal") };
     if (testing) return { tone: "ok", text: t("test.title") };
     if (clipping) return { tone: "alarm", text: t("lamp.clipping") };
+    // For the seconds two tracks overlap, nothing is bit-perfect: the lamp says so.
+    if (status.crossfading) return { tone: "dsp", text: t("lamp.crossfade") };
     if (signal.bitPerfect) return { tone: "ok", text: t("signal.bitPerfect") };
     if (processing.length) return { tone: "dsp", text: t("signal.processing") };
     if (signal.sourceLossy && signal.exclusive) return { tone: "ok", text: t("lamp.unchanged") };
@@ -91,6 +93,14 @@
     if (error) return error;
     if (!signal || !links) return t("verdict.empty");
     if (testing) return t("verdict.test");
+    if (status.crossfading)
+      return sentences([t("verdict.crossfade"), signal.bitPerfect ? t("verdict.crossfadeAfter") : steady()]);
+    return steady();
+  });
+
+  /** What the path does to the signal outside a crossfade. */
+  function steady(): string {
+    if (!signal || !links) return t("verdict.empty");
     // Only a DSD file can go bit-perfect as DoP; PCM encoded to DSD is processing.
     if (signal.bitPerfect && signal.dop) return t("verdict.dop");
     // DSD output was chosen and PCM plays: said after whatever else is said, bit-perfect or not.
@@ -107,7 +117,7 @@
       signal.dsdNote && t("verdict.noDop", { reason: dsdNoteText(signal.dsdNote) }),
       noDsdOut,
     ]);
-  });
+  }
 
   // ---- level meters ----------------------------------------------------------------------------
   const FLOOR = -60;
