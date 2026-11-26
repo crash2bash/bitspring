@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.24.1",
+    "name": "BitSpring 0.24.1",
+    "date": "2026-11-26T11:16:31Z",
+    "url": "https://github.com/crash2bash/bitspring/releases/tag/v0.24.1",
+    "notes": "- **Crossfade between albums, if you want it.** Settings → Playback → Crossfade between tracks: in a playlist or a shuffled queue, the end of a track fades out under the start of the next one, over 2, 4, 6, 8 or 12 seconds. The next track of the same album still follows without a gap, so an album played through stays as it was made. Off by default.\n- **Only the overlap is mixed.** The rest of each track reaches the DAC exactly as before, and while two tracks overlap the lamp says \"Crossfade\". No crossfade between tracks at different sample rates, for DSD sent as DoP, or on network players: those join as they always have."
+  },
+  {
     "version": "0.24.0",
     "name": "BitSpring 0.24.0",
     "date": "2026-11-24T17:33:58Z",
