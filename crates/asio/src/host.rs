@@ -56,8 +56,8 @@ use windows::core::{HRESULT, PCWSTR, PWSTR, w};
 
 use crate::sys::*;
 use crate::{
-    AsioError, BufferSizes, Caps, ChannelInfo, DSD_RATES, DriverEntry, DriverInfo, Error, Events,
-    MAX_CHANNELS, MessageEffect, PCM_RATES, RenderFn, SampleType, StreamConfig, StreamInfo,
+    AsioError, BufferSizes, Caps, ChannelInfo, DSD_RATES, DriverEntry, DriverInfo, DsdCaps, Error,
+    Events, MAX_CHANNELS, MessageEffect, PCM_RATES, RenderFn, SampleType, StreamConfig, StreamInfo,
     answer_message, c_string, choose_buffer_size, future_succeeded, is_dsd_rate, parse_clsid,
     ranges_disjoint, rates_equal,
 };
@@ -385,12 +385,37 @@ impl Host {
 
     /// Finds out which PCM rates of [`PCM_RATES`] and DSD rates of
     /// [`DSD_RATES`] the driver accepts, and the channel sample types in
-    /// each mode. Switches the driver to DSD and back to PCM to do so, then
-    /// restores the previous PCM rate. DSD counts as available only if the
-    /// channels really report a DSD sample type in DSD mode. Not while a
-    /// stream runs.
+    /// each mode: [`Host::probe_pcm`], then [`Host::probe_dsd`] where the
+    /// driver has a DSD mode. Switches the driver to DSD and back to PCM to
+    /// do so. Not while a stream runs.
     pub fn probe(&self) -> Result<Caps, Error> {
-        self.call(|s| s.probe())?
+        self.call(|s| {
+            let mut caps = s.probe_pcm()?;
+            if caps.can_dsd {
+                let dsd = s.probe_dsd()?;
+                caps.dsd_rates = dsd.rates;
+                caps.dsd_types = dsd.types;
+            }
+            Ok(caps)
+        })?
+    }
+
+    /// The PCM half of [`Host::probe`]: the PCM rates of [`PCM_RATES`] the
+    /// driver accepts, its outputs and their PCM sample types, and whether
+    /// it answers the IoFormat "can do" call for DSD ([`Caps::can_dsd`]),
+    /// which doesn't switch anything. Never puts the driver in DSD mode;
+    /// `dsd_rates` and `dsd_types` stay empty. Not while a stream runs.
+    pub fn probe_pcm(&self) -> Result<Caps, Error> {
+        self.call(|s| s.probe_pcm())?
+    }
+
+    /// The DSD half of [`Host::probe`]: switches the driver to DSD, finds
+    /// the rates of [`DSD_RATES`] it accepts and the channels' DSD sample
+    /// types, then switches it back to PCM and restores the previous PCM
+    /// rate. Empty when it has no DSD mode, or its channels report no DSD
+    /// sample type in it. Not while a stream runs.
+    pub fn probe_dsd(&self) -> Result<DsdCaps, Error> {
+        self.call(|s| s.probe_dsd())?
     }
 
     /// Prepares buffers and starts a stream.
@@ -635,13 +660,12 @@ impl Session {
         })
     }
 
-    fn probe(&mut self) -> Result<Caps, Error> {
+    fn probe_pcm(&mut self) -> Result<Caps, Error> {
         let d = self.driver.as_mut().ok_or(Error::NotOpen)?;
         if !d.stream.is_null() {
             return Err(Error::Running);
         }
         let asio = &d.asio;
-        let previous = asio.sample_rate().ok();
         if asio.io_format(K_ASIO_CAN_DO_IO_FORMAT, K_ASIO_PCM_FORMAT) {
             asio.io_format(K_ASIO_SET_IO_FORMAT, K_ASIO_PCM_FORMAT);
         }
@@ -652,12 +676,30 @@ impl Session {
             .filter(|&r| asio.can_sample_rate(r as f64))
             .collect();
         let pcm_types = channel_types(asio, outputs)?;
+        let can_dsd = asio.io_format(K_ASIO_CAN_DO_IO_FORMAT, K_ASIO_DSD_FORMAT);
+        EVENTS.forget_own_changes();
+        Ok(Caps {
+            pcm_rates,
+            dsd_rates: Vec::new(),
+            output_channels: outputs,
+            pcm_types,
+            dsd_types: Vec::new(),
+            can_dsd,
+        })
+    }
 
-        let mut dsd_rates = Vec::new();
-        let mut dsd_types = Vec::new();
+    fn probe_dsd(&mut self) -> Result<DsdCaps, Error> {
+        let d = self.driver.as_mut().ok_or(Error::NotOpen)?;
+        if !d.stream.is_null() {
+            return Err(Error::Running);
+        }
+        let asio = &d.asio;
+        let previous = asio.sample_rate().ok();
+        let mut found = DsdCaps::default();
         if asio.io_format(K_ASIO_CAN_DO_IO_FORMAT, K_ASIO_DSD_FORMAT)
             && asio.io_format(K_ASIO_SET_IO_FORMAT, K_ASIO_DSD_FORMAT)
         {
+            let (_, outputs) = asio.channels()?;
             let rates: Vec<u32> = DSD_RATES
                 .iter()
                 .copied()
@@ -671,8 +713,7 @@ impl Session {
                 let outputs = asio.channels().map(|c| c.1).unwrap_or(outputs);
                 let types = channel_types(asio, outputs).unwrap_or_default();
                 if !types.is_empty() && types.iter().all(|t| t.is_dsd()) {
-                    dsd_rates = rates;
-                    dsd_types = types;
+                    found = DsdCaps { rates, types };
                 }
             }
             asio.io_format(K_ASIO_SET_IO_FORMAT, K_ASIO_PCM_FORMAT);
@@ -682,13 +723,7 @@ impl Session {
             let _ = set_rate(asio, rate);
         }
         EVENTS.forget_own_changes();
-        Ok(Caps {
-            pcm_rates,
-            dsd_rates,
-            output_channels: outputs,
-            pcm_types,
-            dsd_types,
-        })
+        Ok(found)
     }
 
     fn start(&mut self, config: StreamConfig) -> Result<StreamInfo, Error> {

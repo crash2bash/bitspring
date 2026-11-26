@@ -360,6 +360,7 @@ impl Player {
         let open_channels = if wide { info.output_channels as usize } else { 2 };
         let speakers = crate::channels::default_layout(open_channels);
         let mut plan = output::plan(&track, opts, &info.rates, &info.name, dsd, &speakers)?;
+        let mut native_refused = false;
         let stream = match Stream::open(&device, &plan, open_channels, &info.name) {
             // The card wouldn't run its native DSD format at that rate after all: once more as if
             // it had none (DoP where it carries that, else as `plan` decides). Not when it is busy
@@ -367,6 +368,7 @@ impl Player {
             Err(e) if plan.native && !matches!(UserError::of(&e), UserError::DeviceBusy | UserError::DeviceNotFound) => {
                 log::warn!("{}: native DSD didn't open ({e:#}); trying without", info.name.trim());
                 dsd.native = false;
+                native_refused = true;
                 plan = output::plan(&track, opts, &info.rates, &info.name, dsd, &speakers)?;
                 Stream::open(&device, &plan, open_channels, &info.name)?
             }
@@ -392,7 +394,8 @@ impl Player {
         // but the playback and the signal path count our 16-bit words, as for DoP: `plan.target`
         // (dsd_rate / 16). The card's real rate is in `neg.physical`.
         let rate = if plan.native { plan.target } else { neg.rate };
-        let path = output::signal_path(&track, opts, &plan, rate, Some(neg.physical), neg.format, exclusive, info.transport);
+        let mut path = output::signal_path(&track, opts, &plan, rate, Some(neg.physical), neg.format, exclusive, info.transport);
+        path.native_refused = native_refused;
         let playback = match Playback::new(track, opts, &plan, rate) {
             Ok(p) => Arc::new(p),
             Err(e) => {

@@ -86,6 +86,15 @@ impl Device {
         }
     }
 
+    /// [`Self::supports_native_dsd`] as far as it is known, never asking a driver (an ASIO
+    /// driver's DSD mode is probed only when it is about to be used): for the device list.
+    pub fn native_dsd_known(&self, dsd_rate: u32) -> bool {
+        match self {
+            Self::Wasapi(d) => d.supports_native_dsd(dsd_rate),
+            Self::Asio { clsid } => asio_out::native_dsd_known(clsid, dsd_rate),
+        }
+    }
+
     /// Every playback has the device to itself (ASIO: the driver is never shared), whatever
     /// `PlayOptions.exclusive` says.
     pub fn always_exclusive(&self) -> bool {
@@ -117,6 +126,20 @@ pub fn output_devices() -> Result<Vec<DeviceInfo>> {
         }
         Err(e) => Err(e),
     }
+}
+
+/// One output by uid, touching no ASIO driver but the one asked for (an `asio:` uid: as
+/// probed before, else that driver alone), so a playback never opens drivers nobody chose.
+pub fn find_device(uid: &str) -> Result<Option<DeviceInfo>> {
+    if let Some(clsid) = uid.strip_prefix("asio:") {
+        return asio_out::find(clsid);
+    }
+    Ok(wasapi_out::output_devices()?.into_iter().find(|d| d.uid == uid).map(DeviceInfo::from))
+}
+
+/// The user refreshed the device list: ASIO drivers that failed to open are tried again.
+pub fn refresh() {
+    asio_out::retry_failed();
 }
 
 /// Before the app quits: close the ASIO driver kept loaded (stopping a stream on it), so it

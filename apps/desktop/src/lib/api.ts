@@ -113,7 +113,8 @@ export type DsdOutNote =
 
 /** Why a DSD file plays as PCM although it could have gone as it is (worded by dsdNoteText).
  *  `native`: the device takes DSD natively — at this rate, or (with "rate") at others; false:
- *  only DoP was in question. With "rate", `dop`: DoP was asked for too. */
+ *  only DoP was in question. With "rate", `dop`: DoP was asked for too. "nativeRefused": the
+ *  device said it takes `dsd` natively, then refused it when opened. */
 export type DsdNote = { native: boolean } & (
   | { kind: "exclusive" }
   | { kind: "volume" }
@@ -121,6 +122,7 @@ export type DsdNote = { native: boolean } & (
   | { kind: "level" }
   | { kind: "rate"; device: string; khz: number; dsd: string; dop: boolean }
   | { kind: "channels"; channels: number }
+  | { kind: "nativeRefused"; device: string; dsd: string }
 );
 
 /** The queue stopped at a track it couldn't play. */
@@ -148,6 +150,8 @@ export type EngineError =
   | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
   | { code: "serviceUnreachable"; service: string; detail: string }
   | { code: "noRates"; device: string }
+  /** Windows ASIO: the driver's settings window is open, which holds the driver. */
+  | { code: "driverPanelOpen"; device: string }
   | { code: "rateRefused"; khz: number }
   | { code: "rateStuck"; khz: number; current: number }
   | { code: "resample" | "abxFilterRate"; from: number; to: number }
@@ -1005,6 +1009,7 @@ export function dsdNoteText(n: DsdNote): string {
     return t(key, { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
   }
   if (n.kind === "channels") return t(n.native ? "dsd.channelsNative" : "dsd.channels", { n: num(n.channels) });
+  if (n.kind === "nativeRefused") return t("dsd.nativeRefused", { device: deviceLabel(n.device), dsd: n.dsd });
   if (n.kind === "exclusive" && n.native) return t("dsd.exclusiveNative");
   return t(`dsd.${n.kind}`);
 }
@@ -1039,6 +1044,8 @@ export function errorText(e: unknown): string {
         return t("error.otherFormat", { device: deviceLabel(err.device), rate: num(err.khz) });
       case "noRates":
         return t("error.noRates", { device: deviceLabel(err.device) });
+      case "driverPanelOpen":
+        return t("error.driverPanelOpen", { device: deviceLabel(err.device) });
       case "openFailed":
         return t("error.openFailed", { device: deviceLabel(err.device), detail: err.detail });
       case "copyFailed":

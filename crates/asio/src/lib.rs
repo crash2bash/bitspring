@@ -461,6 +461,20 @@ pub struct Caps {
     /// The sample type of each output channel in DSD mode (empty without
     /// DSD).
     pub dsd_types: Vec<SampleType>,
+    /// The driver answers the IoFormat "can do" call for DSD: it says it has
+    /// a native DSD mode (which [`Host::probe_dsd`] then checks).
+    pub can_dsd: bool,
+}
+
+/// What [`Host::probe_dsd`] found out about the open driver's DSD mode.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DsdCaps {
+    /// The rates of [`DSD_RATES`] the driver accepts in DSD mode; empty if
+    /// it has no usable DSD mode.
+    pub rates: Vec<u32>,
+    /// The sample type of each output channel in DSD mode (empty without
+    /// DSD).
+    pub types: Vec<SampleType>,
 }
 
 /// The render closure of a stream. It is called from the driver's realtime

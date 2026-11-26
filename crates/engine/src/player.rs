@@ -89,6 +89,19 @@ impl Output {
         }
     }
 
+    /// [`Self::supports_native_dsd`] as far as it is known, without asking a driver (Windows:
+    /// an ASIO driver's DSD mode is probed only when it is about to be used, so until then it
+    /// isn't known): for the device list.
+    pub fn native_dsd_known(&self, dsd_rate: u32) -> bool {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.native_dsd_known(dsd_rate),
+            #[cfg(not(windows))]
+            Self::Device(d) => d.device.supports_native_dsd(dsd_rate),
+            Self::Network(_) => false,
+        }
+    }
+
     pub fn is_network(&self) -> bool {
         matches!(self, Self::Network(_))
     }
@@ -141,11 +154,15 @@ pub fn outputs() -> Result<Vec<Output>> {
     Ok(v)
 }
 
-/// One output by uid. A network player not seen yet gets a few seconds to answer.
+/// One output by uid. A network player not seen yet gets a few seconds to answer. (Windows:
+/// without opening any ASIO driver but the one asked for: see `windows_out::find_device`.)
 pub fn find(uid: &str) -> Result<Option<Output>> {
     if net::is_network_uid(uid) {
         return Ok(if NETWORK { net::find(uid).map(Output::Network) } else { None });
     }
+    #[cfg(windows)]
+    return Ok(output::find_device(uid)?.map(Output::Device));
+    #[cfg(not(windows))]
     Ok(output::output_devices()?.into_iter().find(|d| d.uid == uid).map(Output::Device))
 }
 
@@ -158,11 +175,14 @@ pub fn start_discovery() {
     }
 }
 
-/// Look for network players again now.
+/// The user asked to look again: for network players now, and (Windows) at ASIO drivers that
+/// failed to open before (tried again at the next listing; never by themselves).
 pub fn refresh() {
     if NETWORK {
         net::refresh();
     }
+    #[cfg(windows)]
+    output::refresh_devices();
 }
 
 enum Kind {

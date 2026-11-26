@@ -25,6 +25,9 @@ pub enum UserError {
     /// Windows ASIO: the driver's settings changed under the stream (its control panel, or
     /// another app: buffer size, sample rate, clock) and playing on in place didn't work.
     DeviceReset,
+    /// Windows ASIO: the settings window of `device`'s driver is open, which holds the driver
+    /// until it is closed.
+    DriverPanelOpen { device: String },
     /// The chosen device isn't there any more.
     DeviceNotFound,
     /// No output device at all.
@@ -161,6 +164,7 @@ impl fmt::Display for UserError {
             DeviceUnplugged => write!(f, "the device was disconnected"),
             DeviceStalled => write!(f, "the device stopped responding"),
             DeviceReset => write!(f, "the device's driver settings changed, so playback stopped — press play to carry on"),
+            DriverPanelOpen { device } => write!(f, "the driver settings window of {device} is open: close it, then try again"),
             DeviceNotFound => write!(f, "device not found — was it unplugged?"),
             NoDevice => write!(f, "no output device"),
             NoRates { device } => write!(f, "{device} reports no usable sample rates"),

@@ -33,7 +33,7 @@ use crate::ring::Ring;
 #[cfg(target_os = "macos")]
 pub use crate::coreaudio::{Device, DeviceInfo, Player, output_devices};
 #[cfg(windows)]
-pub use crate::windows_out::{Device, DeviceInfo, Player, asio_release, output_devices};
+pub use crate::windows_out::{Device, DeviceInfo, Player, asio_release, find_device, output_devices, refresh as refresh_devices};
 #[cfg(target_os = "ios")]
 pub use crate::ios_out::{Device, DeviceInfo, Player, dop_blocker, output_devices, system_volume};
 #[cfg(target_os = "android")]
@@ -164,6 +164,10 @@ pub struct SignalPath {
     /// The DSD on the wire (a DSD track's own bits, or `dsd_out`) goes natively, in the
     /// device's native DSD format; false when it goes as DoP, or no DSD goes out at all.
     pub native_dsd: bool,
+    /// The device was to take the DSD natively but refused it when opened, and the playback was
+    /// planned again without native DSD (DoP where allowed, else PCM): what plays isn't what
+    /// the device claimed it could do. Set by the backend that retried.
+    pub native_refused: bool,
     /// The gain this track plays at (volume levelling, peak headroom), when one applies.
     pub level: Option<Level>,
     pub bit_perfect: bool,
@@ -567,6 +571,7 @@ pub(crate) fn signal_path(
         dsd: track.dsd,
         dsd_out: plan.encode,
         native_dsd: plan.native,
+        native_refused: false,
         level: if leveled { track.level() } else { None },
         // DSD on the wire (DoP or native) gets this far only with the exact rate, a format
         // that carries the bits untouched and exclusive access (the backend checked). Only a
@@ -2159,13 +2164,15 @@ fn fill_dop(
     let start = phase.load(Ordering::Relaxed);
     let mut written = 0;
     let mut peaks = [0f32; 2];
-    let mut ones = [0u32; 2];
     let mut first_channel = 0;
     for buf in buffers.iter_mut() {
         let (nch, fmt) = (buf.channels, buf.format);
         if nch == 0 {
             continue;
         }
+        // Counted per buffer, for the device channels 0 and 1 it holds: interleaved, both; one
+        // buffer per channel (ASIO), its own.
+        let mut ones = [0u32; 2];
         let mut n = 0;
         let all = buf.data.chunks_exact_mut(nch * fmt.bytes());
         for (f, frame) in all.skip(frames.start).take(frames.len()).enumerate() {
@@ -2178,11 +2185,11 @@ fn fill_dop(
                 }
                 fmt.write_dop(out, marker << 16 | p as u32);
             }
-            if first_channel == 0 && (f + 1) % WINDOW == 0 {
-                for c in 0..2 {
-                    let level = (ones[c] as f32 / (8 * WINDOW) as f32 - 1.0).abs() * PCM_GAIN as f32;
-                    peaks[c] = peaks[c].max(level);
-                    ones[c] = 0;
+            if (f + 1) % WINDOW == 0 {
+                for dc in first_channel..(first_channel + nch).min(2) {
+                    let level = (ones[dc] as f32 / (8 * WINDOW) as f32 - 1.0).abs() * PCM_GAIN as f32;
+                    peaks[dc] = peaks[dc].max(level);
+                    ones[dc] = 0;
                 }
             }
             n = f + 1;
@@ -4518,6 +4525,33 @@ mod tests {
             assert_eq!(&data[3..5], &[1, 0]);
         }
         assert_eq!(markers, [0x05, 0xFA, 0x05, 0xFA, 0x05, 0xFA]);
+    }
+
+    /// DoP in one buffer per channel (ASIO) meters each channel by its own bits, exactly as
+    /// the interleaved stereo buffer does, and writes the same words and markers.
+    #[test]
+    fn dop_meters_per_channel_buffers_like_interleaved() {
+        let frames = 64;
+        // Left mostly ones, right a balanced pattern with a few more ones: different levels.
+        let payload = |f: usize, c: usize| if c == 0 { 0xFFF0 } else if f.is_multiple_of(2) { 0x6969 } else { 0x69FF };
+        let fmt = OutFormat::I32 { bits: 32 };
+        let mut inter = vec![0u8; frames * 2 * 4];
+        let peaks_inter = fill_dop(&mut [OutBuf { data: &mut inter, channels: 2, format: fmt }], 0..frames, frames, &AtomicBool::new(false), payload);
+        let (mut left, mut right) = (vec![0u8; frames * 4], vec![0u8; frames * 4]);
+        let peaks_split = fill_dop(
+            &mut [OutBuf { data: &mut left, channels: 1, format: fmt }, OutBuf { data: &mut right, channels: 1, format: fmt }],
+            0..frames,
+            frames,
+            &AtomicBool::new(false),
+            payload,
+        );
+        assert!(peaks_inter[0] > 0.0 && peaks_inter[1] > 0.0 && peaks_inter[0] != peaks_inter[1]);
+        assert_eq!(peaks_split, peaks_inter);
+        assert!(peaks_split[1] <= PCM_GAIN as f32, "no channel counted from bits it doesn't hold");
+        for f in 0..frames {
+            assert_eq!(&left[f * 4..f * 4 + 4], &inter[f * 8..f * 8 + 4]);
+            assert_eq!(&right[f * 4..f * 4 + 4], &inter[f * 8 + 4..f * 8 + 8]);
+        }
     }
 
     #[test]
