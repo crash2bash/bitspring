@@ -54,6 +54,9 @@ them, and off means bit-perfect again.
 - **Volume levelling** by track or by album: one fixed gain per track towards −18 LUFS, nothing
   compressed. The player reads ReplayGain tags, measures the files that have none (EBU R128), and
   can write the result into their tags. Off by default.
+- **Crossfade between albums:** in a playlist or a shuffled queue, the end of a track can fade
+  out under the start of the next, for 2 to 12 seconds. The next track of the same album still
+  follows gapless, and only the seconds of the overlap are mixed. Off by default.
 - **What is really in the file.** The quality check looks at a file's spectrum and tells you when
   "hi-res" is really a CD or an MP3 inside a bigger file. It also measures the dynamic range (DR
   and loudness range), and for an album ripped from CD it can compare the audio with other
