@@ -557,7 +557,7 @@ impl Player {
 
         let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let speakers = device.speakers(info.output_channels as usize);
-        let plan = output::plan(&track, opts, &info.rates, &info.name, dop_ok, &speakers)?;
+        let plan = output::plan(&track, opts, &info.rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers)?;
 
         // Physical format first: setting it can itself move the nominal rate.
         let physical = match device.apply_best_physical_format(plan.target, hog.is_some()) {

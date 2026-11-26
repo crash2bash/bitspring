@@ -315,7 +315,7 @@ impl Player {
         let wide = exclusive && track.channels > 2 && info.output_channels > 2;
         let open_channels = if wide { info.output_channels as usize } else { 2 };
         let speakers = crate::channels::default_layout(open_channels);
-        let mut plan = output::plan(&track, opts, &info.rates, &info.name, dop_ok, &speakers)?;
+        let mut plan = output::plan(&track, opts, &info.rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers)?;
 
         let (fmt_tx, fmt_rx) = mpsc::sync_channel::<Result<Negotiated>>(1);
         let (pb_tx, pb_rx) = mpsc::sync_channel::<Option<Arc<Playback>>>(1);
@@ -356,7 +356,7 @@ impl Player {
         // The card said where its channels go, or took fewer than asked: plan for what it has.
         let actual = neg.speakers.clone().unwrap_or_else(|| crate::channels::default_layout(neg.channels));
         if actual != speakers {
-            match output::plan(&track, opts, &info.rates, &info.name, dop_ok, &actual) {
+            match output::plan(&track, opts, &info.rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &actual) {
                 Ok(p) => plan = p,
                 Err(e) => {
                     abort(&pb_tx, thread);

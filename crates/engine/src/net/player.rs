@@ -198,7 +198,7 @@ impl NetPlayer {
         let rates = rates(&renderer);
         // Network players take mono or stereo: anything wider is folded down to stereo.
         let speakers = crate::channels::default_layout(track.channels.min(2));
-        let plan = output::plan(&track, opts, &rates, renderer.name(), false, &speakers)?;
+        let plan = output::plan(&track, opts, &rates, renderer.name(), output::DsdSupport { dop: false, native: false }, &speakers)?;
         let rate = plan.target.round() as u32;
         let source_bits = track.bits_per_sample.unwrap_or(24);
         let untouched = !plan.processing && !plan.route.folds();

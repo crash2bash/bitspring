@@ -256,7 +256,7 @@ impl Player {
         } else {
             speakers_for(info.output_channels as usize, Some(info.channel_mask))
         };
-        let mut plan = output::plan(&track, opts, &rates, &info.name, dop_ok, &speakers)?;
+        let mut plan = output::plan(&track, opts, &rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers)?;
 
         let (fmt_tx, fmt_rx) = mpsc::sync_channel::<Result<Negotiated>>(1);
         let (pb_tx, pb_rx) = mpsc::sync_channel::<Option<Arc<Playback>>>(1);
@@ -295,7 +295,7 @@ impl Player {
         // The device took fewer channels than asked (a driver without multichannel exclusive
         // formats): fold down to what it did take.
         if neg.channels != speakers.len() {
-            match output::plan(&track, opts, &rates, &info.name, dop_ok, &speakers_for(neg.channels, Some(neg.mask))) {
+            match output::plan(&track, opts, &rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers_for(neg.channels, Some(neg.mask))) {
                 Ok(p) => plan = p,
                 Err(e) => {
                     let _ = pb_tx.send(None);
