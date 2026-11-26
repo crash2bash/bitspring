@@ -73,7 +73,7 @@
   let repeat = $state<Repeat>(load("repeat", "off"));
   let canNext = $derived(index < queue.length - 1 || (repeat === "all" && queue.length > 0));
   let now = $state<NowPlaying | null>(null);
-  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null, queueIndex: null, nowRev: 0, advanceError: null, systemVolume: null, load: null, filterStep: null, dsdStep: null });
+  let status = $state<Status>({ active: false, position: 0, duration: 0, paused: false, finished: false, peakDb: null, underruns: 0, buffering: false, buffered: 0, error: null, queueIndex: null, nowRev: 0, advanceError: null, systemVolume: null, load: null, filterStep: null, dsdStep: null, crossfading: false });
   /** The backend's nowRev we are showing; when it moves, the queue went on by itself. */
   let knownRev = 0;
   let lastOutputError: string | null = null;
@@ -241,6 +241,13 @@
     fades = on;
     save("fades", on);
     api.setFades(on).catch(() => {});
+  }
+  /** Tracks of different albums cross into each other over this many seconds; 0 = off. */
+  let crossfade = $state<number>(load("crossfade", 0));
+  function setCrossfade(secs: number) {
+    crossfade = secs;
+    save("crossfade", secs);
+    api.setCrossfade(secs).catch(() => {});
   }
   /** The lyrics take the stage on the player screen (kept on from track to track). */
   let lyricsOn = $state<boolean>(load("lyrics", false));
@@ -833,6 +840,7 @@
     })();
     refreshStreaming();
     if (!untrack(() => fades)) api.setFades(false).catch(() => {});
+    if (untrack(() => crossfade) > 0) api.setCrossfade(untrack(() => crossfade)).catch(() => {});
     loadRemote();
     loadMarks();
     const stopUpdateChecks = startUpdateChecks();
@@ -1098,7 +1106,7 @@
     </main>
   {:else if screen === "settings"}
     <main class="lib">
-      <Settings {fades} onfades={setFades} onclose={toggleSettings} />
+      <Settings {fades} onfades={setFades} {crossfade} oncrossfade={setCrossfade} onclose={toggleSettings} />
     </main>
   {:else if screen === "streaming" && streaming?.available}
     <main class="lib">

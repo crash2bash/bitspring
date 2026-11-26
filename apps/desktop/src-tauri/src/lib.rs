@@ -14,6 +14,7 @@ mod linux_media;
 mod abx;
 mod bookmarks;
 mod crash;
+mod crossfade;
 mod device_key;
 mod dsd_out;
 mod eq;
@@ -52,7 +53,7 @@ use windows_media as media;
 use linux_media as media;
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::Duration;
 
@@ -134,6 +135,9 @@ struct AppState {
     play_lock: Mutex<()>,
     /// The user turned off the short fades at pause, seek and stop (on unless they did).
     fades_off: AtomicBool,
+    /// How long tracks of different albums cross into each other, in seconds; 0 = they don't
+    /// (see `crossfade`).
+    crossfade_secs: AtomicU32,
     /// Why the queue stopped at a track it couldn't play.
     advance_error: Mutex<Option<AdvanceError>>,
     /// The last status sent to the UI, answered again while a track is starting.
@@ -411,6 +415,8 @@ struct StatusDto {
     filter_step: Option<upsampling::FilterStep>,
     /// The DSD output was stepped down (or off) because the processor couldn't keep up.
     dsd_step: Option<dsd_out::DsdStep>,
+    /// A crossfade is under way: the end of the track before still sounds under this one.
+    crossfading: bool,
 }
 
 #[derive(Serialize)]
@@ -988,7 +994,9 @@ fn follow_queue(state: &AppState) {
         let _one = state.play_lock.lock().unwrap();
         took_over(state);
     }
-    let before = line_up_before(state);
+    let crossfade = state.crossfade_secs.load(Ordering::Relaxed) as f64;
+    // (A crossfade starts that much before the end.)
+    let before = line_up_before(state) + crossfade;
     let Some(want) = wanted_next(state, before) else { return };
     let known = state.lined_up.lock().unwrap().iter().find(|l| l.index == want.index && l.path == want.path).map(|l| (l.track.clone(), l.refused));
     let track = match known {
@@ -1029,7 +1037,13 @@ fn follow_queue(state: &AppState) {
             let q = state.queue.lock().unwrap();
             q.following() == Some(want.index) && q.paths.get(want.index) == Some(&want.path)
         };
-    if same && !p.queue_next(track.clone()) {
+    if !same {
+        return;
+    }
+    // Crossfade, unless the album just goes on (see `crossfade`).
+    let cross = crossfade > 0.0 && !crossfade::album_goes_on(&p.heard().meta, &track.meta);
+    let joined = if cross { p.queue_next_crossfading(track.clone(), crossfade) } else { p.queue_next(track.clone()) };
+    if !joined {
         let mut l = state.lined_up.lock().unwrap();
         if let Some(e) = l.iter_mut().find(|e| Arc::ptr_eq(&e.track, &track)) {
             e.refused = true;
@@ -1200,6 +1214,7 @@ impl StatusDto {
             load: None,
             filter_step,
             dsd_step,
+            crossfading: false,
         }
     }
 }
@@ -1240,6 +1255,7 @@ fn status(state: State<'_, AppState>) -> StatusDto {
             load: p.load(),
             filter_step,
             dsd_step,
+            crossfading: p.crossfading(),
         },
         None => StatusDto::idle(queue_index, now_rev, advance_error, system_volume, filter_step, dsd_step),
     };
@@ -1300,6 +1316,13 @@ fn set_fades(state: State<'_, AppState>, on: bool) {
     if let Some(p) = state.player.lock().unwrap().as_ref() {
         p.set_fades(on);
     }
+}
+
+/// Crossfades between tracks of different albums: `secs` long (taken to the nearest length the
+/// setting offers), 0 = off. From the next join on; what is lined up already keeps its own.
+#[tauri::command]
+fn set_crossfade(state: State<'_, AppState>, secs: f64) {
+    state.crossfade_secs.store(crossfade::secs_from(secs), Ordering::Relaxed);
 }
 
 /// Replace the processing settings of the output `device_uid`. Everything off = bit-perfect.
@@ -1703,6 +1726,7 @@ pub fn run() {
             seek,
             stop,
             set_fades,
+            set_crossfade,
             set_dsp,
             eq::eq_state,
             eq::eq_save,

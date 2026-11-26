@@ -170,6 +170,22 @@ impl Player {
     pub fn queue_next(&self, track: Arc<Track>) -> bool {
         each!(self, p => p.queue_next(track))
     }
+    /// Line up `track` to cross into it over `secs` (see
+    /// [`output::Playback::queue_next_crossfading`]). A network player joins it on gapless
+    /// instead: it gets each track as a stream of its own.
+    pub fn queue_next_crossfading(&self, track: Arc<Track>, secs: f64) -> bool {
+        match &self.kind {
+            Kind::Device(p) => p.queue_next_crossfading(track, secs),
+            Kind::Net(p) => p.queue_next(track),
+        }
+    }
+    /// A crossfade is under way (the end of the track before still sounds).
+    pub fn crossfading(&self) -> bool {
+        match &self.kind {
+            Kind::Device(p) => p.crossfading(),
+            Kind::Net(_) => false,
+        }
+    }
     /// Carry on with `track` in place of the one being heard, at the same position (see
     /// [`output::Playback::swap`]). Never on a network player: what it plays was sent ahead.
     pub fn swap(&self, track: Arc<Track>) -> bool {

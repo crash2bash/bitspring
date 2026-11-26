@@ -8,18 +8,33 @@
   import { marks } from "./marks.svelte";
   import { liquidPill } from "./liquid";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { untrack } from "svelte";
 
   let {
     fades,
     onfades,
+    crossfade,
+    oncrossfade,
     onclose,
   }: {
     /** Pause, seek and stop fade over a few milliseconds. */
     fades: boolean;
     onfades: (on: boolean) => void;
+    /** Seconds tracks of different albums cross into each other over; 0 = off. */
+    crossfade: number;
+    oncrossfade: (secs: number) => void;
     /** Back to the screen the settings were opened from. */
     onclose: () => void;
   } = $props();
+
+  /** The lengths offered (the backend takes anything else to the nearest of them). */
+  const CROSSFADES = [2, 4, 6, 8, 12];
+  /** The length last picked: what the switch brings back. */
+  let crossfadeLen = $state(untrack(() => (CROSSFADES.includes(crossfade) ? crossfade : 6)));
+  function pickCrossfade(secs: number) {
+    crossfadeLen = secs;
+    oncrossfade(secs);
+  }
 
   const SITE = "https://bitspring.app";
   // In the browser, not in the app's own webview. Outside Tauri (the mock in a browser) the
@@ -72,6 +87,35 @@
             <span class="knob" aria-hidden="true"></span>
           </span>
         </div>
+        <div class="row">
+          <div class="what">
+            <label for="set-crossfade">{t("settings.crossfade")}</label>
+            <p class="help">{t("settings.crossfadeHelp")}</p>
+            <p class="signal"><i aria-hidden="true"></i>{t("settings.crossfadeSignal")}</p>
+          </div>
+          <span class="switch">
+            <input
+              id="set-crossfade"
+              type="checkbox"
+              role="switch"
+              checked={crossfade > 0}
+              onchange={(e) => oncrossfade(e.currentTarget.checked ? crossfadeLen : 0)}
+            />
+            <span class="knob" aria-hidden="true"></span>
+          </span>
+        </div>
+        {#if crossfade > 0}
+          <div class="row">
+            <div class="what"><span id="set-crossfade-len">{t("settings.crossfadeLength")}</span></div>
+            <div class="seg" role="radiogroup" aria-labelledby="set-crossfade-len" use:liquidPill={crossfade}>
+              {#each CROSSFADES as s (s)}
+                <button role="radio" aria-checked={crossfade === s} class:sel={crossfade === s} onclick={() => pickCrossfade(s)}>
+                  {t("settings.crossfadeSecs", { n: s })}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </div>
     </section>
 
