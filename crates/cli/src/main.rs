@@ -53,9 +53,11 @@ enum Cmd {
         /// 1048576; apodizing has its own).
         #[arg(long, value_name = "N", default_value_t = 65_536)]
         taps: usize,
-        /// PCM files: encode to DSD at this rate (64, 128 or 256) and send it as DoP. Needs
-        /// exclusive access and a DAC that takes DoP at the wire rate (176.4, 352.8 or 705.6
-        /// kHz); otherwise the file plays as PCM.
+        /// PCM files: encode to DSD at this rate (64, 128, 256 or 512) and send it natively
+        /// where the device takes DSD, as DoP otherwise. Needs exclusive access and a DAC that
+        /// takes the rate natively or DoP at the wire rate (176.4, 352.8 or 705.6 kHz; DSD512's
+        /// 1411.2 kHz next to none list, so it is native only in practice); otherwise the file
+        /// plays as PCM.
         #[arg(long, value_name = "RATE")]
         dsd: Option<u32>,
         /// With --dsd: order of the modulator, 5 or 7 (the seventh: lower noise in the audio band,
@@ -131,7 +133,7 @@ fn main() -> Result<()> {
             let dsd_out = match dsd {
                 None => None,
                 Some(m) => {
-                    let Some(rate) = DsdRate::from_multiple(m) else { bail!("unknown DSD rate {m} (64, 128 or 256)") };
+                    let Some(rate) = DsdRate::from_multiple(m) else { bail!("unknown DSD rate {m} (64, 128, 256 or 512)") };
                     let Some(order) = ModOrder::from_number(modulator) else { bail!("unknown modulator order {modulator} (5 or 7)") };
                     Some(DsdOut { rate, order })
                 }
@@ -392,7 +394,7 @@ fn play(files: Vec<PathBuf>, device: Option<String>, dsd_mode: DsdMode, opts: Pl
         let mut player = Player::start(&out, track, &opts)?;
         describe(&dev_name, &player.path);
         if let Some(o) = opts.dsp.dsd_out.filter(|_| player.path.dsd_out.is_none() && !player.path.dsd.is_some_and(|d| d.dop)) {
-            println!("Note:    DSD{} asked for, but this output can't take DoP at {} kHz: PCM instead", o.rate.multiple(), o.rate.wire_rate() as f64 / 1000.0);
+            println!("Note:    DSD{} asked for, but this output takes it neither natively nor as DoP at {} kHz: PCM instead", o.rate.multiple(), o.rate.wire_rate() as f64 / 1000.0);
         }
         // A long filter holds seconds of input back: line the next file up that much earlier,
         // or the render thread reaches the end before it is there.
@@ -486,7 +488,7 @@ fn describe(dev_name: &str, p: &hifi_engine::output::SignalPath) {
         dsp.push(format!("EQ {name}"));
     }
     if let Some(o) = p.dsd_out {
-        dsp.push(format!("encoded to DSD{} ({}th-order modulator), sent as DoP", o.rate.multiple(), o.order.get()));
+        dsp.push(format!("encoded to DSD{} ({}th-order modulator), sent {}", o.rate.multiple(), o.order.get(), if p.native_dsd { "natively" } else { "as DoP" }));
     }
     if let Some(cf) = p.crossfeed {
         dsp.push(format!("crossfeed {} Hz / {} dB", cf.cutoff_hz, cf.feed_db));

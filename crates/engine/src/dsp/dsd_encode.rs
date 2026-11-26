@@ -1,5 +1,8 @@
-//! PCM → DSD on the fly: PCM at the DoP wire rate R (176.4, 352.8 or 705.6 kHz) becomes a
-//! 1-bit stream at 16·R, 16 bits per channel per wire frame, ready to be sent as DoP.
+//! PCM → DSD on the fly: PCM at the wire rate R (176.4, 352.8, 705.6 or 1411.2 kHz) becomes a
+//! 1-bit stream at 16·R, 16 bits per channel per wire frame, ready to be sent as DoP or
+//! natively. DSD512 (R = 1411.2 kHz) is the same encoder at twice the DSD256 clock: the
+//! half-band stages are designed relative to R, so the ×16 is the same filters; only the
+//! modulator gets a design of its own (a wider band, see [`DsdRate::band_hz`]).
 //!
 //! Two stages, f64 throughout:
 //!
@@ -70,11 +73,16 @@
 //! | DSD128, 7th | 1.25 | 0.18 | 132.7 dB | 71.9 dB | 123.2 dB | −94.5 | −28.1 | 0.74 / 0.64 |
 //! | DSD256, 5th | 1.35 | 0.22 | 146.9 dB | 86.0 dB | 139.5 dB | −144.5 | −82.8 | 0.68 / 0.70 |
 //! | DSD256, 7th | 1.25 | 0.18 | 160.2 dB | 100.5 dB | 152.0 dB | −157.3 | −70.7 | 0.72 / 0.64 |
+//! | DSD512, 5th | 1.35 | 0.22 | 161.6 dB | 101.2 dB | 154.8 dB | −163.1 | −119.2 | 0.68 / 0.68 |
+//! | DSD512, 7th | 1.25 | 0.18 | 168.9 dB | 119.8 dB | 171.2 dB | −168.8 | −119.8 | 0.72 / 0.62 |
 //!
 //! "First failure": the lowest depth (steps of 0.02 from the rated 0.58) at which a signal of
-//! the class runs away in 20 s (DSD64; 10 s DSD128, 5 s DSD256) with the limiter lifted
-//! there (test `stability_limit`; the classes and their margins at [`H_INF`]). At DSD256 the
-//! seventh order is within ~5 dB of what f32 PCM input itself holds in 20 kHz (~165 dB).
+//! the class runs away in 20 s (DSD64; 10 s DSD128, 5 s DSD256, 2.5 s DSD512) with the
+//! limiter lifted there (test `stability_limit`; the classes and their margins at [`H_INF`]).
+//! At DSD256 the seventh order is within ~5 dB of what f32 PCM input itself holds in 20 kHz
+//! (~165 dB). At DSD512 that is ~3 dB more (the rounding error spreads over twice the band),
+//! and the seventh order is there: 168.9 dB, below its linear model (the input sets it, not
+//! the loop).
 //! Tone levels are within 1.5e-4 dB at 1 and 19 kHz; the delay is 21.56 wire frames (22).
 
 use std::f64::consts::PI;
@@ -92,17 +100,22 @@ pub enum DsdRate {
     Dsd64,
     Dsd128,
     Dsd256,
+    /// Native DSD only in practice: its wire rate, 1411.2 kHz, is a PCM rate next to no DAC
+    /// lists for DoP (see `output::plan`, which only encodes for a device that takes the rate
+    /// natively or lists that PCM rate).
+    Dsd512,
 }
 
 impl DsdRate {
-    pub const ALL: [DsdRate; 3] = [DsdRate::Dsd64, DsdRate::Dsd128, DsdRate::Dsd256];
+    pub const ALL: [DsdRate; 4] = [DsdRate::Dsd64, DsdRate::Dsd128, DsdRate::Dsd256, DsdRate::Dsd512];
 
-    /// 64, 128 or 256: the rate as a multiple of 44.1 kHz.
+    /// 64, 128, 256 or 512: the rate as a multiple of 44.1 kHz.
     pub fn multiple(self) -> u32 {
         match self {
             DsdRate::Dsd64 => 64,
             DsdRate::Dsd128 => 128,
             DsdRate::Dsd256 => 256,
+            DsdRate::Dsd512 => 512,
         }
     }
 
@@ -115,21 +128,30 @@ impl DsdRate {
         DSD64 / 64 * self.multiple()
     }
 
-    /// The PCM rate the DAC runs at for DoP: 16 DSD bits per frame.
+    /// The rate of the encoder's 16-bit words, 16 DSD bits each: the PCM rate the DAC runs at
+    /// for DoP (176.4, 352.8, 705.6 kHz; 1411.2 kHz for DSD512), and the rate the chain
+    /// upsamples to whether the words then go as DoP or natively.
     pub fn wire_rate(self) -> u32 {
         self.hz() / 16
     }
 
-    /// Band the noise shaping is optimised for.
+    /// Band the noise shaping is optimised for. DSD512's 60 kHz (the OSR up by a third on
+    /// DSD256's) spends its extra octave on both ends: the fifth order 15 dB lower in 0–20 kHz
+    /// than at DSD256, and the noise from 40 to 100 kHz 36–49 dB lower (see the module doc).
+    /// 80 kHz, DSD256's loop exactly at twice the clock, measured only 4.5 dB (fifth) and 2.4
+    /// dB (seventh) better than DSD256 in 0–20 kHz; 40–50 kHz bring the seventh order no
+    /// more than 60 does (it is at what f32 input holds) and the fifth 5–7 dB, for noise that
+    /// starts rising 10–20 kHz lower.
     pub fn band_hz(self) -> f64 {
         match self {
             DsdRate::Dsd64 => 20_000.0,
             DsdRate::Dsd128 => 30_000.0,
             DsdRate::Dsd256 => 40_000.0,
+            DsdRate::Dsd512 => 60_000.0,
         }
     }
 
-    /// Oversampling ratio of the noise shaping: 70.56, 94.08, 141.12.
+    /// Oversampling ratio of the noise shaping: 70.56, 94.08, 141.12, 188.16.
     fn osr(self) -> f64 {
         self.hz() as f64 / (2.0 * self.band_hz())
     }
@@ -139,6 +161,7 @@ impl DsdRate {
             DsdRate::Dsd64 => 0,
             DsdRate::Dsd128 => 1,
             DsdRate::Dsd256 => 2,
+            DsdRate::Dsd512 => 3,
         }
     }
 }
@@ -181,9 +204,11 @@ pub struct DsdOut {
 
 impl DsdOut {
     /// The next cheaper setting, for when the processor can't keep up: halve the rate first
-    /// (keeps the order: 256 → 128 → 64), at DSD64 the seventh order gives way to the fifth, then None.
+    /// (keeps the order: 512 → 256 → 128 → 64), at DSD64 the seventh order gives way to the
+    /// fifth, then None.
     pub fn lighter(self) -> Option<DsdOut> {
         let rate = match self.rate {
+            DsdRate::Dsd512 => DsdRate::Dsd256,
             DsdRate::Dsd256 => DsdRate::Dsd128,
             DsdRate::Dsd128 => DsdRate::Dsd64,
             DsdRate::Dsd64 => {
@@ -201,9 +226,9 @@ impl DsdOut {
 pub const LEVEL: f64 = 0.5;
 
 /// Out-of-band gain of the NTF (|NTF| at fs/2, its largest value), per `[order][rate]` (5th,
-/// 7th; DSD64, 128, 256). Chosen for stability, not SNR: for each variant the largest on a
-/// grid of 0.05 (1.20 … 1.50) that keeps both classes of test signal bounded, the limiter
-/// lifted to depth m and the final dither in, for 20 s (DSD64; 10 s, 5 s) (tests
+/// 7th; DSD64, 128, 256, 512). Chosen for stability, not SNR: for each variant the largest on
+/// a grid of 0.05 (1.20 … 1.50) that keeps both classes of test signal bounded, the limiter
+/// lifted to depth m and the final dither in, for 20 s (DSD64; 10 s, 5 s, 2.5 s) (tests
 /// `h_inf_search`, `stability_limit`):
 /// - Programme-like signals — sines at 20 Hz, 1 kHz and 20 kHz, a 100 Hz square, DC of both
 ///   signs, white noise low-passed at 20 kHz peaking at full scale, and that noise driven
@@ -217,9 +242,10 @@ pub const LEVEL: f64 = 0.5;
 ///
 /// What binds: the fifth order on programme (DC, the square, slow sines, clipped noise: 1.40
 /// first fails at 0.64 at every rate); the seventh on wire-rate noise (one step up first fails
-/// at 0.58 at DSD64, 0.60 at DSD128 and DSD256), its programme margin then 0.06–0.10 over the
-/// rule's.
-pub const H_INF: [[f64; 3]; 2] = [[1.35, 1.35, 1.35], [1.3, 1.25, 1.25]];
+/// at 0.58 at DSD64, 0.60 at DSD128, DSD256 and DSD512), its programme margin then 0.06–0.10
+/// over the rule's. DSD512's wider band (OSR 188 against DSD256's 141) changes none of it:
+/// the search picks the same values, with the same first failures to within a step.
+pub const H_INF: [[f64; 4]; 2] = [[1.35, 1.35, 1.35, 1.35], [1.3, 1.25, 1.25, 1.25]];
 
 /// Rated maximum modulation depth: the modulator input is hard-limited here. PCM +1.3 dB
 /// over full scale; the player's peak headroom keeps true peaks at or under full scale in
@@ -234,6 +260,12 @@ pub const MAX_DEPTH: f64 = 0.58;
 /// was 10.6 dB in the survey and 11.5 dB in the silence test, too close to the 12 dB limit.
 /// The quantiser input spans about ±1, hence the size.
 ///
+/// DSD512/7 follows the rule with one case left out: the −20 dBFS tone shows a line of 12–14
+/// dB near 655 Hz at every amount tried (0.06–0.30), the f32 input's own rounding error (the
+/// input alone has the same power there, some 206 dB under full scale), so the survey prints
+/// no choice. Without it, 0.18 is the smallest clean amount (every case 7.4 dB or less, to
+/// 0.30); 0.16 leaves lines of 13–16 dB on DC.
+///
 /// It shrinks as 1 − (u/M)² with the input u, to nothing at the rated depth M. A constant
 /// dither this size took 0.07 off the stable depth (DC alone stable to 0.68 instead of 0.75,
 /// measured on an earlier fifth-order design, H∞ 1.3); tapered, the stability is as without
@@ -241,7 +273,7 @@ pub const MAX_DEPTH: f64 = 0.58;
 /// linear so the noise floor hardly moves with the level: silence measures −0.4 to +1.2 dB
 /// against a full-scale tone's noise (a linear taper: up to 3.7 dB). Cost against 0.06 of
 /// dither (the smallest tried, tones still there): 0.4–0.9 dB of SNR.
-pub const DITHER: [[f64; 3]; 2] = [[0.2, 0.2, 0.22], [0.18, 0.18, 0.18]];
+pub const DITHER: [[f64; 4]; 2] = [[0.2, 0.2, 0.22, 0.22], [0.18, 0.18, 0.18, 0.18]];
 
 // ---------------------------------------------------------------------------------------------
 // Stage A: ×16 interpolation
@@ -357,22 +389,24 @@ const LEGENDRE5: [f64; 2] = [0.5384693101056831, 0.906179845938664];
 const LEGENDRE7: [f64; 3] = [0.4058451513773972, 0.7415311855993945, 0.9491079123427585];
 
 /// Clamp limits of the states x0, p1, q1, p2, q2 (, p3, q3), per `[order][rate]`: twice the
-/// largest |state| seen in 20 s (DSD64; 10 s DSD128, 5 s DSD256) of each test signal of both
-/// classes (see [`H_INF`]) at the rated depth, through the interpolation, limiter and dither
-/// (the test `calibration`), rounded up to two digits. With the input fed forward the states
-/// carry only shaped noise, so the peaks depend little on the signal (wire-rate white noise
-/// gives the largest, sines, DC and audio-band noise 40–95 % of it) and follow H∞ more than
-/// the rate.
-const LIMITS: [[[f64; 7]; 3]; 2] = [
+/// largest |state| seen in 20 s (DSD64; 10 s DSD128, 5 s DSD256, 2.5 s DSD512) of each test
+/// signal of both classes (see [`H_INF`]) at the rated depth, through the interpolation,
+/// limiter and dither (the test `calibration`), rounded up to two digits. With the input fed
+/// forward the states carry only shaped noise, so the peaks depend little on the signal
+/// (wire-rate white noise gives the largest, sines, DC and audio-band noise 40–95 % of it)
+/// and follow H∞ more than the rate (DSD512's are within 20 % of DSD256's).
+const LIMITS: [[[f64; 7]; 4]; 2] = [
     [
         [9.8e-4, 1.8e-2, 1.7e-1, 7.6e-1, 2.3, 0.0, 0.0],
         [1.1e-3, 1.8e-2, 1.7e-1, 7.7e-1, 2.3, 0.0, 0.0],
         [1.1e-3, 1.9e-2, 1.7e-1, 8.0e-1, 2.3, 0.0, 0.0],
+        [1.1e-3, 1.9e-2, 1.7e-1, 7.9e-1, 2.4, 0.0, 0.0],
     ],
     [
         [2.2e-6, 7.6e-5, 1.6e-3, 1.7e-2, 1.5e-1, 7.0e-1, 2.2],
         [8.2e-7, 3.7e-5, 8.7e-4, 1.2e-2, 1.2e-1, 6.1e-1, 2.0],
         [8.4e-7, 3.9e-5, 8.9e-4, 1.2e-2, 1.2e-1, 6.3e-1, 2.1],
+        [9.7e-7, 4.5e-5, 1.1e-3, 1.4e-2, 1.2e-1, 6.5e-1, 2.1],
     ],
 ];
 
@@ -563,7 +597,7 @@ impl Design {
     }
 }
 
-/// The six designs, made on first use (a few microseconds each) and kept.
+/// The eight designs, made on first use (a few microseconds each) and kept.
 static CACHE: Mutex<Vec<Arc<Design>>> = Mutex::new(Vec::new());
 
 fn design(out: DsdOut) -> Arc<Design> {
@@ -1137,6 +1171,9 @@ mod tests {
             (DsdRate::Dsd128, ModOrder::Seventh) => 130.5,
             (DsdRate::Dsd256, ModOrder::Fifth) => 145.0,
             (DsdRate::Dsd256, ModOrder::Seventh) => 158.0,
+            (DsdRate::Dsd512, ModOrder::Fifth) => 159.5,
+            // At what the f32 input itself holds (see the module doc).
+            (DsdRate::Dsd512, ModOrder::Seventh) => 166.5,
         }
     }
 
@@ -1166,13 +1203,14 @@ mod tests {
 
     #[test]
     fn rates_orders_and_lighter() {
-        for (r, m, hz, wire) in [(DsdRate::Dsd64, 64, 2_822_400, 176_400), (DsdRate::Dsd128, 128, 5_644_800, 352_800), (DsdRate::Dsd256, 256, 11_289_600, 705_600)] {
+        for (r, m, hz, wire) in [(DsdRate::Dsd64, 64, 2_822_400, 176_400), (DsdRate::Dsd128, 128, 5_644_800, 352_800), (DsdRate::Dsd256, 256, 11_289_600, 705_600), (DsdRate::Dsd512, 512, 22_579_200, 1_411_200)] {
             assert_eq!((r.multiple(), r.hz(), r.wire_rate()), (m, hz, wire));
             assert_eq!(DsdRate::from_multiple(m), Some(r));
         }
-        assert_eq!(DsdRate::from_multiple(512), None);
+        assert_eq!((DsdRate::from_multiple(1024), DsdRate::from_multiple(0)), (None, None));
         assert_eq!((ModOrder::from_number(5), ModOrder::from_number(7), ModOrder::from_number(6)), (Some(ModOrder::Fifth), Some(ModOrder::Seventh), None));
         let chain = |out: DsdOut| std::iter::successors(Some(out), |o| o.lighter()).skip(1).map(|o| (o.rate.multiple(), o.order.get())).collect::<Vec<_>>();
+        assert_eq!(chain(DsdOut { rate: DsdRate::Dsd512, order: ModOrder::Seventh }), [(256, 7), (128, 7), (64, 7), (64, 5)]);
         assert_eq!(chain(DsdOut { rate: DsdRate::Dsd256, order: ModOrder::Seventh }), [(128, 7), (64, 7), (64, 5)]);
         assert_eq!(chain(DsdOut { rate: DsdRate::Dsd256, order: ModOrder::Fifth }), [(128, 5), (64, 5)]);
         assert_eq!(chain(dsd64(ModOrder::Fifth)), []);
@@ -1452,7 +1490,8 @@ mod tests {
     /// A PCM signal by wire frame.
     type Signal = Box<dyn Fn(usize) -> f64 + Send + Sync>;
 
-    /// Wire frames of the longest stability run: 20 s at DSD64 (10 s DSD128, 5 s DSD256).
+    /// Wire frames of the longest stability run: 20 s at DSD64 (10 s DSD128, 5 s DSD256,
+    /// 2.5 s DSD512).
     const LONGEST: usize = 20 * 176_400;
 
     /// White noise low-passed at 20 kHz (Kaiser FIR, −6 dB at 20 kHz, 90 dB down from 24 kHz)
@@ -1560,7 +1599,7 @@ mod tests {
         check_stable(&ModOrder::ALL.map(dsd64), 4.0);
     }
 
-    /// 20 s at DSD64, 10 s at DSD128, 5 s at DSD256.
+    /// 20 s at DSD64, 10 s at DSD128, 5 s at DSD256, 2.5 s at DSD512.
     #[test]
     #[ignore]
     fn stable_at_rated_levels_long() {
@@ -1695,9 +1734,9 @@ mod tests {
         }
     }
 
-    /// The state peaks at the rated depth, over 20 s (DSD64; 10 s DSD128, 5 s DSD256) of
-    /// every test signal, through the encoder's interpolation and limiter: [`LIMITS`] are
-    /// twice these, rounded up to 2 significant digits.
+    /// The state peaks at the rated depth, over 20 s (DSD64; 10 s DSD128, 5 s DSD256, 2.5 s
+    /// DSD512) of every test signal, through the encoder's interpolation and limiter:
+    /// [`LIMITS`] are twice these, rounded up to 2 significant digits.
     /// `cargo test --release -p hifi-engine -- --ignored dsd_encode::tests::calibration --nocapture`
     #[test]
     #[ignore]
@@ -1731,9 +1770,9 @@ mod tests {
     }
 
     /// The rule [`H_INF`] is chosen by, with the limiter lifted to depth m and 20 s runs
-    /// (DSD64; 10 s DSD128, 5 s DSD256): programme-like signals stay bounded at every m up to
-    /// 0.64 (first failure 0.66 or later), wire-rate white noise up to 0.60 (first failure
-    /// 0.62 or later). Prints where each class first fails, and which signals.
+    /// (DSD64; 10 s DSD128, 5 s DSD256, 2.5 s DSD512): programme-like signals stay bounded at
+    /// every m up to 0.64 (first failure 0.66 or later), wire-rate white noise up to 0.60
+    /// (first failure 0.62 or later). Prints where each class first fails, and which signals.
     /// `cargo test --release -p hifi-engine -- --ignored dsd_encode::tests::stability_limit --nocapture`
     #[test]
     #[ignore]
