@@ -364,7 +364,7 @@ unsafe impl Sync for Player {}
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let bit_perfect_on = opts.exclusive && !info.bit_perfect.is_empty();
         let rates = if bit_perfect_on { info.rates.clone() } else { vec![RateRange::exact(info.mixer_rate as f64)] };
         let opts_eff = PlayOptions { exclusive: bit_perfect_on, ..opts.clone() };

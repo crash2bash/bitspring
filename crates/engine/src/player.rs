@@ -78,8 +78,9 @@ impl Output {
         }
     }
 
-    /// The output takes DSD at `dsd_rate` natively, as raw DSD without DoP's markers (so far
-    /// only a Linux card the kernel gives a DSD format; network players never). Where both
+    /// The output takes DSD at `dsd_rate` natively, as raw DSD without DoP's markers (a Linux
+    /// card the kernel gives a DSD format, a Windows ASIO driver with a DSD mode; network
+    /// players never). Where both
     /// work, the engine sends it natively.
     pub fn supports_native_dsd(&self, dsd_rate: u32) -> bool {
         match self {
@@ -91,6 +92,34 @@ impl Output {
     pub fn is_network(&self) -> bool {
         matches!(self, Self::Network(_))
     }
+
+    /// The output's driver has a settings window of its own (Windows: an ASIO driver's
+    /// control panel, for its buffer size and the like).
+    pub fn has_control_panel(&self) -> bool {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.has_control_panel(),
+            _ => false,
+        }
+    }
+
+    /// Open that window. Blocks while the driver shows it modally (some do), so call it off
+    /// the UI thread. Errors where there is none, or (ASIO) while another ASIO driver plays.
+    pub fn control_panel(&self) -> Result<()> {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.control_panel(),
+            _ => anyhow::bail!("this output has no control panel"),
+        }
+    }
+}
+
+/// Before the app quits: let go of what an output keeps open between playbacks (Windows: the
+/// ASIO driver, which is closed properly and left in PCM mode for the next app). Nothing to
+/// do elsewhere.
+pub fn release_outputs() {
+    #[cfg(windows)]
+    output::asio_release();
 }
 
 /// The system's devices, then the network players found so far.

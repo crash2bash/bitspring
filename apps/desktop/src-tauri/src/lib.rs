@@ -858,7 +858,7 @@ fn begin(
     dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
     let (dsp, dsd_out_note) = dsp_for(state, device, exclusive, dop);
-    let opts = PlayOptions { exclusive, dsp, start_at, start_paused, fades: !state.fades_off.load(Ordering::Relaxed) };
+    let opts = PlayOptions { exclusive, dsp, start_at, start_paused, fades: !state.fades_off.load(Ordering::Relaxed), allow_dop: dop };
     let mut signal = start(state, device, track.clone(), opts, dsd_out_note)?;
     signal.dsd_note = dsd_note.clone();
     let current = Current {
@@ -1551,7 +1551,7 @@ fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalD
     for next in state.lined_up.lock().unwrap().iter() {
         set_level(&settings, std::path::Path::new(&next.path), &next.track, Duration::ZERO);
     }
-    let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused, fades: !state.fades_off.load(Ordering::Relaxed) };
+    let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused, fades: !state.fades_off.load(Ordering::Relaxed), allow_dop: cur.dop };
     let mut signal = start(state, &device, cur.track.clone(), opts, dsd_out_note)?;
     signal.dsd_note = cur.dsd_note.clone();
     cur.dsd_out_note = signal.dsd_out_note.clone();

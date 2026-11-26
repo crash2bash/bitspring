@@ -33,7 +33,7 @@ use crate::ring::Ring;
 #[cfg(target_os = "macos")]
 pub use crate::coreaudio::{Device, DeviceInfo, Player, output_devices};
 #[cfg(windows)]
-pub use crate::wasapi_out::{Device, DeviceInfo, Player, output_devices};
+pub use crate::windows_out::{Device, DeviceInfo, Player, asio_release, output_devices};
 #[cfg(target_os = "ios")]
 pub use crate::ios_out::{Device, DeviceInfo, Player, dop_blocker, output_devices, system_volume};
 #[cfg(target_os = "android")]
@@ -71,6 +71,9 @@ pub enum Transport {
     Virtual,
     /// A network player we stream to (UPnP/DLNA): the samples reach it exactly, over TCP.
     Network,
+    /// Windows: a device's own ASIO driver, which takes our samples (and native DSD) past the
+    /// Windows audio stack. (Software ASIO wrappers over Windows audio count as `Virtual`.)
+    Asio,
     Other(u32),
 }
 
@@ -107,11 +110,17 @@ pub struct PlayOptions {
     /// seek, stop), instead of a click. A track playing through, and a gapless join, are never
     /// touched. Off for a network stream: there the player on the other end does the pausing.
     pub fades: bool,
+    /// The user's DoP switch for this device: DSD may go out as DoP only with it on. Native DSD
+    /// doesn't need it (the driver declares that format), so with it off a device whose native
+    /// DSD is missing or fails to open gets PCM (or an error, for a DSD track sent straight),
+    /// never DoP: to a DAC that doesn't decode DoP, DoP is loud noise. On by default, so the
+    /// CLI and the tests keep working as before.
+    pub allow_dop: bool,
 }
 
 impl Default for PlayOptions {
     fn default() -> Self {
-        Self { exclusive: true, dsp: DspSettings::default(), start_at: 0.0, start_paused: false, fades: true }
+        Self { exclusive: true, dsp: DspSettings::default(), start_at: 0.0, start_paused: false, fades: true, allow_dop: true }
     }
 }
 
@@ -441,6 +450,9 @@ fn effective(dsp: &DspSettings, encode: Option<DsdOut>) -> Cow<'_, DspSettings> 
 pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], device_name: &str, dsd: DsdSupport, speakers: &[Speaker]) -> Result<Plan> {
     let src_hz = track.sample_rate as f64;
     let route = Route::new(&track.layout, speakers);
+    // DoP only with the user's switch on for this device, whatever the device could carry
+    // (the backends check it too; this keeps a fallback re-plan from slipping into DoP).
+    let dsd = DsdSupport { dop: dsd.dop && opts.allow_dop, ..dsd };
     // DSD bits on the wire (DoP or native): they must reach the DAC exactly, so no
     // processing, no rate change and no folding channels together.
     let dop = track.is_dop();
@@ -1265,7 +1277,7 @@ impl Drop for Playback {
 pub(crate) fn render_offline(track: Arc<Track>, dsp: &DspSettings) -> Result<Vec<f32>> {
     let rate = track.sample_rate as f64;
     let ch = track.channels;
-    let opts = PlayOptions { exclusive: true, dsp: dsp.clone(), start_at: 0.0, start_paused: false, fades: false };
+    let opts = PlayOptions { exclusive: true, dsp: dsp.clone(), start_at: 0.0, start_paused: false, fades: false, allow_dop: true };
     let plan = Plan {
         target: rate,
         start_frame: 0,
@@ -3810,6 +3822,33 @@ mod tests {
             assert!(a[0].iter().any(|&x| x != 0x69), "music, not idle");
             assert_eq!(native.shared().ring.as_ref().unwrap().played.load(Ordering::Relaxed), 20 * 512);
             assert!(!native.shared().dop_phase.load(Ordering::Relaxed));
+        }
+
+        #[test]
+        fn no_dop_without_the_users_switch() {
+            let speakers = crate::channels::default_layout(2);
+            let pcm_rates = [44_100.0, 88_200.0, 176_400.0].map(RateRange::exact).to_vec();
+            let off = PlayOptions { allow_dop: false, ..Default::default() };
+            let both = DsdSupport { dop: true, native: true };
+            // A DSD track: natively still (no switch needed), but never as DoP with the switch
+            // off, even where the device could carry it (native missing, or refused and
+            // re-planned without it): an error instead.
+            let track = dsd_track(1_000, 5);
+            let p = plan(&track, &off, &pcm_rates, "DAC", both, &speakers).unwrap();
+            assert!(p.native && p.dop);
+            assert!(plan(&track, &off, &pcm_rates, "DAC", DOP, &speakers).is_err());
+            let e = plan(&track, &off, &pcm_rates, "DAC", DsdSupport { native: false, ..both }, &speakers).err().unwrap();
+            assert!(matches!(crate::UserError::of(&e), crate::UserError::DopRefused { .. }));
+            // PCM encoded to DSD: natively with the switch off, else not encoded at all.
+            let out = DsdOut { rate: DsdRate::Dsd64, order: ModOrder::Fifth };
+            let pcm = Arc::new(Track::from_samples(44_100, 2, Some(24), &vec![0.0; 2 * 4_410], TrackMeta::default()));
+            let enc = |allow_dop| PlayOptions { allow_dop, dsp: DspSettings { dsd_out: Some(out), ..Default::default() }, ..Default::default() };
+            let p = plan(&pcm, &enc(false), &pcm_rates, "DAC", both, &speakers).unwrap();
+            assert!(p.native && p.encode == Some(out));
+            let p = plan(&pcm, &enc(false), &pcm_rates, "DAC", DOP, &speakers).unwrap();
+            assert!(!p.dop && !p.native && p.encode.is_none());
+            let p = plan(&pcm, &enc(true), &pcm_rates, "DAC", DOP, &speakers).unwrap();
+            assert!(p.dop && !p.native && p.encode == Some(out), "with the switch on, DoP as before");
         }
 
         #[test]

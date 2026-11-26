@@ -34,6 +34,9 @@ unsafe-libopus = "0.2.0"
 coreaudio-sys = "0.2.18"
 
 [target.'cfg(windows)'.dependencies]
+# ASIO output (bit-perfect PCM and native DSD). The ASIO crate is GPL-3.0-only (it uses the
+# Steinberg SDK's GPLv3 option), so the Windows builds that link it are distributed under GPLv3.
+bitspring-asio = { path = "../asio" }
 wasapi = "0.27.0"
 # Same version wasapi uses, so its COM interface types are ours too.
 windows = { version = "0.62.2", features = [

@@ -22,6 +22,9 @@ pub enum UserError {
     DeviceUnplugged,
     /// The device stopped asking for audio.
     DeviceStalled,
+    /// Windows ASIO: the driver's settings changed under the stream (its control panel, or
+    /// another app: buffer size, sample rate, clock) and playing on in place didn't work.
+    DeviceReset,
     /// The chosen device isn't there any more.
     DeviceNotFound,
     /// No output device at all.
@@ -157,6 +160,7 @@ impl fmt::Display for UserError {
             AudioSetup { detail } => write!(f, "couldn't set up audio: {detail}"),
             DeviceUnplugged => write!(f, "the device was disconnected"),
             DeviceStalled => write!(f, "the device stopped responding"),
+            DeviceReset => write!(f, "the device's driver settings changed, so playback stopped — press play to carry on"),
             DeviceNotFound => write!(f, "device not found — was it unplugged?"),
             NoDevice => write!(f, "no output device"),
             NoRates { device } => write!(f, "{device} reports no usable sample rates"),

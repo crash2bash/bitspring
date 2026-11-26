@@ -560,7 +560,7 @@ impl Player {
         let hog = if opts.exclusive { Some(device.hog()?) } else { None };
         let restore = DeviceRestore::capture(device)?;
 
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let speakers = device.speakers(info.output_channels as usize);
         let plan = output::plan(&track, opts, &info.rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers)?;
 

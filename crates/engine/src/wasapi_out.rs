@@ -10,7 +10,7 @@
 //! stream needs is created and used on its own "hifi-wasapi" thread.
 
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -249,7 +249,7 @@ impl Deref for Player {
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         // Shared mode can only run at the mixer's rate.
         let rates = if opts.exclusive { info.rates.clone() } else { vec![RateRange { min: info.nominal_rate, max: info.nominal_rate }] };
         // Exclusive mode opens a stereo pair, or every channel for a multichannel track on a
@@ -343,6 +343,31 @@ impl Drop for Player {
     }
 }
 
+/// Exclusive streams this process has open (or is opening) right now.
+static EXCLUSIVE_STREAMS: AtomicUsize = AtomicUsize::new(0);
+
+/// Some exclusive WASAPI stream of ours holds a device. Then no ASIO driver is probed: probing
+/// switches rates and modes, and the driver may drive the very hardware that stream plays on.
+pub(crate) fn exclusive_running() -> bool {
+    EXCLUSIVE_STREAMS.load(Ordering::Acquire) > 0
+}
+
+/// One exclusive stream, counted in [`EXCLUSIVE_STREAMS`] while it lives.
+struct ExclusiveStream;
+
+impl ExclusiveStream {
+    fn enter() -> Self {
+        EXCLUSIVE_STREAMS.fetch_add(1, Ordering::AcqRel);
+        Self
+    }
+}
+
+impl Drop for ExclusiveStream {
+    fn drop(&mut self) {
+        EXCLUSIVE_STREAMS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 /// Open the device, negotiate the format, report it, then feed the device until `stop`.
 #[allow(clippy::too_many_arguments)]
 fn stream_thread(
@@ -356,6 +381,8 @@ fn stream_thread(
     pb_rx: &mpsc::Receiver<Option<Arc<Playback>>>,
     stop: &AtomicBool,
 ) -> Result<()> {
+    // Counted from before the device is opened until the thread ends (see `exclusive_running`).
+    let _counted = exclusive.then(ExclusiveStream::enter);
     com();
     let device = Device { id: id.to_string() }.open()?;
     let mut client = device.get_iaudioclient().map_err(wasapi_err)?;

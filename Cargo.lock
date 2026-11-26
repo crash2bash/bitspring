@@ -1827,6 +1827,7 @@ dependencies = [
  "alsa",
  "anyhow",
  "ape-decoder",
+ "bitspring-asio",
  "coreaudio-sys",
  "encoding_rs",
  "jni 0.21.1",

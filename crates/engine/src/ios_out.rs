@@ -273,7 +273,7 @@ fn activate_at(hz: f64) -> Result<f64> {
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r)) && dop_blocker().is_none();
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r)) && dop_blocker().is_none();
         // Plan against every rate a USB DAC might have; the session tells us what it took.
         let wide: Vec<RateRange> = if info.transport == Transport::Usb {
             USB_RATES.iter().copied().map(RateRange::exact).collect()

@@ -353,7 +353,7 @@ impl Player {
         let opts = &PlayOptions { exclusive, ..opts.clone() };
         let dsd_rate = output::wire_dsd_rate(&track, opts);
         let mut dsd = output::DsdSupport {
-            dop: dsd_rate.is_some_and(|r| device.supports_dop(r)),
+            dop: opts.allow_dop && dsd_rate.is_some_and(|r| device.supports_dop(r)),
             native: dsd_rate.is_some_and(|r| device.supports_native_dsd(r)),
         };
         let wide = exclusive && track.channels > 2 && info.output_channels > 2;
