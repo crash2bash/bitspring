@@ -122,6 +122,7 @@ impl NativeDsd {
     }
 
     /// The DSD rates the card runs at in `format`.
+    #[cfg(test)]
     pub(crate) fn rates(&self, format: DsdFormat) -> &[u32] {
         self.formats.iter().find(|(f, _)| *f == format).map_or(&[], |(_, r)| r)
     }
@@ -131,6 +132,7 @@ impl NativeDsd {
         self.formats.iter().find(|(_, r)| r.contains(&dsd_rate)).map(|(f, _)| *f)
     }
 
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.formats.is_empty()
     }
