@@ -102,15 +102,17 @@ mod platform {
                         TOTAL.store(t, Ordering::Relaxed);
                     }
                 },
-                || {},
+                // Downloaded: let go of the DAC (hog mode, sample rate, an ASIO driver)
+                // before the installer runs — on Windows it ends this process without the
+                // app's own exit.
+                || {
+                    use tauri::Manager;
+                    drop(app.state::<crate::AppState>().player.lock().unwrap().take());
+                    hifi_engine::player::release_outputs();
+                },
             )
             .await
             .map_err(failed)?;
-        // Let go of the DAC (hog mode, sample rate) before the new version starts.
-        {
-            use tauri::Manager;
-            drop(app.state::<crate::AppState>().player.lock().unwrap().take());
-        }
         app.restart()
     }
 }

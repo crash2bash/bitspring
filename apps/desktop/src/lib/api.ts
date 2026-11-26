@@ -24,6 +24,11 @@ export interface Device {
   maxNativeDsd: number | null;
   /** A network player (UPnP/DLNA): streamed to over the network. */
   network: boolean;
+  /** Every playback has the device to itself, whatever the exclusive switch says (Windows: an
+   *  ASIO driver). */
+  alwaysExclusive: boolean;
+  /** The driver has a settings window of its own (api.openControlPanel). */
+  hasControlPanel: boolean;
   /** A network player's maker and model. */
   model: string | null;
   /** A network player's protocol: "UPnP" or "Chromecast". */
@@ -90,7 +95,7 @@ export type UpsampleTaps = 65536 | 1048576;
 export type Crossfeed = "light" | "medium" | "strong";
 
 /** DSD output rates, as multiples of 44.1 kHz. */
-export type DsdOut = 64 | 128 | 256;
+export type DsdOut = 64 | 128 | 256 | 512;
 /** The order of the sigma-delta modulator that makes the DSD stream. */
 export type DsdOrder = 5 | 7;
 
@@ -131,7 +136,7 @@ export interface AdvanceError {
 export type EngineError =
   | {
       code:
-        | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice"
+        | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice" | "deviceReset"
         | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder" | "folderNotOnDevice"
         | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled"
         | "eqFormat" | "eqEmpty" | "eqNotFound" | "irEmpty" | "installNotAllowed"
@@ -674,7 +679,11 @@ export function entryFromStream(t: STrack): PlaylistEntry {
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-export const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
+export const isWindows =
+  typeof navigator !== "undefined" &&
+  (navigator.userAgent.includes("Windows") ||
+    // layout work in a desktop browser: append ?windows (or ?asio, which adds an ASIO output)
+    (!("__TAURI_INTERNALS__" in window) && ["windows", "asio"].some((k) => new URLSearchParams(location.search).has(k))));
 /** iPhone / iPad (an iPad asks for desktop sites and says "Macintosh", but has a touch screen). */
 export const isIOS =
   typeof navigator !== "undefined" &&
@@ -724,6 +733,8 @@ export const api = {
   remoteNewAddress: () => call<RemoteStatus>("remote_new_address"),
   /** `search`: also look for network players (asks macOS for local network access once). */
   listDevices: (search = false) => call<Device[]>("list_devices", { search }),
+  /** Open the driver's own settings window (ASIO); resolves when the driver lets go of it. */
+  openControlPanel: (uid: string) => call<void>("open_control_panel", { uid }),
   /** The network player's own volume (0…100), or null. */
   outputVolume: (uid: string) => call<number | null>("output_volume", { uid }),
   setOutputVolume: (uid: string, volume: number) => call<void>("set_output_volume", { uid, volume }),
@@ -970,6 +981,7 @@ const TRANSPORT_NAMES: Record<string, string> = {
   DisplayPort: "DisplayPort",
   Thunderbolt: "Thunderbolt",
   AirPlay: "AirPlay",
+  Asio: "ASIO",
 };
 const TRANSPORT_KEYS = new Set(["BuiltIn", "Aggregate", "Virtual", "Network"]);
 

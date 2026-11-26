@@ -241,6 +241,11 @@ struct DeviceDto {
     max_native_dsd: Option<u32>,
     /// A network player (UPnP/DLNA): no exclusive mode or DoP to set, maybe a volume.
     network: bool,
+    /// Every playback has the device to itself, whatever the exclusive switch says (Windows:
+    /// an ASIO driver).
+    always_exclusive: bool,
+    /// The driver has a settings window of its own (`open_control_panel`).
+    has_control_panel: bool,
     /// A network player's maker and model ("WiiM Pro"), to tell it apart.
     model: Option<String>,
     /// A network player's protocol ("UPnP", "Chromecast"): a device may speak both.
@@ -265,6 +270,8 @@ impl From<&Output> for DeviceDto {
                 .flatten(),
             max_native_dsd: (transport.can_be_bit_perfect()).then(|| max_native_dsd(d)).flatten(),
             network: d.is_network(),
+            always_exclusive: d.always_exclusive(),
+            has_control_panel: d.has_control_panel(),
             model: match d {
                 Output::Network(t) => Some(t.model()).filter(|m| !m.is_empty()),
                 Output::Device(_) => None,
@@ -755,6 +762,15 @@ fn list_devices(search: Option<bool>) -> CmdResult<Vec<DeviceDto>> {
     Ok(outputs::outputs().map_err(err)?.iter().map(DeviceDto::from).collect())
 }
 
+/// Open the driver's own settings window (an ASIO control panel). Some drivers show it
+/// modally and return only when it closes, so it runs off the UI thread; the UI then lists
+/// the devices again (the rates may have changed).
+#[tauri::command]
+async fn open_control_panel(uid: String) -> CmdResult<()> {
+    let device = find_device(&uid)?;
+    tauri::async_runtime::spawn_blocking(move || device.control_panel().map_err(err)).await.map_err(err)?
+}
+
 /// A network player's own volume, 0…100 (None for other outputs and players without one).
 #[tauri::command(async)]
 fn output_volume(uid: String) -> Option<u32> {
@@ -930,6 +946,9 @@ async fn play_file(
     paused: Option<bool>,
 ) -> CmdResult<NowPlayingDto> {
     let device = find_device(&device_uid)?;
+    // An ASIO driver is never shared: whatever the switch says, it plays as exclusive (and the
+    // decisions below, the queue's next tracks and the signal path go by that).
+    let exclusive = exclusive || device.always_exclusive();
     let file = PathBuf::from(&path);
     let dop = dop.unwrap_or(false);
     let (dsp, _) = dsp_for(&state, &device, exclusive, dop);
@@ -1790,6 +1809,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_devices,
+            open_control_panel,
             system_locales,
             set_menu_labels,
             update::update_check,
@@ -1891,6 +1911,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 use tauri::Manager;
                 drop(app.state::<AppState>().player.lock().unwrap().take());
+                // Then whatever an output keeps open between playbacks (Windows: the ASIO
+                // driver, left in PCM mode for the next app). Nothing to do elsewhere.
+                outputs::release_outputs();
             }
         });
 }

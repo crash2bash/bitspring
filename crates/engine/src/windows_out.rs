@@ -86,6 +86,12 @@ impl Device {
         }
     }
 
+    /// Every playback has the device to itself (ASIO: the driver is never shared), whatever
+    /// `PlayOptions.exclusive` says.
+    pub fn always_exclusive(&self) -> bool {
+        matches!(self, Self::Asio { .. })
+    }
+
     /// The output has a settings window of its driver's own (ASIO).
     pub fn has_control_panel(&self) -> bool {
         matches!(self, Self::Asio { .. })

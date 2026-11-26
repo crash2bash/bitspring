@@ -17,7 +17,7 @@ use serde::Serialize;
 /// Phones get DSD64 only: the higher rates take a core's worth of battery or more.
 const PHONE: bool = cfg!(mobile);
 
-/// The setting the UI sent: the rate as a multiple of 44.1 kHz (64, 128 or 256; anything else:
+/// The setting the UI sent: the rate as a multiple of 44.1 kHz (64, 128, 256 or 512; anything else:
 /// off) and the modulator's order (5 or 7; anything else: 7).
 pub fn parse(multiple: Option<u32>, order: Option<u32>) -> Option<DsdOut> {
     parse_on(multiple, order, PHONE)
@@ -30,7 +30,7 @@ fn parse_on(multiple: Option<u32>, order: Option<u32>, phone: bool) -> Option<Ds
     Some(DsdOut { rate: if phone { DsdRate::Dsd64 } else { rate }, order })
 }
 
-/// The rate (64, 128, 256) and order (5, 7) as the UI names them.
+/// The rate (64, 128, 256, 512) and order (5, 7) as the UI names them.
 pub fn names(out: Option<DsdOut>) -> (Option<u32>, Option<u32>) {
     match out {
         Some(o) => (Some(o.rate.multiple()), Some(o.order.get() as u32)),
@@ -218,12 +218,13 @@ mod tests {
         assert_eq!(parse_on(Some(64), Some(5), false), Some(out(64, 5)));
         assert_eq!(parse_on(Some(128), Some(7), false), Some(out(128, 7)));
         assert_eq!(parse_on(Some(256), Some(7), false), Some(out(256, 7)));
+        assert_eq!(parse_on(Some(512), Some(5), false), Some(out(512, 5)));
         // The order defaults to the seventh, also for one not offered.
         assert_eq!(parse_on(Some(128), None, false), Some(out(128, 7)));
         assert_eq!(parse_on(Some(64), Some(6), false), Some(out(64, 7)));
         // Off: nothing asked, or a rate not offered.
         assert_eq!(parse_on(None, Some(5), false), None);
-        for m in [0, 32, 100, 512, u32::MAX] {
+        for m in [0, 32, 100, 1024, u32::MAX] {
             assert_eq!(parse_on(Some(m), Some(7), false), None, "{m}");
         }
         assert_eq!(parse(Some(64), Some(5)), Some(out(64, 5)));
@@ -235,7 +236,8 @@ mod tests {
         assert_eq!(parse_on(Some(256), Some(7), true), Some(out(64, 7)));
         assert_eq!(parse_on(Some(128), Some(5), true), Some(out(64, 5)));
         assert_eq!(parse_on(Some(64), None, true), Some(out(64, 7)));
-        assert_eq!(parse_on(Some(512), None, true), None);
+        assert_eq!(parse_on(Some(512), None, true), Some(out(64, 7)));
+        assert_eq!(parse_on(Some(1024), None, true), None);
         assert_eq!(parse_on(None, None, true), None);
     }
 
@@ -243,7 +245,7 @@ mod tests {
     fn settings_get_their_ui_names_back() {
         assert_eq!(names(None), (None, None));
         assert_eq!(names(Some(out(256, 5))), (Some(256), Some(5)));
-        for m in [64, 128, 256] {
+        for m in [64, 128, 256, 512] {
             for o in [5, 7] {
                 assert_eq!(parse_on(names(Some(out(m, o))).0, names(Some(out(m, o))).1, false), Some(out(m, o)));
             }
@@ -320,6 +322,18 @@ mod tests {
         assert_eq!(run_native(want, true, true, true, 256, (64, 128)), (Some(out(128, 7)), None));
         // Never above the wish.
         assert_eq!(run_native(Some(out(64, 5)), true, false, false, 0, (64, 256)), (Some(out(64, 5)), None));
+    }
+
+    #[test]
+    fn dsd512_where_the_device_takes_it_natively() {
+        let want = Some(out(512, 7));
+        // Native up to DSD512: as asked.
+        assert_eq!(run_native(want, true, false, false, 0, (64, 512)), (want, None));
+        // A device that tops out lower (natively or over DoP) plays the highest it takes; the
+        // UI says it is limited (signal path below the wish), no note.
+        assert_eq!(run_native(want, true, false, false, 0, (64, 256)), (Some(out(256, 7)), None));
+        assert_eq!(run(want, facts(256)), (Some(out(256, 7)), None));
+        assert_eq!(run(Some(out(512, 5)), facts(128)), (Some(out(128, 5)), None));
     }
 
     #[test]

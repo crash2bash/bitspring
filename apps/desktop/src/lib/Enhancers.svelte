@@ -14,6 +14,7 @@
     stepped = null,
     dsdStepped = null,
     device = null,
+    maxNativeDsd = null,
     others = [],
     onchange,
     oncopy,
@@ -36,6 +37,9 @@
     dsdStepped?: { dsdOut: number | null; order: number | null; kind: "rate" | "order" | "off" } | null;
     /** The picked output's name, whose settings these are (null: not known yet). */
     device?: string | null;
+    /** The highest DSD the picked output takes natively (64 … 512), if any: DSD512 output is
+     *  offered only where it is 512 (DoP can't carry it). */
+    maxNativeDsd?: number | null;
     /** The other outputs with settings of their own, to copy from (settings key, name as last seen). */
     others?: { key: string; name: string }[];
     onchange: (s: DspSettings) => void;
@@ -96,7 +100,11 @@
   let loadText = $derived(loadPct === null ? null : t("enh.load", { pct: num(loadPct, { maximumFractionDigits: loadPct < 10 ? 1 : 0 }) }));
 
   // DSD output: phones take DSD64 only (the higher rates cost a core's worth of battery or more).
-  const DSD_OUT: (DsdOut | null)[] = phone ? [null, 64] : [null, 64, 128, 256];
+  // DSD512 only to a device that takes it natively (DoP can't carry it), or while it is the
+  // setting (a device that tops out lower plays the highest it takes, with the notice below).
+  let dsdRates = $derived<(DsdOut | null)[]>(
+    phone ? [null, 64] : (maxNativeDsd ?? 0) >= 512 || settings.dsdOut === 512 ? [null, 64, 128, 256, 512] : [null, 64, 128, 256],
+  );
   /** The rate chosen, as it plays: a higher one in a phone's settings plays as DSD64. */
   let dsdChosen = $derived<DsdOut | null>(phone && settings.dsdOut ? 64 : settings.dsdOut);
   const ORDERS: DsdOrder[] = [7, 5];
@@ -106,6 +114,7 @@
     64: { 5: 109, 7: 119 },
     128: { 5: 127, 7: 132 },
     256: { 5: 146, 7: 160 },
+    512: { 5: 161, 7: 168 },
   };
   /** The one notice under DSD output: why it changed by itself, why it doesn't run, or that it
    *  runs at a lower rate than chosen. */
@@ -296,7 +305,7 @@
       <fieldset>
         <legend>{t("enh.dsd")}</legend>
         <div class="seg" role="radiogroup" aria-label={t("enh.dsd")} use:liquidPill={dsdChosen}>
-          {#each DSD_OUT as v (v)}
+          {#each dsdRates as v (v)}
             <button role="radio" aria-checked={dsdChosen === v} class:sel={dsdChosen === v} onclick={() => set({ dsdOut: v })}>
               {v ? `DSD${v}` : t("enh.offShort")}
             </button>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { i18n, LOCALES, t } from "./i18n.svelte";
   import { checkUpdates, updates } from "./updates.svelte";
-  import { inTauri } from "./api";
+  import { inTauri, isWindows } from "./api";
   import { hasRemote, loadRemote, newAddress, remote, setRemote } from "./remote.svelte";
   import { look, LOOKS } from "./look.svelte";
   import { lyricsPrefs } from "./lyricsPrefs.svelte";
@@ -216,6 +216,8 @@
               {#if updates.error && !updates.update}<p class="help err">{updates.error}</p>{/if}
             {/if}
             <p class="help"><a href={SITE} onclick={openSite}>bitspring.app</a></p>
+            <!-- The ASIO crate is GPLv3 (Steinberg's SDK option), which makes this build GPLv3. -->
+            {#if isWindows}<p class="help">{t("settings.asioLicence")}</p>{/if}
           </div>
           {#if updates.enabled}
             {#if updates.update}

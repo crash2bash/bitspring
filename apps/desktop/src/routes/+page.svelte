@@ -562,6 +562,17 @@
     }
   }
 
+  /** The picked output's driver settings window (ASIO). Afterwards the list is read again:
+   *  the driver may run at other rates now. */
+  async function controlPanel() {
+    try {
+      await api.openControlPanel(selected);
+    } catch (e) {
+      error = t("err.controlPanel", { error: errorText(e) });
+    }
+    await refreshDevices();
+  }
+
   /** Apply processing settings to output `uid` (the picked one unless said) and keep them as
    *  its own; a track playing there continues in place with the new chain. */
   async function applyDsp(next: DspSettings, uid = selected) {
@@ -954,8 +965,8 @@
       <button class:sel={screen === "eq"} aria-current={screen === "eq" ? "page" : undefined} data-label={t("nav.eq")} onclick={() => (screen = "eq")}>{t("nav.eq")}</button>
     </nav>
     <div class="controls">
-      <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} {dsdStepped} device={dspDeviceName} others={dspOthers} onchange={(s) => applyDsp(s)} oncopy={copyDspFrom} onopeneq={() => (screen = "eq")} />
-      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices playing={liveRate} onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} />
+      <Enhancers settings={dsp} {eqName} {ir} track={now && !testing ? { path: now.path, title: now.title } : null} signal={now && !testing ? now.signal : null} load={status.load} stepped={filterStepped} {dsdStepped} device={dspDeviceName} maxNativeDsd={devices.find((d) => d.uid === selected)?.maxNativeDsd ?? null} others={dspOthers} onchange={(s) => applyDsp(s)} oncopy={copyDspFrom} onopeneq={() => (screen = "eq")} />
+      <DevicePicker {devices} bind:selected bind:exclusive bind:dopDevices playing={liveRate} onrefresh={() => refreshDevices(true)} onchanneltest={channelTest} oncontrolpanel={controlPanel} />
       <RemoteButton />
       <button class="trigger gear" class:open={screen === "settings"} onclick={toggleSettings} aria-pressed={screen === "settings"} aria-label={t("settings.label")} title={t("settings.label")}>
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">

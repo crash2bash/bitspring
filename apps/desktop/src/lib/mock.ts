@@ -25,13 +25,16 @@ const mockDsdLimit = new URLSearchParams(location.search).has("dsdlimit") ? 128 
 /** ?nativedsd: the USB DAC takes DSD natively up to DSD512 (its driver declares a DSD format):
  *  DSD files and DSD output go to it as they are, without the DoP switch. Its EQ starts off. */
 const mockNativeDsd = new URLSearchParams(location.search).has("nativedsd") ? 512 : null;
+/** ?asio: a Windows machine (see api.ts isWindows) with an ASIO driver listed next to the USB
+ *  DAC: always exclusive, a driver settings window, native DSD up to DSD512. */
+const mockAsio = new URLSearchParams(location.search).has("asio");
 /** ?dsdstep: a few seconds into a track, the pretend processor falls behind and the DSD output
  *  steps down once: 256 → 128 → 64 at the same modulator, then 64 with the 5th order, then off. */
 let mockDsdStepDown = new URLSearchParams(location.search).has("dsdstep");
 let mockDsdStep: { seq: number; dsdOut: number | null; order: number | null; deviceKey: string } | null = null;
 let mockDsdStepSeq = 0;
 /** The DoP word rate that carries each DSD rate. */
-const DOP_WIRE: Record<number, number> = { 64: 176400, 128: 352800, 256: 705600 };
+const DOP_WIRE: Record<number, number> = { 64: 176400, 128: 352800, 256: 705600, 512: 1411200 };
 const LIB: [string, string, string | null, string | null, string, number, number | null, string | null, string[]][] = [
   ["Ada Marlow", "Paper Moons", "2017", "Folk", "ALAC", 48000, 24, "#6b5d2e", ["Kite Strings", "Harbour", "Paper Moons"]],
   ["Echo Field", "Signal Path", "2020", "Electronic", "MP3", 44100, null, "#16233a", ["Carrier", "Sideband", "Noise Floor"]],
@@ -104,12 +107,15 @@ const libUnder = (dir: string, parent: string) => dir === parent || dir.startsWi
 let mockVolume = 35;
 let mockRemote = false;
 const devices: Device[] = [
-  { uid: "q7", key: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, maxNativeDsd: mockNativeDsd, network: false, model: null, protocol: null },
-  { uid: "spk", key: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: false, model: null, protocol: null },
-  { uid: "air", key: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, maxNativeDsd: null, network: false, model: null, protocol: null },
-  { uid: "upnp:wiim", key: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, model: "WiiM Pro Plus", protocol: "UPnP" },
-  { uid: "upnp:sonos", key: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, model: "Sonos Era 100", protocol: "UPnP" },
-  { uid: "cast:shield", key: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
+  { uid: "q7", key: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, maxNativeDsd: mockNativeDsd, network: false, alwaysExclusive: false, hasControlPanel: false, model: null, protocol: null },
+  ...(mockAsio
+    ? [{ uid: "asio:{8E2B5C3A-0F1D-4B7E-9A6C-2D4F1E0B7C95}", key: "asio:{8E2B5C3A-0F1D-4B7E-9A6C-2D4F1E0B7C95}", name: "FiiO ASIO Driver (ASIO)", transport: "Asio", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: 256, maxNativeDsd: 512, network: false, alwaysExclusive: true, hasControlPanel: true, model: null, protocol: null }]
+    : []),
+  { uid: "spk", key: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: false, alwaysExclusive: false, hasControlPanel: false, model: null, protocol: null },
+  { uid: "air", key: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, maxNativeDsd: null, network: false, alwaysExclusive: false, hasControlPanel: false, model: null, protocol: null },
+  { uid: "upnp:wiim", key: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, alwaysExclusive: false, hasControlPanel: false, model: "WiiM Pro Plus", protocol: "UPnP" },
+  { uid: "upnp:sonos", key: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, alwaysExclusive: false, hasControlPanel: false, model: "Sonos Era 100", protocol: "UPnP" },
+  { uid: "cast:shield", key: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, alwaysExclusive: false, hasControlPanel: false, model: "SHIELD Android TV", protocol: "Chromecast" },
 ];
 
 /** Like the backend: each output's processing by settings key; one with none has the defaults. */
@@ -303,6 +309,10 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
       const url = "http://192.168.0.169:48173/?t=3f9c2a7e5b1d4c8a9e0f6b2d7c4a1e8f";
       return { enabled: mockRemote, url: mockRemote ? url : null, qr: mockRemote ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><rect width="21" height="21" fill="#fff"/><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1z" fill="#000"/></svg>' : null, error: null } as T;
     }
+    case "open_control_panel":
+      // A driver's window, open for a moment (the real call returns when it closes).
+      await new Promise((r) => setTimeout(r, 400));
+      return undefined as T;
     case "output_volume":
       return (mockVolume as unknown) as T;
     case "set_output_volume":
@@ -522,7 +532,8 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "play_file": {
       const dev = devices.find((d) => d.uid === args.deviceUid) ?? devices[0];
       lastDevice = dev;
-      lastExclusive = args.exclusive as boolean;
+      // Like the backend: an ASIO driver plays exclusively whatever the switch says.
+      lastExclusive = (args.exclusive as boolean) || dev.alwaysExclusive;
       lastPath = args.path as string;
       lastDop = !!args.dop;
       const signal = mockSignal(dev, lastExclusive, lastPath, lastDop);

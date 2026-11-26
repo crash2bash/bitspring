@@ -93,6 +93,16 @@ impl Output {
         matches!(self, Self::Network(_))
     }
 
+    /// Every playback has the device to itself, whether exclusive access is asked for or not
+    /// (Windows: an ASIO driver, which is never shared).
+    pub fn always_exclusive(&self) -> bool {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.always_exclusive(),
+            _ => false,
+        }
+    }
+
     /// The output's driver has a settings window of its own (Windows: an ASIO driver's
     /// control panel, for its buffer size and the like).
     pub fn has_control_panel(&self) -> bool {

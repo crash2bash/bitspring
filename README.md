@@ -118,3 +118,9 @@ npm run build:appstore        # Mac App Store build (sandboxed, no streaming or 
 
 [MIT](LICENSE). Third-party libraries keep their own licenses (mostly MIT and Apache-2.0; the
 Symphonia decoders are MPL-2.0, the Opus decoder, libopus, BSD-3-Clause).
+
+The Windows build also includes ASIO support, `crates/asio`, which is under the
+[GNU GPL v3](crates/asio/LICENSE) (it is translated from Steinberg's ASIO SDK, used under its
+GPLv3 option), so the Windows build as a whole is distributed under the GPLv3; the builds for
+other systems and the rest of this repository stay MIT. ASIO is a registered trademark of
+Steinberg Media Technologies GmbH.
