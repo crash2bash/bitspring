@@ -154,12 +154,17 @@
       </label>
       {/if}
 
+      <!-- the driver itself declares a native DSD format: no switch, nothing to risk -->
+      {#if current?.maxNativeDsd}
+        <p class="note">{t("dev.nativeDsd", { device: deviceLabel(current.name), max: current.maxNativeDsd })}</p>
+      {/if}
+
       {#if current?.maxDop}
         <label class="option">
           <input type="checkbox" checked={dop} onchange={(e) => setDop(e.currentTarget.checked)} />
           <span>
             <strong>{t("dev.dop")}</strong>
-            <small>{t("dev.dopHelp", { device: deviceLabel(current.name), max: current.maxDop })}</small>
+            <small>{t(current.maxNativeDsd ? "dev.dopHelpNative" : "dev.dopHelp", { device: deviceLabel(current.name), max: current.maxDop })}</small>
           </span>
         </label>
       {/if}

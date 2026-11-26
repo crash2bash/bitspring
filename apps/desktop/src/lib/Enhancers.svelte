@@ -118,7 +118,8 @@
     }
     if (signal && settings.dsdOut !== null && signal.dsdOut === null && signal.dsdOutNote)
       return t("enh.dsdOff", { reason: dsdOutNoteText(signal.dsdOutNote) });
-    if (signal?.dsdOut && dsdChosen !== null && signal.dsdOut < dsdChosen) return t("enh.dsdLimited", { dsd: `DSD${signal.dsdOut}` });
+    if (signal?.dsdOut && dsdChosen !== null && signal.dsdOut < dsdChosen)
+      return t(signal.nativeDsd ? "enh.dsdLimitedNative" : "enh.dsdLimited", { dsd: `DSD${signal.dsdOut}` });
     return null;
   });
 

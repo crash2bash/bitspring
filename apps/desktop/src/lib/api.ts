@@ -19,6 +19,9 @@ export interface Device {
   bitPerfectCapable: boolean;
   /** Highest DSD the device could take as DoP (64, 128, 256…), if any. */
   maxDop: number | null;
+  /** Highest DSD the device takes natively (64 … 1024), if any: DSD files go to it as they are,
+   *  without the DoP switch. */
+  maxNativeDsd: number | null;
   /** A network player (UPnP/DLNA): streamed to over the network. */
   network: boolean;
   /** A network player's maker and model. */
@@ -54,9 +57,11 @@ export interface Signal {
   levelLimited: boolean;
   /** DSD source: its 1-bit rate in Hz. */
   dsdRate: number | null;
-  /** DSD goes to the DAC as DoP (otherwise it was converted to PCM). */
+  /** The DSD file's own bits go to the DAC, as DoP or natively (otherwise it was converted to PCM). */
   dop: boolean;
-  /** Why DoP was asked for but this file plays as PCM. */
+  /** The DSD on the wire (the file's own, or `dsdOut`) goes natively, not as DoP. */
+  nativeDsd: boolean;
+  /** Why this DSD file plays as PCM although it could have gone as it is. */
   dsdNote: DsdNote | null;
   /** The source's channels as the engine names them: "Stereo", "Mono", "5.1", "10 ch". */
   layout: string;
@@ -66,7 +71,7 @@ export interface Signal {
   upsampleFilter: UpsampleFilter | null;
   /** Its length in taps (null for apodizing, which has one length). */
   upsampleTaps: number | null;
-  /** PCM encoded to DSD and sent as DoP: the DSD multiple that runs (64, 128, 256). It can be
+  /** PCM encoded to DSD and sent as DoP or natively (`nativeDsd`): the DSD multiple that runs (64, 128, 256…). It can be
    *  lower than the one asked for, where the device goes no higher. Null: PCM goes out, or a
    *  DSD file goes as DoP (that is `dop`). */
   dsdOut: number | null;
@@ -96,16 +101,22 @@ export type DsdOutNote =
   | { kind: "volume" }
   | { kind: "network" }
   | { kind: "rate"; device: string; dsd: string; khz: number }
-  | { kind: "refused"; device: string; dsd: string; khz: number };
+  | { kind: "refused"; device: string; dsd: string; khz: number }
+  /** The device takes DSD natively only above the rate asked for. */
+  | { kind: "nativeRate"; device: string; dsd: string }
+  | { kind: "refusedNative"; device: string; dsd: string };
 
-/** Why a DSD file plays as PCM although DoP was asked for (worded by dsdNoteText). */
-export type DsdNote =
+/** Why a DSD file plays as PCM although it could have gone as it is (worded by dsdNoteText).
+ *  `native`: the device takes DSD natively — at this rate, or (with "rate") at others; false:
+ *  only DoP was in question. With "rate", `dop`: DoP was asked for too. */
+export type DsdNote = { native: boolean } & (
   | { kind: "exclusive" }
   | { kind: "volume" }
   | { kind: "dsp" }
   | { kind: "level" }
-  | { kind: "rate"; device: string; khz: number; dsd: string }
-  | { kind: "channels"; channels: number };
+  | { kind: "rate"; device: string; khz: number; dsd: string; dop: boolean }
+  | { kind: "channels"; channels: number }
+);
 
 /** The queue stopped at a track it couldn't play. */
 export interface AdvanceError {
@@ -975,16 +986,21 @@ export function layoutName(layout: string): string {
   return n ? tn("layout.channels", +n[1]) : layout;
 }
 
-/** Why DoP isn't used, in the UI language. */
+/** Why a DSD file isn't sent as it is (natively or as DoP), in the UI language. */
 export function dsdNoteText(n: DsdNote): string {
-  if (n.kind === "rate") return t("dsd.rate", { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
-  if (n.kind === "channels") return t("dsd.channels", { n: num(n.channels) });
+  if (n.kind === "rate") {
+    const key = !n.native ? "dsd.rate" : n.dop ? "dsd.rateNativeDop" : "dsd.rateNative";
+    return t(key, { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  }
+  if (n.kind === "channels") return t(n.native ? "dsd.channelsNative" : "dsd.channels", { n: num(n.channels) });
+  if (n.kind === "exclusive" && n.native) return t("dsd.exclusiveNative");
   return t(`dsd.${n.kind}`);
 }
 
 /** Why DSD output doesn't run, in the UI language. */
 export function dsdOutNoteText(n: DsdOutNote): string {
   if (n.kind === "rate" || n.kind === "refused") return t(`dsdOutNote.${n.kind}`, { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  if (n.kind === "nativeRate" || n.kind === "refusedNative") return t(`dsdOutNote.${n.kind}`, { device: deviceLabel(n.device), dsd: n.dsd });
   return t(`dsdOutNote.${n.kind}`);
 }
 

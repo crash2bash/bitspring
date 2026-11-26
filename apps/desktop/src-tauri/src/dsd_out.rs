@@ -4,7 +4,8 @@
 //!
 //! `DspSettings.dsd_out` in the app's settings is what the user *wants*. What a playback runs
 //! with is that wish resolved for the output and the playback ([`resolve`]): only the exclusive
-//! playback of a DAC the user said takes DoP, at a rate it can carry, ever gets one.
+//! playback of a DAC that takes DSD natively (its driver says so), or that the user said takes
+//! DoP, at a rate it can carry, ever gets one.
 
 use hifi_engine::dsd;
 use hifi_engine::dsp::dsd_encode::{DsdOut, DsdRate, ModOrder};
@@ -42,10 +43,10 @@ pub fn names(out: Option<DsdOut>) -> (Option<u32>, Option<u32>) {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum DsdOutNote {
-    /// DoP needs exclusive access to the device.
+    /// DSD output needs exclusive access to the device.
     Exclusive,
     /// The device's DoP switch is off: the user hasn't said this DAC decodes DoP, and one that
-    /// doesn't would play it as noise.
+    /// doesn't would play it as noise. (Never for a DAC that takes DSD natively.)
     Device,
     /// Something system-wide blocks DoP (iOS: the volume is below maximum).
     Volume,
@@ -56,6 +57,11 @@ pub enum DsdOutNote {
     Rate { device: String, dsd: String, khz: f64 },
     /// The device was opened for DoP at `khz` (`dsd`) and failed to start; PCM plays.
     Refused { device: String, dsd: String, khz: f64 },
+    /// The device takes DSD natively, but only at rates above the one asked for (`dsd`), and
+    /// DoP doesn't carry any at or below it.
+    NativeRate { device: String, dsd: String },
+    /// The device was opened for native DSD at `dsd` and failed to start; PCM plays.
+    RefusedNative { device: String, dsd: String },
 }
 
 impl DsdOutNote {
@@ -65,6 +71,15 @@ impl DsdOutNote {
     pub fn refused(device: &str, asked: DsdOut) -> Self {
         let (dsd, khz) = Self::wire(asked.rate);
         Self::Refused { device: device.trim().to_string(), dsd, khz }
+    }
+
+    /// [`refused`](Self::refused), for a device that takes the rate asked for natively (the
+    /// engine tried that first).
+    pub fn refused_as(device: &str, asked: DsdOut, native: bool) -> Self {
+        if !native {
+            return Self::refused(device, asked);
+        }
+        Self::RefusedNative { device: device.trim().to_string(), dsd: dsd::dsd_name(asked.rate.hz()) }
     }
 
     fn rate(device: &str, rate: DsdRate) -> Self {
@@ -92,27 +107,36 @@ pub struct Facts<'a> {
     pub device: &'a str,
     /// The device can carry DoP at this DSD rate (its clock and formats).
     pub carries: &'a dyn Fn(DsdRate) -> bool,
+    /// The device takes this DSD rate natively (its driver declares a DSD format for it):
+    /// no DoP switch needed, and nothing that blocks DoP matters.
+    pub native: &'a dyn Fn(DsdRate) -> bool,
 }
 
 /// What runs of `want` under `facts`, and why nothing does when something was wanted. The
-/// rate is the highest the device carries at or below the wish, with the same order; the
-/// signal path then shows it, and the UI compares it with the wish (no note).
+/// rate is the highest the device carries at or below the wish, with the same order — a rate
+/// carries natively, or as DoP where the switch is on and nothing blocks it; the signal path
+/// then shows it, and the UI compares it with the wish (no note).
 pub fn decide(want: Option<DsdOut>, facts: &Facts) -> (Option<DsdOut>, Option<DsdOutNote>) {
     let Some(want) = want else { return (None, None) };
-    let note = if facts.network {
-        DsdOutNote::Network
-    } else if !facts.exclusive {
-        DsdOutNote::Exclusive
+    if facts.network {
+        return (None, Some(DsdOutNote::Network));
+    }
+    if !facts.exclusive {
+        return (None, Some(DsdOutNote::Exclusive));
+    }
+    let dop = facts.dop && !facts.blocked;
+    let carries = |r: DsdRate| (facts.native)(r) || (dop && (facts.carries)(r));
+    if let Some(rate) = DsdRate::ALL.into_iter().rev().filter(|r| r.multiple() <= want.rate.multiple()).find(|r| carries(*r)) {
+        return (Some(DsdOut { rate, order: want.order }), None);
+    }
+    let note = if DsdRate::ALL.into_iter().any(|r| (facts.native)(r)) {
+        DsdOutNote::NativeRate { device: facts.device.to_string(), dsd: dsd::dsd_name(want.rate.hz()) }
     } else if !facts.dop {
         DsdOutNote::Device
     } else if facts.blocked {
         DsdOutNote::Volume
     } else {
-        let rate = DsdRate::ALL.into_iter().rev().filter(|r| r.multiple() <= want.rate.multiple()).find(|r| (facts.carries)(*r));
-        match rate {
-            Some(rate) => return (Some(DsdOut { rate, order: want.order }), None),
-            None => DsdOutNote::rate(facts.device, DsdRate::Dsd64),
-        }
+        DsdOutNote::rate(facts.device, DsdRate::Dsd64)
     };
     (None, Some(note))
 }
@@ -124,6 +148,7 @@ pub fn resolve(want: Option<DsdOut>, device: &Output, exclusive: bool, dop: bool
         return (None, None);
     }
     let carries = |r: DsdRate| device.supports_dop(r.hz());
+    let native = |r: DsdRate| device.supports_native_dsd(r.hz());
     let facts = Facts {
         network: device.is_network(),
         exclusive,
@@ -131,6 +156,7 @@ pub fn resolve(want: Option<DsdOut>, device: &Output, exclusive: bool, dop: bool
         blocked: output::dop_blocker().is_some(),
         device: device.name().trim(),
         carries: &carries,
+        native: &native,
     };
     decide(want, &facts)
 }
@@ -231,7 +257,15 @@ mod tests {
 
     fn run(want: Option<DsdOut>, (network, exclusive, dop, blocked, max): (bool, bool, bool, bool, u32)) -> (Option<DsdOut>, Option<DsdOutNote>) {
         let carries = move |r: DsdRate| r.multiple() <= max;
-        decide(want, &Facts { network, exclusive, dop, blocked, device: "DAC", carries: &carries })
+        decide(want, &Facts { network, exclusive, dop, blocked, device: "DAC", carries: &carries, native: &|_| false })
+    }
+
+    /// [`run`] on a device that takes DSD natively at the multiples `from..=to` (none when
+    /// `from` > `to`), DoP up to `dop_max` (0: none).
+    fn run_native(want: Option<DsdOut>, exclusive: bool, dop: bool, blocked: bool, dop_max: u32, (from, to): (u32, u32)) -> (Option<DsdOut>, Option<DsdOutNote>) {
+        let carries = move |r: DsdRate| r.multiple() <= dop_max;
+        let native = move |r: DsdRate| (from..=to).contains(&r.multiple());
+        decide(want, &Facts { network: false, exclusive, dop, blocked, device: "DAC", carries: &carries, native: &native })
     }
 
     #[test]
@@ -263,9 +297,41 @@ mod tests {
         assert_eq!(run(Some(out(128, 7)), facts(256)), (Some(out(128, 7)), None));
         // A device that carries DSD128 but not DSD64 (a clock without 176.4 kHz): DSD128.
         let carries = |r: DsdRate| r == DsdRate::Dsd128;
-        let f = Facts { network: false, exclusive: true, dop: true, blocked: false, device: "DAC", carries: &carries };
+        let f = Facts { network: false, exclusive: true, dop: true, blocked: false, device: "DAC", carries: &carries, native: &|_| false };
         assert_eq!(decide(Some(out(256, 7)), &f), (Some(out(128, 7)), None));
         assert_eq!(decide(Some(out(64, 7)), &f).0, None);
+    }
+
+    #[test]
+    fn a_native_dac_needs_no_dop_switch() {
+        let want = Some(out(256, 7));
+        // Native up to DSD256, the DoP switch off (and DoP carrying nothing): as asked.
+        assert_eq!(run_native(want, true, false, false, 0, (64, 256)), (want, None));
+        // What blocks DoP doesn't touch native DSD.
+        assert_eq!(run_native(want, true, false, true, 0, (64, 256)), (want, None));
+        assert_eq!(run_native(want, true, true, true, 256, (64, 256)), (want, None));
+        // It still needs exclusive access, and a network player never gets it.
+        assert_eq!(run_native(want, false, false, false, 0, (64, 256)), (None, Some(DsdOutNote::Exclusive)));
+        // Native only up to DSD128: DSD128, unless DoP (switched on) goes higher.
+        assert_eq!(run_native(want, true, false, false, 0, (64, 128)), (Some(out(128, 7)), None));
+        assert_eq!(run_native(want, true, true, false, 256, (64, 128)), (want, None));
+        // ...but not with DoP off, or blocked.
+        assert_eq!(run_native(want, true, false, false, 256, (64, 128)), (Some(out(128, 7)), None));
+        assert_eq!(run_native(want, true, true, true, 256, (64, 128)), (Some(out(128, 7)), None));
+        // Never above the wish.
+        assert_eq!(run_native(Some(out(64, 5)), true, false, false, 0, (64, 256)), (Some(out(64, 5)), None));
+    }
+
+    #[test]
+    fn a_native_dac_only_above_the_wish() {
+        // Native from DSD128 up, DSD64 asked for, no DoP: says so (not "switch DoP on").
+        let note = DsdOutNote::NativeRate { device: "DAC".into(), dsd: "DSD64".into() };
+        assert_eq!(run_native(Some(out(64, 7)), true, false, false, 0, (128, 256)), (None, Some(note.clone())));
+        assert_eq!(run_native(Some(out(64, 7)), true, true, false, 0, (128, 256)), (None, Some(note)));
+        // DoP switched on and carrying DSD64: DoP.
+        assert_eq!(run_native(Some(out(64, 7)), true, true, false, 64, (128, 256)), (Some(out(64, 7)), None));
+        // No native rate at all: as before.
+        assert_eq!(run_native(Some(out(64, 7)), true, false, false, 64, (1, 0)), (None, Some(DsdOutNote::Device)));
     }
 
     #[test]
@@ -274,6 +340,8 @@ mod tests {
         assert_eq!(note(64, 7), DsdOutNote::Refused { device: "DAC".into(), dsd: "DSD64".into(), khz: 176.4 });
         assert_eq!(note(128, 5), DsdOutNote::Refused { device: "DAC".into(), dsd: "DSD128".into(), khz: 352.8 });
         assert_eq!(note(256, 7), DsdOutNote::Refused { device: "DAC".into(), dsd: "DSD256".into(), khz: 705.6 });
+        assert_eq!(DsdOutNote::refused_as(" DAC ", out(128, 7), false), note(128, 7));
+        assert_eq!(DsdOutNote::refused_as(" DAC ", out(128, 7), true), DsdOutNote::RefusedNative { device: "DAC".into(), dsd: "DSD128".into() });
     }
 
     #[test]
@@ -285,6 +353,8 @@ mod tests {
             DsdOutNote::Network,
             DsdOutNote::rate("DAC", DsdRate::Dsd64),
             DsdOutNote::refused("DAC", out(256, 7)),
+            DsdOutNote::NativeRate { device: "DAC".into(), dsd: "DSD64".into() },
+            DsdOutNote::refused_as("DAC", out(64, 7), true),
         ];
         let json: Vec<String> = notes.iter().map(|n| serde_json::to_string(n).unwrap()).collect();
         for j in &json {
@@ -296,6 +366,8 @@ mod tests {
         assert_eq!(json[3], r#"{"kind":"network"}"#);
         assert_eq!(json[4], r#"{"kind":"rate","device":"DAC","dsd":"DSD64","khz":176.4}"#);
         assert_eq!(json[5], r#"{"kind":"refused","device":"DAC","dsd":"DSD256","khz":705.6}"#);
+        assert_eq!(json[6], r#"{"kind":"nativeRate","device":"DAC","dsd":"DSD64"}"#);
+        assert_eq!(json[7], r#"{"kind":"refusedNative","device":"DAC","dsd":"DSD64"}"#);
         let step = serde_json::to_string(&DsdStep { seq: 2, dsd_out: Some(64), order: Some(5), device_key: "dac".into() }).unwrap();
         println!("{step}");
         assert_eq!(step, r#"{"seq":2,"dsdOut":64,"order":5,"deviceKey":"dac"}"#);

@@ -1130,7 +1130,7 @@
         </span>
       </div>
       <span class="mini-sig" class:ok={now.signal.bitPerfect}>
-        <i aria-hidden="true"></i>{t(now.signal.bitPerfect ? "signal.bitPerfect" : "signal.processing")}{t("list.sep")}{#if now.signal.dop && now.signal.dsdRate}{dsdName(now.signal.dsdRate)} DoP{:else if now.signal.dsdOut}DSD{now.signal.dsdOut} DoP{:else}{khz(now.signal.deviceRate)} {t("unit.khz")}{/if}
+        <i aria-hidden="true"></i>{t(now.signal.bitPerfect ? "signal.bitPerfect" : "signal.processing")}{t("list.sep")}{#if now.signal.dop && now.signal.dsdRate}{dsdName(now.signal.dsdRate)} {now.signal.nativeDsd ? t("unit.native") : "DoP"}{:else if now.signal.dsdOut}DSD{now.signal.dsdOut} {now.signal.nativeDsd ? t("unit.native") : "DoP"}{:else}{khz(now.signal.deviceRate)} {t("unit.khz")}{/if}
       </span>
       <div class="mini-keys" dir="ltr">
         <button onclick={prev} aria-label={t("common.prev")} title={hint(t("common.prev"), `${modKey}←`)} disabled={testing}>

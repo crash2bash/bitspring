@@ -18,10 +18,13 @@ let mockStep: { seq: number; filter: DspSettings["upsampleFilter"]; taps: number
 let mockStepSeq = 0;
 // DSD output (Enhancers → DSD output) runs whenever it is chosen, on the USB DAC in exclusive
 // mode, without the device's DoP switch. These give its other states:
-/** ?dsdnote=exclusive|device|volume|network|rate|refused: it doesn't run, for that reason. */
+/** ?dsdnote=exclusive|device|volume|network|rate|refused|nativeRate|refusedNative: it doesn't run, for that reason. */
 const mockDsdNote = new URLSearchParams(location.search).get("dsdnote");
 /** ?dsdlimit: the device takes DoP up to DSD128 only (DSD256 asked for runs as DSD128). */
 const mockDsdLimit = new URLSearchParams(location.search).has("dsdlimit") ? 128 : 256;
+/** ?nativedsd: the USB DAC takes DSD natively up to DSD512 (its driver declares a DSD format):
+ *  DSD files and DSD output go to it as they are, without the DoP switch. Its EQ starts off. */
+const mockNativeDsd = new URLSearchParams(location.search).has("nativedsd") ? 512 : null;
 /** ?dsdstep: a few seconds into a track, the pretend processor falls behind and the DSD output
  *  steps down once: 256 → 128 → 64 at the same modulator, then 64 with the 5th order, then off. */
 let mockDsdStepDown = new URLSearchParams(location.search).has("dsdstep");
@@ -101,12 +104,12 @@ const libUnder = (dir: string, parent: string) => dir === parent || dir.startsWi
 let mockVolume = 35;
 let mockRemote = false;
 const devices: Device[] = [
-  { uid: "q7", key: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, network: false, model: null, protocol: null },
-  { uid: "spk", key: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, network: false, model: null, protocol: null },
-  { uid: "air", key: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, network: false, model: null, protocol: null },
-  { uid: "upnp:wiim", key: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "WiiM Pro Plus", protocol: "UPnP" },
-  { uid: "upnp:sonos", key: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "Sonos Era 100", protocol: "UPnP" },
-  { uid: "cast:shield", key: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
+  { uid: "q7", key: "q7", name: "USB DAC", transport: "Usb", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000], nominalRate: 44100, isDefault: true, bitPerfectCapable: true, maxDop: 256, maxNativeDsd: mockNativeDsd, network: false, model: null, protocol: null },
+  { uid: "spk", key: "spk", name: "Built-in Speakers", transport: "BuiltIn", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 44100, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: false, model: null, protocol: null },
+  { uid: "air", key: "air", name: "AirPods Pro", transport: "Bluetooth", channels: 2, rates: [24000, 48000], nominalRate: 48000, isDefault: false, bitPerfectCapable: false, maxDop: null, maxNativeDsd: null, network: false, model: null, protocol: null },
+  { uid: "upnp:wiim", key: "upnp:wiim", name: "Living Room", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000, 176400, 192000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, model: "WiiM Pro Plus", protocol: "UPnP" },
+  { uid: "upnp:sonos", key: "upnp:sonos", name: "Kitchen", transport: "Network", channels: 2, rates: [44100, 48000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, model: "Sonos Era 100", protocol: "UPnP" },
+  { uid: "cast:shield", key: "cast:shield", name: "Living Room TV", transport: "Network", channels: 2, rates: [44100, 48000, 88200, 96000], nominalRate: 0, isDefault: false, bitPerfectCapable: true, maxDop: null, maxNativeDsd: null, network: true, model: "SHIELD Android TV", protocol: "Chromecast" },
 ];
 
 /** Like the backend: each output's processing by settings key; one with none has the defaults. */
@@ -158,7 +161,8 @@ const eq: { presets: StoredPreset[]; activeId: string | null; enabled: boolean; 
     },
   ],
   activeId: "p1", enabled: false, perDevice: true, bypass: false,
-  devices: { q7: { mode: "preset", id: "p1" }, spk: { mode: "off" } },
+  // With ?nativedsd the USB DAC starts without its EQ, so a DSD file shows the native path at once.
+  devices: { q7: mockNativeDsd ? { mode: "off" } : { mode: "preset", id: "p1" }, spk: { mode: "off" } },
   last: { q7: "p1", spk: "p2" },
 };
 let eqSeq = 3;
@@ -197,17 +201,23 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
   if (/\.(dsf|dff)$/i.test(path)) {
     const dsdRate = 2822400;
     const dspOn = !!eqOn() || !!dsp.convolution || !!dsp.crossfeed;
-    const dop = dopWanted && exclusive && !!dev.maxDop && !dspOn;
+    // Like the backend: natively whatever the DoP switch says, where the device takes it so.
+    const native = !!dev.maxNativeDsd;
+    const dop = (native || (dopWanted && !!dev.maxDop)) && exclusive && !dspOn;
     const maxRate = Math.max(...dev.rates);
     const deviceRate = dop ? 176400 : Math.min(176400, maxRate);
-    const dsdNote: Signal["dsdNote"] = !dopWanted || dop ? null : !exclusive ? { kind: "exclusive" } : dspOn ? { kind: "dsp" } : { kind: "rate", device: dev.name, khz: 176.4, dsd: "DSD64" };
+    const dsdNote: Signal["dsdNote"] =
+      (!dopWanted && !native) || dop ? null
+      : !exclusive ? { native, kind: "exclusive" }
+      : dspOn ? { native, kind: "dsp" }
+      : { native, kind: "rate", device: dev.name, khz: 176.4, dsd: "DSD64", dop: dopWanted };
     return {
-      sourceRate: 176400, sourceBits: dop ? 1 : null, deviceRate, dacBits: 32, dacFloat: air, integerMode: !air,
+      sourceRate: 176400, sourceBits: dop ? 1 : null, deviceRate, dacBits: dop && native ? 1 : 32, dacFloat: air, integerMode: !air,
       exclusive, transport: dev.transport, resampled: deviceRate !== 176400,
       eq: dop ? null : eqOn(), eqLinear: false, convolution: dop ? null : convName(dsp), crossfeed: dop ? null : dsp.crossfeed,
       sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null,
       ...(dop ? { levelDb: null, levelBasis: null, levelLimited: false } : mockLevel(dsp)),
-      dsdRate, dop, dsdNote, layout: "Stereo", downmix: null, upsampleFilter: null, upsampleTaps: null,
+      dsdRate, dop, nativeDsd: dop && native, dsdNote, layout: "Stereo", downmix: null, upsampleFilter: null, upsampleTaps: null,
       dsdOut: null, dsdOutOrder: null, dsdOutNote: null, bitPerfect: dop,
     };
   }
@@ -234,18 +244,21 @@ function mockSignal(dev: Device, exclusive: boolean, path = "", dopWanted = fals
 }
 
 /** DSD output for a PCM track on `dev`: what runs of the one chosen, or why nothing does. */
-function mockDsdOut(dev: Device, exclusive: boolean): Pick<Signal, "dsdOut" | "dsdOutOrder" | "dsdOutNote"> {
+function mockDsdOut(dev: Device, exclusive: boolean): Pick<Signal, "dsdOut" | "dsdOutOrder" | "dsdOutNote" | "nativeDsd"> {
   const dsp = dspOf(dev);
   const want = dsp.dsdOut;
-  if (!want) return { dsdOut: null, dsdOutOrder: null, dsdOutNote: null };
-  const off = (note: NonNullable<Signal["dsdOutNote"]>) => ({ dsdOut: null, dsdOutOrder: null, dsdOutNote: note });
+  if (!want) return { dsdOut: null, dsdOutOrder: null, dsdOutNote: null, nativeDsd: false };
+  const off = (note: NonNullable<Signal["dsdOutNote"]>) => ({ dsdOut: null, dsdOutOrder: null, dsdOutNote: note, nativeDsd: false });
   const name = dev.name;
-  if (mockDsdNote === "rate" || (!mockDsdNote && !dev.network && exclusive && !dev.maxDop)) return off({ kind: "rate", device: name, dsd: "DSD64", khz: 176.4 });
+  if (mockDsdNote === "rate" || (!mockDsdNote && !dev.network && exclusive && !dev.maxDop && !dev.maxNativeDsd)) return off({ kind: "rate", device: name, dsd: "DSD64", khz: 176.4 });
   if (mockDsdNote === "refused") return off({ kind: "refused", device: name, dsd: `DSD${want}`, khz: DOP_WIRE[want] / 1000 });
+  if (mockDsdNote === "nativeRate" || mockDsdNote === "refusedNative") return off({ kind: mockDsdNote, device: name, dsd: `DSD${want}` });
   if (mockDsdNote === "exclusive" || mockDsdNote === "device" || mockDsdNote === "volume" || mockDsdNote === "network") return off({ kind: mockDsdNote });
   if (dev.network) return off({ kind: "network" });
   if (!exclusive) return off({ kind: "exclusive" });
-  return { dsdOut: Math.min(want, dev.maxDop ?? 64, mockDsdLimit), dsdOutOrder: dsp.dsdOrder, dsdOutNote: null };
+  const native = dev.maxNativeDsd ? Math.min(want, dev.maxNativeDsd) : 0;
+  const dsdOut = Math.max(native, Math.min(want, dev.maxDop ?? 64, mockDsdLimit));
+  return { dsdOut, dsdOutOrder: dsp.dsdOrder, dsdOutNote: null, nativeDsd: native > 0 && dsdOut === native };
 }
 
 let mockQueue: string[] = [];
@@ -714,7 +727,7 @@ export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): 
     case "eq_export_text":
       return "Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.7\n" as T;
     case "channel_test":
-      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, levelDb: null, levelBasis: null, levelLimited: false, dsdRate: null, dop: false, dsdNote: null, dsdOut: null, dsdOutOrder: null, dsdOutNote: null, layout: "Stereo", downmix: null, bitPerfect: true } as T;
+      return { sourceRate: 44100, sourceBits: 24, deviceRate: 44100, dacBits: 32, dacFloat: false, integerMode: true, exclusive: true, transport: "Usb", resampled: false, eq: null, eqLinear: false, convolution: null, crossfeed: null, sourceLossy: false, headroomDb: null, headroomMeasured: true, restoreFromHz: null, levelDb: null, levelBasis: null, levelLimited: false, dsdRate: null, dop: false, nativeDsd: false, dsdNote: null, dsdOut: null, dsdOutOrder: null, dsdOutNote: null, layout: "Stereo", downmix: null, bitPerfect: true } as T;
     case "playlists_list":
       return [...mockLists].sort((a, b) => b.updated - a.updated).map(mockSummary) as T;
     case "playlist_get": {

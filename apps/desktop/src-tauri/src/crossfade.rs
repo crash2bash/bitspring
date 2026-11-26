@@ -7,7 +7,8 @@
 //! album played through stays as it is.
 //!
 //! What the engine itself leaves out (see `Playback::queue_next_crossfading`): DSD sent as
-//! DoP, tracks at different rates (the device would have to switch), network players.
+//! it is (DoP or native), tracks at different rates (the device would have to switch),
+//! network players.
 
 use hifi_engine::decode::TrackMeta;
 
