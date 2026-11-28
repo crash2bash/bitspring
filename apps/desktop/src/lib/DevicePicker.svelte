@@ -10,6 +10,7 @@
     playing = null,
     onrefresh,
     onchanneltest,
+    oncontrolpanel,
   }: {
     devices: Device[];
     selected: string;
@@ -21,6 +22,8 @@
     playing?: string | null;
     onrefresh: () => void;
     onchanneltest: () => void;
+    /** Open the picked device's driver settings (ASIO); resolves when the driver lets go. */
+    oncontrolpanel: () => Promise<void>;
   } = $props();
 
   let open = $state(false);
@@ -70,6 +73,18 @@
     if (!current) return;
     const key = current.key;
     dopDevices = on ? [...dopDevices.filter((k) => k !== key), key] : dopDevices.filter((k) => k !== key);
+  }
+
+  // The driver's settings window: one at a time (some drivers hold the call while it's open).
+  let driverBusy = $state(false);
+  async function driverSettings() {
+    open = false;
+    driverBusy = true;
+    try {
+      await oncontrolpanel();
+    } finally {
+      driverBusy = false;
+    }
   }
 
   function maxRate(d: Device) {
@@ -137,6 +152,15 @@
         <p class="note">{t("dev.networkHelp")}</p>
       {:else if isIOS}
         <p class="note">{t("dev.iosNote")}</p>
+      {:else if current?.alwaysExclusive}
+        <!-- ASIO: the driver is never shared, so there is nothing to switch -->
+        <label class="option fixed">
+          <input type="checkbox" checked disabled />
+          <span>
+            <strong>{t("dev.exclusive")}</strong>
+            <small>{t("dev.exclusiveAlways")}</small>
+          </span>
+        </label>
       {:else}
       <label class="option">
         <input type="checkbox" bind:checked={exclusive} />
@@ -154,14 +178,26 @@
       </label>
       {/if}
 
+      <!-- the driver itself declares a native DSD format: no switch, nothing to risk -->
+      {#if current?.maxNativeDsd}
+        <p class="note">{t("dev.nativeDsd", { device: deviceLabel(current.name), max: current.maxNativeDsd })}</p>
+      {/if}
+
       {#if current?.maxDop}
         <label class="option">
           <input type="checkbox" checked={dop} onchange={(e) => setDop(e.currentTarget.checked)} />
           <span>
             <strong>{t("dev.dop")}</strong>
-            <small>{t("dev.dopHelp", { device: deviceLabel(current.name), max: current.maxDop })}</small>
+            <small>{t(current.maxNativeDsd ? "dev.dopHelpNative" : "dev.dopHelp", { device: deviceLabel(current.name), max: current.maxDop })}</small>
           </span>
         </label>
+      {/if}
+
+      {#if current?.hasControlPanel}
+        <button class="test middle" onclick={driverSettings} disabled={driverBusy}>
+          {t("dev.driverSettings")}
+          <small>{t("dev.driverSettingsHelp")}</small>
+        </button>
       {/if}
 
       <button class="test" onclick={() => { open = false; onchanneltest(); }} disabled={!current}>
@@ -311,6 +347,9 @@
     accent-color: var(--porcelain);
     margin-top: 3px;
   }
+  .option.fixed {
+    cursor: default;
+  }
   .option span,
   .test {
     display: flex;
@@ -330,6 +369,9 @@
     border-top: 1px solid var(--slate-600);
     font-weight: 600;
     border-radius: 0 0 var(--r-md) var(--r-md);
+  }
+  .test.middle {
+    border-radius: 0;
   }
   .test:hover:not(:disabled) {
     background: var(--slate-600);

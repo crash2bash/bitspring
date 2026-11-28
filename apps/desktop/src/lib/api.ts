@@ -19,8 +19,16 @@ export interface Device {
   bitPerfectCapable: boolean;
   /** Highest DSD the device could take as DoP (64, 128, 256…), if any. */
   maxDop: number | null;
+  /** Highest DSD the device takes natively (64 … 1024), if any: DSD files go to it as they are,
+   *  without the DoP switch. */
+  maxNativeDsd: number | null;
   /** A network player (UPnP/DLNA): streamed to over the network. */
   network: boolean;
+  /** Every playback has the device to itself, whatever the exclusive switch says (Windows: an
+   *  ASIO driver). */
+  alwaysExclusive: boolean;
+  /** The driver has a settings window of its own (api.openControlPanel). */
+  hasControlPanel: boolean;
   /** A network player's maker and model. */
   model: string | null;
   /** A network player's protocol: "UPnP" or "Chromecast". */
@@ -54,9 +62,11 @@ export interface Signal {
   levelLimited: boolean;
   /** DSD source: its 1-bit rate in Hz. */
   dsdRate: number | null;
-  /** DSD goes to the DAC as DoP (otherwise it was converted to PCM). */
+  /** The DSD file's own bits go to the DAC, as DoP or natively (otherwise it was converted to PCM). */
   dop: boolean;
-  /** Why DoP was asked for but this file plays as PCM. */
+  /** The DSD on the wire (the file's own, or `dsdOut`) goes natively, not as DoP. */
+  nativeDsd: boolean;
+  /** Why this DSD file plays as PCM although it could have gone as it is. */
   dsdNote: DsdNote | null;
   /** The source's channels as the engine names them: "Stereo", "Mono", "5.1", "10 ch". */
   layout: string;
@@ -66,7 +76,7 @@ export interface Signal {
   upsampleFilter: UpsampleFilter | null;
   /** Its length in taps (null for apodizing, which has one length). */
   upsampleTaps: number | null;
-  /** PCM encoded to DSD and sent as DoP: the DSD multiple that runs (64, 128, 256). It can be
+  /** PCM encoded to DSD and sent as DoP or natively (`nativeDsd`): the DSD multiple that runs (64, 128, 256…). It can be
    *  lower than the one asked for, where the device goes no higher. Null: PCM goes out, or a
    *  DSD file goes as DoP (that is `dop`). */
   dsdOut: number | null;
@@ -85,7 +95,7 @@ export type UpsampleTaps = 65536 | 1048576;
 export type Crossfeed = "light" | "medium" | "strong";
 
 /** DSD output rates, as multiples of 44.1 kHz. */
-export type DsdOut = 64 | 128 | 256;
+export type DsdOut = 64 | 128 | 256 | 512;
 /** The order of the sigma-delta modulator that makes the DSD stream. */
 export type DsdOrder = 5 | 7;
 
@@ -96,16 +106,24 @@ export type DsdOutNote =
   | { kind: "volume" }
   | { kind: "network" }
   | { kind: "rate"; device: string; dsd: string; khz: number }
-  | { kind: "refused"; device: string; dsd: string; khz: number };
+  | { kind: "refused"; device: string; dsd: string; khz: number }
+  /** The device takes DSD natively only above the rate asked for. */
+  | { kind: "nativeRate"; device: string; dsd: string }
+  | { kind: "refusedNative"; device: string; dsd: string };
 
-/** Why a DSD file plays as PCM although DoP was asked for (worded by dsdNoteText). */
-export type DsdNote =
+/** Why a DSD file plays as PCM although it could have gone as it is (worded by dsdNoteText).
+ *  `native`: the device takes DSD natively — at this rate, or (with "rate") at others; false:
+ *  only DoP was in question. With "rate", `dop`: DoP was asked for too. "nativeRefused": the
+ *  device said it takes `dsd` natively, then refused it when opened. */
+export type DsdNote = { native: boolean } & (
   | { kind: "exclusive" }
   | { kind: "volume" }
   | { kind: "dsp" }
   | { kind: "level" }
-  | { kind: "rate"; device: string; khz: number; dsd: string }
-  | { kind: "channels"; channels: number };
+  | { kind: "rate"; device: string; khz: number; dsd: string; dop: boolean }
+  | { kind: "channels"; channels: number }
+  | { kind: "nativeRefused"; device: string; dsd: string }
+);
 
 /** The queue stopped at a track it couldn't play. */
 export interface AdvanceError {
@@ -120,7 +138,7 @@ export interface AdvanceError {
 export type EngineError =
   | {
       code:
-        | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice"
+        | "deviceBusy" | "audioBusy" | "deviceUnplugged" | "deviceStalled" | "deviceNotFound" | "noDevice" | "deviceReset"
         | "formatRefused" | "exclusiveDisabled" | "dopVolume" | "profileEmpty" | "noAppFolder" | "folderNotOnDevice"
         | "playlistNotFound" | "playlistNoTracks" | "playlistFormat" | "streamingOff" | "signInCancelled"
         | "eqFormat" | "eqEmpty" | "eqNotFound" | "irEmpty" | "installNotAllowed"
@@ -132,6 +150,8 @@ export type EngineError =
   | { code: "signInNeeded" | "signInExpired" | "streamPreview" | "streamEncrypted" | "streamRestricted" | "streamChanged"; service: string }
   | { code: "serviceUnreachable"; service: string; detail: string }
   | { code: "noRates"; device: string }
+  /** Windows ASIO: the driver's settings window is open, which holds the driver. */
+  | { code: "driverPanelOpen"; device: string }
   | { code: "rateRefused"; khz: number }
   | { code: "rateStuck"; khz: number; current: number }
   | { code: "resample" | "abxFilterRate"; from: number; to: number }
@@ -663,7 +683,11 @@ export function entryFromStream(t: STrack): PlaylistEntry {
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-export const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
+export const isWindows =
+  typeof navigator !== "undefined" &&
+  (navigator.userAgent.includes("Windows") ||
+    // layout work in a desktop browser: append ?windows (or ?asio, which adds an ASIO output)
+    (!("__TAURI_INTERNALS__" in window) && ["windows", "asio"].some((k) => new URLSearchParams(location.search).has(k))));
 /** iPhone / iPad (an iPad asks for desktop sites and says "Macintosh", but has a touch screen). */
 export const isIOS =
   typeof navigator !== "undefined" &&
@@ -713,6 +737,8 @@ export const api = {
   remoteNewAddress: () => call<RemoteStatus>("remote_new_address"),
   /** `search`: also look for network players (asks macOS for local network access once). */
   listDevices: (search = false) => call<Device[]>("list_devices", { search }),
+  /** Open the driver's own settings window (ASIO); resolves when the driver lets go of it. */
+  openControlPanel: (uid: string) => call<void>("open_control_panel", { uid }),
   /** The network player's own volume (0…100), or null. */
   outputVolume: (uid: string) => call<number | null>("output_volume", { uid }),
   setOutputVolume: (uid: string, volume: number) => call<void>("set_output_volume", { uid, volume }),
@@ -959,6 +985,7 @@ const TRANSPORT_NAMES: Record<string, string> = {
   DisplayPort: "DisplayPort",
   Thunderbolt: "Thunderbolt",
   AirPlay: "AirPlay",
+  Asio: "ASIO",
 };
 const TRANSPORT_KEYS = new Set(["BuiltIn", "Aggregate", "Virtual", "Network"]);
 
@@ -975,16 +1002,22 @@ export function layoutName(layout: string): string {
   return n ? tn("layout.channels", +n[1]) : layout;
 }
 
-/** Why DoP isn't used, in the UI language. */
+/** Why a DSD file isn't sent as it is (natively or as DoP), in the UI language. */
 export function dsdNoteText(n: DsdNote): string {
-  if (n.kind === "rate") return t("dsd.rate", { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
-  if (n.kind === "channels") return t("dsd.channels", { n: num(n.channels) });
+  if (n.kind === "rate") {
+    const key = !n.native ? "dsd.rate" : n.dop ? "dsd.rateNativeDop" : "dsd.rateNative";
+    return t(key, { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  }
+  if (n.kind === "channels") return t(n.native ? "dsd.channelsNative" : "dsd.channels", { n: num(n.channels) });
+  if (n.kind === "nativeRefused") return t("dsd.nativeRefused", { device: deviceLabel(n.device), dsd: n.dsd });
+  if (n.kind === "exclusive" && n.native) return t("dsd.exclusiveNative");
   return t(`dsd.${n.kind}`);
 }
 
 /** Why DSD output doesn't run, in the UI language. */
 export function dsdOutNoteText(n: DsdOutNote): string {
   if (n.kind === "rate" || n.kind === "refused") return t(`dsdOutNote.${n.kind}`, { device: deviceLabel(n.device), rate: num(n.khz), dsd: n.dsd });
+  if (n.kind === "nativeRate" || n.kind === "refusedNative") return t(`dsdOutNote.${n.kind}`, { device: deviceLabel(n.device), dsd: n.dsd });
   return t(`dsdOutNote.${n.kind}`);
 }
 
@@ -1011,6 +1044,8 @@ export function errorText(e: unknown): string {
         return t("error.otherFormat", { device: deviceLabel(err.device), rate: num(err.khz) });
       case "noRates":
         return t("error.noRates", { device: deviceLabel(err.device) });
+      case "driverPanelOpen":
+        return t("error.driverPanelOpen", { device: deviceLabel(err.device) });
       case "openFailed":
         return t("error.openFailed", { device: deviceLabel(err.device), detail: err.detail });
       case "copyFailed":

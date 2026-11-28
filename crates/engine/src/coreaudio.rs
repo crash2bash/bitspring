@@ -374,6 +374,11 @@ impl Device {
                 .is_ok_and(|f| f.iter().any(|(f, r)| !f.float && f.bits >= 24 && r.contains(hz)))
     }
 
+    /// Never: Core Audio has no native DSD format, so DSD reaches a DAC here only as DoP.
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
+
     /// The formats our IOProc will actually be handed (per output stream).
     fn virtual_formats(&self) -> Result<Vec<ca::AudioStreamBasicDescription>> {
         self.output_streams()?
@@ -555,9 +560,9 @@ impl Player {
         let hog = if opts.exclusive { Some(device.hog()?) } else { None };
         let restore = DeviceRestore::capture(device)?;
 
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let speakers = device.speakers(info.output_channels as usize);
-        let plan = output::plan(&track, opts, &info.rates, &info.name, dop_ok, &speakers)?;
+        let plan = output::plan(&track, opts, &info.rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers)?;
 
         // Physical format first: setting it can itself move the nominal rate.
         let physical = match device.apply_best_physical_format(plan.target, hog.is_some()) {

@@ -3,6 +3,7 @@
 //! UI-agnostic: the CLI, the Tauri desktop app and (later) the phone remote all drive it.
 
 pub mod abx;
+mod alsa_dsd;
 pub mod channels;
 pub mod cue;
 pub mod decode;
@@ -33,6 +34,12 @@ pub mod testsignal;
 pub mod coreaudio;
 #[cfg(windows)]
 pub mod wasapi_out;
+// ASIO (GPL-3.0-only crate: see crates/engine/Cargo.toml). Built for tests everywhere, for
+// its platform-independent rules; the driver side is Windows only.
+#[cfg(any(windows, test))]
+mod asio_out;
+#[cfg(windows)]
+pub mod windows_out;
 #[cfg(target_os = "ios")]
 pub mod ios_out;
 #[cfg(target_os = "android")]

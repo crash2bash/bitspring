@@ -10,7 +10,7 @@
 //! stream needs is created and used on its own "hifi-wasapi" thread.
 
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -142,6 +142,12 @@ impl Device {
         let Ok(client) = d.get_iaudioclient() else { return false };
         exclusive_format(&client, dsd_rate / 16, 2, None, true).is_some()
     }
+
+    /// Never through WASAPI, which has no native DSD format: DSD goes as DoP (ASIO, which has
+    /// one, comes as an output of its own).
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
 }
 
 /// The best exclusive format at `hz` with `channels` (placed as `mask` says, else the usual
@@ -243,7 +249,7 @@ impl Deref for Player {
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         // Shared mode can only run at the mixer's rate.
         let rates = if opts.exclusive { info.rates.clone() } else { vec![RateRange { min: info.nominal_rate, max: info.nominal_rate }] };
         // Exclusive mode opens a stereo pair, or every channel for a multichannel track on a
@@ -256,7 +262,7 @@ impl Player {
         } else {
             speakers_for(info.output_channels as usize, Some(info.channel_mask))
         };
-        let mut plan = output::plan(&track, opts, &rates, &info.name, dop_ok, &speakers)?;
+        let mut plan = output::plan(&track, opts, &rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers)?;
 
         let (fmt_tx, fmt_rx) = mpsc::sync_channel::<Result<Negotiated>>(1);
         let (pb_tx, pb_rx) = mpsc::sync_channel::<Option<Arc<Playback>>>(1);
@@ -295,7 +301,7 @@ impl Player {
         // The device took fewer channels than asked (a driver without multichannel exclusive
         // formats): fold down to what it did take.
         if neg.channels != speakers.len() {
-            match output::plan(&track, opts, &rates, &info.name, dop_ok, &speakers_for(neg.channels, Some(neg.mask))) {
+            match output::plan(&track, opts, &rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &speakers_for(neg.channels, Some(neg.mask))) {
                 Ok(p) => plan = p,
                 Err(e) => {
                     let _ = pb_tx.send(None);
@@ -337,6 +343,31 @@ impl Drop for Player {
     }
 }
 
+/// Exclusive streams this process has open (or is opening) right now.
+static EXCLUSIVE_STREAMS: AtomicUsize = AtomicUsize::new(0);
+
+/// Some exclusive WASAPI stream of ours holds a device. Then no ASIO driver is probed: probing
+/// switches rates and modes, and the driver may drive the very hardware that stream plays on.
+pub(crate) fn exclusive_running() -> bool {
+    EXCLUSIVE_STREAMS.load(Ordering::Acquire) > 0
+}
+
+/// One exclusive stream, counted in [`EXCLUSIVE_STREAMS`] while it lives.
+struct ExclusiveStream;
+
+impl ExclusiveStream {
+    fn enter() -> Self {
+        EXCLUSIVE_STREAMS.fetch_add(1, Ordering::AcqRel);
+        Self
+    }
+}
+
+impl Drop for ExclusiveStream {
+    fn drop(&mut self) {
+        EXCLUSIVE_STREAMS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 /// Open the device, negotiate the format, report it, then feed the device until `stop`.
 #[allow(clippy::too_many_arguments)]
 fn stream_thread(
@@ -350,6 +381,8 @@ fn stream_thread(
     pb_rx: &mpsc::Receiver<Option<Arc<Playback>>>,
     stop: &AtomicBool,
 ) -> Result<()> {
+    // Counted from before the device is opened until the thread ends (see `exclusive_running`).
+    let _counted = exclusive.then(ExclusiveStream::enter);
     com();
     let device = Device { id: id.to_string() }.open()?;
     let mut client = device.get_iaudioclient().map_err(wasapi_err)?;

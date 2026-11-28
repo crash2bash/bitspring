@@ -28,13 +28,14 @@ them, and off means bit-perfect again.
 ## What it does
 
 - **Bit-perfect by default.** The player takes the DAC for itself: exclusive (hog) mode with
-  integer output on the Mac, WASAPI Exclusive on Windows, the bit-perfect USB path on Android 14
-  and later, and ALSA straight to the sound card on Linux.
+  integer output on the Mac, WASAPI Exclusive or the DAC's own ASIO driver on Windows, the
+  bit-perfect USB path on Android 14 and later, and ALSA straight to the sound card on Linux.
 - **Every track at its own sample rate**, from CD to 768 kHz, with gapless playback. If the DAC
   can't do a rate, the player resamples carefully and says so.
 - **The formats you have:** FLAC, ALAC, WAV, AIFF, CAF, MKA, APE, WavPack, TTA, MP3, AAC, Ogg
-  Vorbis and Opus. DSD (DSF, DFF, SACD ISO) plays natively over DoP, or as PCM if the DAC can't
-  take it.
+  Vorbis and Opus. DSD (DSF, DFF, SACD ISO) goes to the DAC as it is: as native
+  DSD where the DAC's driver offers it (ASIO on Windows, ALSA on Linux), as DoP elsewhere, or as
+  PCM if the DAC can't take DSD at all.
 - **Sound shaping when you ask for it:** parametric EQ with AutoEQ headphone profiles and Equalizer
   APO / EasyEffects import, crossfeed, and upsampling to 192, 384 or 768 kHz. Turn any of them on
   and the indicator switches from *Bit-perfect* to *Processing* and lists what is being done.
@@ -42,9 +43,10 @@ them, and off means bit-perfect again.
   minimum-phase filter of 64 thousand or a million taps (150 dB down from the recording's own
   limit, a transition under 1 Hz wide), or a short apodizing one. If the processor can't keep up,
   the player moves to a shorter filter and says so.
-- **PCM to DSD on the fly:** any file can go to the DAC as DSD64, DSD128 or DSD256 over DoP,
-  made by a 5th- or 7th-order sigma-delta modulator (119 dB of signal-to-noise in the audio band
-  at DSD64 with the seventh order, 160 dB at DSD256). The equalizer and the rest of the processing
+- **PCM to DSD on the fly:** any file can go to the DAC as DSD64, DSD128 or DSD256 (DoP or
+  native), or DSD512 where the DAC takes DSD natively, made by a 5th- or 7th-order sigma-delta
+  modulator (119 dB of signal-to-noise in the audio band at DSD64 with the seventh order, 160 dB
+  at DSD256, 168 dB at DSD512). The equalizer and the rest of the processing
   run ahead of the modulator. Off by default; if the processor can't keep up, the player moves to
   a lighter setting and says so.
 - **Every output has its own sound:** the equalizer, crossfeed, upsampling and the rest are kept
@@ -118,3 +120,9 @@ npm run build:appstore        # Mac App Store build (sandboxed, no streaming or 
 
 [MIT](LICENSE). Third-party libraries keep their own licenses (mostly MIT and Apache-2.0; the
 Symphonia decoders are MPL-2.0, the Opus decoder, libopus, BSD-3-Clause).
+
+The Windows build also includes ASIO support, `crates/asio`, which is under the
+[GNU GPL v3](crates/asio/LICENSE) (it is translated from Steinberg's ASIO SDK, used under its
+GPLv3 option), so the Windows build as a whole is distributed under the GPLv3; the builds for
+other systems and the rest of this repository stay MIT. ASIO is a registered trademark of
+Steinberg Media Technologies GmbH.

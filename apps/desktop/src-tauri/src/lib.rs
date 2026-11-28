@@ -83,18 +83,29 @@ struct Current {
     exclusive: bool,
     /// The user wants DSD sent as DoP on this device.
     dop: bool,
-    /// Why a DSD file plays as PCM although DoP was asked for.
+    /// Why a DSD file plays as PCM although it could have gone as it is (see `dsd_mode`).
     dsd_note: Option<DsdNote>,
     /// Why PCM plays although DSD output was asked for (kept for a track that joins on).
     dsd_out_note: Option<DsdOutNote>,
 }
 
-/// Why a DSD file plays as PCM although DoP was asked for. Sent as a code: the UI words it
-/// in the user's language.
-#[derive(Serialize, Clone, Debug)]
+/// Why a DSD file plays as PCM although it could have gone as it is: the device takes DSD
+/// natively, or DoP was asked for. Sent as a code (`{ native, kind, ... }`): the UI words it in
+/// the user's language.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+struct DsdNote {
+    /// The device takes DSD natively: at the file's rate, so it would have gone natively —
+    /// or, with [`DsdWhy::Rate`], at other rates but not this one. False: only DoP was in
+    /// question.
+    native: bool,
+    #[serde(flatten)]
+    why: DsdWhy,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-enum DsdNote {
-    /// DoP needs exclusive access to the device.
+enum DsdWhy {
+    /// DSD goes out as it is only with exclusive access to the device.
     Exclusive,
     /// Something system-wide blocks DoP (iOS: the volume is below maximum).
     Volume,
@@ -102,10 +113,14 @@ enum DsdNote {
     Dsp,
     /// Volume levelling works on PCM: DSD bits can't be turned down.
     Level,
-    /// The device doesn't run at the PCM rate DoP needs (`khz`) for this DSD rate (`dsd`).
-    Rate { device: String, khz: f64, dsd: String },
-    /// The file has more channels (`channels`) than the device: DoP can't fold them down.
+    /// The device takes this DSD rate (`dsd`) neither natively nor, where DoP was asked for
+    /// (`dop`), as DoP, for which it doesn't run at the PCM rate needed (`khz`).
+    Rate { device: String, khz: f64, dsd: String, dop: bool },
+    /// The file has more channels (`channels`) than the device: DSD bits can't be folded down.
     Channels { channels: usize },
+    /// `device` said it takes this DSD rate (`dsd`) natively, then refused it when opened (and
+    /// DoP too, where that was allowed): the file plays as PCM.
+    NativeRefused { device: String, dsd: String },
 }
 
 /// The queue stopped at a track it couldn't play: which one, and the engine's reason.
@@ -224,8 +239,16 @@ struct DeviceDto {
     bit_perfect_capable: bool,
     /// Highest DSD rate (64, 128, 256, 512) the device's clock and formats could carry as DoP.
     max_dop: Option<u32>,
+    /// Highest DSD rate (64 … 1024) the device takes natively, as raw DSD in a format its
+    /// driver declares: DSD files go to it as they are without the DoP switch.
+    max_native_dsd: Option<u32>,
     /// A network player (UPnP/DLNA): no exclusive mode or DoP to set, maybe a volume.
     network: bool,
+    /// Every playback has the device to itself, whatever the exclusive switch says (Windows:
+    /// an ASIO driver).
+    always_exclusive: bool,
+    /// The driver has a settings window of its own (`open_control_panel`).
+    has_control_panel: bool,
     /// A network player's maker and model ("WiiM Pro"), to tell it apart.
     model: Option<String>,
     /// A network player's protocol ("UPnP", "Chromecast"): a device may speak both.
@@ -248,7 +271,12 @@ impl From<&Output> for DeviceDto {
             max_dop: (transport.can_be_bit_perfect() && !d.is_network())
                 .then(|| [8u32, 4, 2, 1].into_iter().find(|m| d.supports_dop(dsd::DSD64 * m)).map(|m| 64 * m))
                 .flatten(),
+            // (As known: an ASIO driver's DSD mode is probed only once it is about to be
+            // used, so it may show only after the device has played.)
+            max_native_dsd: (transport.can_be_bit_perfect()).then(|| max_native_dsd_known(d)).flatten(),
             network: d.is_network(),
+            always_exclusive: d.always_exclusive(),
+            has_control_panel: d.has_control_panel(),
             model: match d {
                 Output::Network(t) => Some(t.model()).filter(|m| !m.is_empty()),
                 Output::Device(_) => None,
@@ -294,9 +322,12 @@ struct SignalDto {
     level_limited: bool,
     /// DSD source: its 1-bit rate (Hz).
     dsd_rate: Option<u32>,
-    /// DSD goes out as DoP (false with `dsd_rate` set = converted to PCM).
+    /// The DSD file's own bits go out, as DoP or natively (false with `dsd_rate` set =
+    /// converted to PCM). The name is from when DoP was the only way.
     dop: bool,
-    /// Why DoP was asked for but this DSD file plays as PCM.
+    /// The DSD on the wire (the file's own, or `dsd_out`) goes natively, not as DoP.
+    native_dsd: bool,
+    /// Why this DSD file plays as PCM although it could have gone as it is (see `dsd_mode`).
     dsd_note: Option<DsdNote>,
     /// The source's channels: "Stereo", "Mono", "5.1", "10 ch"…
     layout: String,
@@ -307,13 +338,14 @@ struct SignalDto {
     upsample_filter: Option<String>,
     /// Its length in taps (None for apodizing).
     upsample_taps: Option<u32>,
-    /// PCM encoded to DSD and sent as DoP: the rate that runs (64, 128, 256), which may be
-    /// lower than the one asked for (the device's limit). None = it doesn't run.
+    /// PCM encoded to DSD and sent as DoP or natively (`native_dsd`): the rate that runs (64,
+    /// 128, 256…), which may be lower than the one asked for (the device's limit). None = it
+    /// doesn't run.
     dsd_out: Option<u32>,
     /// The modulator's order (5, 7) with `dsd_out`.
     dsd_out_order: Option<u32>,
     /// Why DSD output was asked for and doesn't run (None when it runs, and for a DSD file
-    /// sent as DoP, which ignores it).
+    /// sent as it is, which ignores it).
     dsd_out_note: Option<DsdOutNote>,
     bit_perfect: bool,
 }
@@ -352,6 +384,7 @@ impl From<&SignalPath> for SignalDto {
             level_limited: p.level.is_some_and(|l| l.limited),
             dsd_rate: p.dsd.map(|d| d.rate),
             dop: p.dsd.is_some_and(|d| d.dop),
+            native_dsd: p.native_dsd,
             dsd_note: None,
             layout: p.layout.clone(),
             downmix: p.downmix.as_ref().map(|d| DownmixDto { to: d.to.clone(), gain_db: d.gain_db }),
@@ -444,72 +477,226 @@ fn find_device(uid: &str) -> CmdResult<Output> {
     outputs::find(uid).map_err(err)?.ok_or(UserError::DeviceNotFound)
 }
 
+/// What [`start`] started: the signal path for the UI, and the track that plays with the note
+/// on how its DSD goes — the ones it was given, or the file opened anew as PCM (see `start`).
+struct Started {
+    signal: SignalDto,
+    track: Arc<Track>,
+    dsd_note: Option<DsdNote>,
+}
+
 /// Stop whatever plays and start `track` on `device`. The old player is dropped *first*, so
 /// its hog mode is released and the device restored before we claim it again.
 ///
 /// `dsd_out_note`: why the DSD output asked for doesn't run (see [`dsp_for`]), for the signal
 /// path. A device that was opened for DSD output and failed to start (for any reason) gets
 /// one more try with PCM, and the signal path says why.
-fn start(state: &AppState, device: &Output, track: Arc<Track>, opts: PlayOptions, dsd_out_note: Option<DsdOutNote>) -> CmdResult<SignalDto> {
+///
+/// `file`: where `track` comes from, and `dsd_note` why a DSD file goes as PCM (see
+/// [`dsd_mode`]). A DSD file sent as it is because the device said it takes its rate natively,
+/// which the device then refused (and DoP too, where it was allowed), is opened anew as PCM at
+/// the same place and started once more (see [`pcm_fallback`]), as it played before native
+/// DSD; the note says the device refused it.
+fn start(
+    state: &AppState,
+    device: &Output,
+    track: Arc<Track>,
+    opts: PlayOptions,
+    dsd_out_note: Option<DsdOutNote>,
+    file: Option<&std::path::Path>,
+    dsd_note: Option<DsdNote>,
+) -> CmdResult<Started> {
     let mut slot = state.player.lock().unwrap();
     if let Some(p) = slot.take() {
         // What sounds now ends in a short fade, not a click.
         p.fade_out();
     }
-    let mut refused = None;
-    let player = match (Player::start(device, track.clone(), &opts).map_err(err), opts.dsp.dsd_out) {
-        // Opened for DSD output and failed, whatever the reason (the device refused DoP, or
-        // the format, or the rate, or didn't open at that rate at all): once more with PCM.
-        // Should that fail too, its error is the one to show: it is about plain playback.
+    let (mut track, mut dsd_note) = (track, dsd_note);
+    let (player, refused) = match (start_player(device, &track, &opts), file) {
+        // (The engine logged why.)
+        (Err(e), Some(file)) if pcm_fallback(track.is_dop(), device.supports_native_dsd(raw_dsd_rate(&track)), &e) => {
+            let pcm = open_for_at(file, DsdMode::Pcm, opts.start_at)?;
+            set_level(&opts.dsp, file, &pcm, Duration::ZERO);
+            dsd_note = Some(native_refused(device, raw_dsd_rate(&track)));
+            track = pcm;
+            start_player(device, &track, &opts)?
+        }
+        (r, _) => r?,
+    };
+    // The device took the DSD file's bits as DoP after it refused them natively: say so (the
+    // path shows DoP), unless something else is said already.
+    if track.is_dop() && player.path.native_refused && dsd_note.is_none() {
+        dsd_note = Some(native_refused(device, raw_dsd_rate(&track)));
+    }
+    let mut signal = SignalDto::from(&player.path);
+    signal.dsd_note = dsd_note.clone();
+    // PCM encoded to DSD that the device refused natively, and the engine played as PCM (DoP
+    // not allowed): said as if the start had failed.
+    let quietly = opts
+        .dsp
+        .dsd_out
+        .filter(|_| player.path.native_refused)
+        .map(|asked| DsdOutNote::RefusedNative { device: device.name().trim().to_string(), dsd: dsd::dsd_name(asked.rate.hz()) });
+    signal.dsd_out_note = dsd_out_note_for(signal.dsd_out.is_some(), track.is_dop(), refused, quietly, dsd_out_note);
+    *slot = Some(player);
+    Ok(Started { signal, track, dsd_note })
+}
+
+/// [`Player::start`], once more with PCM when it was opened for DSD output and failed,
+/// whatever the reason (the device refused DoP or its native DSD, or the format, or the rate,
+/// or didn't open at that rate at all). Should that fail too, its error is the one to show: it
+/// is about plain playback. Also returns the note for that retry.
+fn start_player(device: &Output, track: &Arc<Track>, opts: &PlayOptions) -> CmdResult<(Player, Option<DsdOutNote>)> {
+    match (Player::start(device, track.clone(), opts).map_err(err), opts.dsp.dsd_out) {
         (Err(_), Some(asked)) if !track.is_dop() => {
-            refused = Some(DsdOutNote::refused(device.name(), asked));
+            let refused = DsdOutNote::refused_as(device.name(), asked, device.supports_native_dsd(asked.rate.hz()));
             // The track's gain stays as it was set for the encoder (`set_level`): levelling
             // gives the same gain either way, and the peak headroom it adds (a dB or so, at
             // most what keeps the true peaks at full scale) applies only if this playback
             // processes at all; a bit-perfect one ignores the gain. At worst the track plays
             // that much quieter, never louder, and bit-perfect playback stays bit-perfect.
             let pcm = PlayOptions { dsp: DspSettings { dsd_out: None, ..opts.dsp.clone() }, ..opts.clone() };
-            Player::start(device, track.clone(), &pcm).map_err(err)?
+            Ok((Player::start(device, track.clone(), &pcm).map_err(err)?, Some(refused)))
         }
-        (r, _) => r?,
-    };
-    let mut signal = SignalDto::from(&player.path);
-    signal.dsd_out_note = if signal.dsd_out.is_some() || track.is_dop() { None } else { refused.or(dsd_out_note) };
-    *slot = Some(player);
-    Ok(signal)
+        (r, _) => Ok((r?, None)),
+    }
 }
 
-/// How to carry a DSD file to this device. DoP only when the user switched it on for the
-/// device, the device can take it, we have exclusive access, and no EQ/crossfeed has to run
-/// (those need PCM). Returns the mode and, for a PCM fallback, the reason.
+/// A DSD file's own DSD rate (2 822 400 for DSD64).
+fn raw_dsd_rate(track: &Track) -> u32 {
+    track.dsd.map_or(track.sample_rate * 16, |d| d.rate)
+}
+
+/// The note for a DSD file whose native DSD `device` refused at `rate`.
+fn native_refused(device: &Output, rate: u32) -> DsdNote {
+    DsdNote { native: true, why: DsdWhy::NativeRefused { device: device.name().trim().to_string(), dsd: dsd::dsd_name(rate) } }
+}
+
+/// A start that failed with `error` gets one more try with the file as PCM: it is a DSD file
+/// sent as it is (`raw_dsd`) because the device said it takes its rate natively
+/// (`native_expected`), and the device refused that (the engine then tried DoP, where the user
+/// allows it). Before native DSD, such a file played as PCM; it still does. Not when the device
+/// is missing, busy, didn't open at all or its driver's settings window is open: PCM would fare
+/// no better. A file sent as DoP alone keeps its error (it names the DoP switch's problem).
+fn pcm_fallback(raw_dsd: bool, native_expected: bool, error: &UserError) -> bool {
+    raw_dsd
+        && native_expected
+        && !matches!(
+            error,
+            UserError::DeviceNotFound
+                | UserError::NoDevice
+                | UserError::DeviceBusy
+                | UserError::DeviceUnplugged
+                | UserError::ExclusiveDisabled
+                | UserError::OpenFailed { .. }
+                | UserError::DriverPanelOpen { .. }
+        )
+}
+
+/// What the signal path says about DSD output asked for: nothing while it runs (`running`)
+/// or for a DSD file sent as it is (`raw_dsd`, which ignores it); else why not — the start
+/// with it failed (`refused`), the device refused it natively and the engine played PCM
+/// (`quietly`), or it couldn't run on this device to begin with (`resolved`, from `dsp_for`).
+fn dsd_out_note_for(running: bool, raw_dsd: bool, refused: Option<DsdOutNote>, quietly: Option<DsdOutNote>, resolved: Option<DsdOutNote>) -> Option<DsdOutNote> {
+    if running || raw_dsd { None } else { refused.or(quietly).or(resolved) }
+}
+
+/// The DSD multiples a device may take natively, highest first: DSD1024 down to DSD64.
+const NATIVE_DSD_MULTIPLES: [u32; 5] = [16, 8, 4, 2, 1];
+
+/// Highest DSD rate (64 … 1024) `device` takes natively, if any (never a network player).
+fn max_native_dsd(device: &Output) -> Option<u32> {
+    NATIVE_DSD_MULTIPLES.into_iter().find(|m| device.supports_native_dsd(dsd::DSD64 * m)).map(|m| 64 * m)
+}
+
+/// [`max_native_dsd`] as far as it is known, never asking a driver now: for the device list,
+/// which mustn't switch every ASIO driver into its DSD mode (see `Output::native_dsd_known`).
+fn max_native_dsd_known(device: &Output) -> Option<u32> {
+    NATIVE_DSD_MULTIPLES.into_iter().find(|m| device.native_dsd_known(dsd::DSD64 * m)).map(|m| 64 * m)
+}
+
+/// How to carry a DSD file to this device. As it is (`DsdMode::Dop`: the file's own bits,
+/// whichever way they go) when the device takes its rate natively — its driver declares the
+/// format, so no switch is needed — or else, with the user's DoP switch on for the device, as
+/// DoP at a rate it carries; either way only with exclusive access and nothing running that
+/// needs PCM (EQ/convolution/crossfeed, levelling). The engine sends it natively where it
+/// can. Returns the mode and, for a PCM fallback, the reason.
 fn dsd_mode(path: &std::path::Path, device: &Output, exclusive: bool, dop: bool, dsp: &DspSettings) -> (DsdMode, Option<DsdNote>) {
-    if !dop || !dsd::is_dsd_path(path) {
+    // Neither way open (no native DSD, DoP not switched on): PCM, nothing to say.
+    if !dsd::is_dsd_path(path) || (!dop && max_native_dsd(device).is_none()) {
         return (DsdMode::Pcm, None);
     }
     let (rate, channels) = match dsd::probe(path) {
         Ok(h) => (h.rate, h.channels),
         Err(_) => return (DsdMode::Pcm, None),
     };
-    let note = if !exclusive {
-        Some(DsdNote::Exclusive)
-    } else if output::dop_blocker().is_some() {
-        Some(DsdNote::Volume)
-    } else if dsp.eq.is_some() || dsp.convolution.is_some() || dsp.crossfeed.is_some() {
-        Some(DsdNote::Dsp)
-    } else if dsp.level.mode != LevelMode::Off {
-        Some(DsdNote::Level)
-    } else if channels > 2 && channels > device.output_channels() as usize {
-        Some(DsdNote::Channels { channels })
-    } else if !device.supports_dop(rate) {
-        Some(DsdNote::Rate {
-            device: device.name().trim().to_string(),
-            khz: rate as f64 / 16_000.0,
-            dsd: dsd::dsd_name(rate),
-        })
-    } else {
-        None
+    let native = device.supports_native_dsd(rate);
+    let facts = DsdFacts {
+        exclusive,
+        dop,
+        native,
+        native_any: native || max_native_dsd(device).is_some(),
+        dop_carries: device.supports_dop(rate),
+        dop_blocked: output::dop_blocker().is_some(),
+        dsp: dsp.eq.is_some() || dsp.convolution.is_some() || dsp.crossfeed.is_some(),
+        level: dsp.level.mode != LevelMode::Off,
+        channels: (channels > 2 && channels > device.output_channels() as usize).then_some(channels),
     };
+    let note = dsd_note(&facts, || (device.name().trim().to_string(), rate as f64 / 16_000.0, dsd::dsd_name(rate)));
     (if note.is_none() { DsdMode::Dop } else { DsdMode::Pcm }, note)
+}
+
+/// What decides how a DSD file goes to a device (see [`dsd_mode`]).
+#[derive(Clone, Copy)]
+struct DsdFacts {
+    exclusive: bool,
+    /// The user's DoP switch for the device.
+    dop: bool,
+    /// The device takes the file's rate natively.
+    native: bool,
+    /// It takes some DSD rate natively (true with `native`).
+    native_any: bool,
+    /// It can carry the file's rate as DoP (its clock and formats).
+    dop_carries: bool,
+    /// Something system-wide blocks DoP (`output::dop_blocker`); native DSD doesn't care.
+    dop_blocked: bool,
+    /// The equalizer, convolution or crossfeed runs: they need PCM.
+    dsp: bool,
+    /// Volume levelling is on: it needs PCM.
+    level: bool,
+    /// The file's channels, when it has more than the device and DSD can't fold them down.
+    channels: Option<usize>,
+}
+
+/// Why a DSD file plays as PCM under `f` (None: it goes as it is). `rate` gives the device's
+/// name, the PCM rate DoP would need (kHz) and the DSD rate's name, for the rate note. Native
+/// DSD goes first: the DoP switch and what blocks DoP don't matter to it. A device that takes
+/// DSD natively but not at this rate, with DoP off, gets the rate note straight away: nothing
+/// else would make it go.
+fn dsd_note(f: &DsdFacts, rate: impl FnOnce() -> (String, f64, String)) -> Option<DsdNote> {
+    let rate_note = |dop: bool| {
+        let (device, khz, dsd) = rate();
+        DsdNote { native: f.native_any, why: DsdWhy::Rate { device, khz, dsd, dop } }
+    };
+    if !f.native && !f.dop {
+        return f.native_any.then(|| rate_note(false));
+    }
+    let why = if !f.exclusive {
+        DsdWhy::Exclusive
+    } else if !f.native && f.dop_blocked {
+        DsdWhy::Volume
+    } else if f.dsp {
+        DsdWhy::Dsp
+    } else if f.level {
+        DsdWhy::Level
+    } else if let Some(channels) = f.channels {
+        DsdWhy::Channels { channels }
+    } else if !f.native && !f.dop_carries {
+        return Some(rate_note(true));
+    } else {
+        return None;
+    };
+    Some(DsdNote { native: f.native, why })
 }
 
 /// Open a library file — or a Qobuz/TIDAL track, whose "path" is its id (`qobuz:track:…`).
@@ -674,6 +861,15 @@ fn list_devices(search: Option<bool>) -> CmdResult<Vec<DeviceDto>> {
     Ok(outputs::outputs().map_err(err)?.iter().map(DeviceDto::from).collect())
 }
 
+/// Open the driver's own settings window (an ASIO control panel). Some drivers show it
+/// modally and return only when it closes, so it runs off the UI thread; the UI then lists
+/// the devices again (the rates may have changed).
+#[tauri::command]
+async fn open_control_panel(uid: String) -> CmdResult<()> {
+    let device = find_device(&uid)?;
+    tauri::async_runtime::spawn_blocking(move || device.control_panel().map_err(err)).await.map_err(err)?
+}
+
 /// A network player's own volume, 0…100 (None for other outputs and players without one).
 #[tauri::command(async)]
 fn output_volume(uid: String) -> Option<u32> {
@@ -721,7 +917,7 @@ fn wanted_dsp(state: &AppState, device: &Output) -> DspSettings {
 /// `set_level` see processing (`reshapes`) and give the track a peak headroom cut meant for
 /// the encoder, which a playback that then can't encode would still apply wherever it
 /// processes for another reason; and the signal path couldn't say why nothing was encoded.
-/// (The engine itself falls back to PCM silently.) A DSD file sent as DoP ignores `dsd_out`
+/// (The engine itself falls back to PCM silently.) A DSD file sent as it is ignores `dsd_out`
 /// in the engine and gets no note (`start` drops it).
 fn dsp_for(state: &AppState, device: &Output, exclusive: bool, dop: bool) -> (DspSettings, Option<DsdOutNote>) {
     let mut dsp = wanted_dsp(state, device);
@@ -777,9 +973,8 @@ fn begin(
     dsd_note: Option<DsdNote>,
 ) -> CmdResult<NowPlayingDto> {
     let (dsp, dsd_out_note) = dsp_for(state, device, exclusive, dop);
-    let opts = PlayOptions { exclusive, dsp, start_at, start_paused, fades: !state.fades_off.load(Ordering::Relaxed) };
-    let mut signal = start(state, device, track.clone(), opts, dsd_out_note)?;
-    signal.dsd_note = dsd_note.clone();
+    let opts = PlayOptions { exclusive, dsp, start_at, start_paused, fades: !state.fades_off.load(Ordering::Relaxed), allow_dop: dop };
+    let Started { signal, track, dsd_note } = start(state, device, track, opts, dsd_out_note, Some(&file), dsd_note)?;
     let current = Current {
         track,
         path: file,
@@ -849,6 +1044,9 @@ async fn play_file(
     paused: Option<bool>,
 ) -> CmdResult<NowPlayingDto> {
     let device = find_device(&device_uid)?;
+    // An ASIO driver is never shared: whatever the switch says, it plays as exclusive (and the
+    // decisions below, the queue's next tracks and the signal path go by that).
+    let exclusive = exclusive || device.always_exclusive();
     let file = PathBuf::from(&path);
     let dop = dop.unwrap_or(false);
     let (dsp, _) = dsp_for(&state, &device, exclusive, dop);
@@ -1183,7 +1381,7 @@ fn channel_test(state: State<'_, AppState>, device_uid: String) -> CmdResult<Sig
     // The test bypasses processing: crossfeed would blur exactly what it checks.
     let _one = state.play_lock.lock().unwrap();
     *state.current.lock().unwrap() = None;
-    start(&state, &device, Arc::new(testsignal::channel_test(rate)), PlayOptions::default(), None)
+    start(&state, &device, Arc::new(testsignal::channel_test(rate)), PlayOptions::default(), None, None, None).map(|s| s.signal)
 }
 
 impl StatusDto {
@@ -1448,7 +1646,7 @@ fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalD
     let (Some((pos, paused, false)), Some(cur)) = (resume, current.as_mut()) else { return Ok(None) };
     let device = find_device(&cur.device_uid)?;
     let (settings, dsd_out_note) = dsp_for(state, &device, cur.exclusive, cur.dop);
-    // A DSD file may have to switch between DoP and PCM (the EQ and friends need PCM).
+    // A DSD file may have to switch between going as it is and PCM (the EQ and friends need PCM).
     let mut mode = DsdMode::Pcm;
     if dsd::is_dsd_path(&cur.path) {
         let (m, note) = dsd_mode(&cur.path, &device, cur.exclusive, cur.dop, &settings);
@@ -1470,9 +1668,10 @@ fn restart_locked(state: &AppState, at: Option<f64>) -> CmdResult<Option<SignalD
     for next in state.lined_up.lock().unwrap().iter() {
         set_level(&settings, std::path::Path::new(&next.path), &next.track, Duration::ZERO);
     }
-    let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused, fades: !state.fades_off.load(Ordering::Relaxed) };
-    let mut signal = start(state, &device, cur.track.clone(), opts, dsd_out_note)?;
-    signal.dsd_note = cur.dsd_note.clone();
+    let opts = PlayOptions { exclusive: cur.exclusive, dsp: settings, start_at: pos, start_paused: paused, fades: !state.fades_off.load(Ordering::Relaxed), allow_dop: cur.dop };
+    let started = start(state, &device, cur.track.clone(), opts, dsd_out_note, Some(&cur.path), cur.dsd_note.clone())?;
+    let signal = started.signal;
+    (cur.track, cur.dsd_note) = (started.track, started.dsd_note);
     cur.dsd_out_note = signal.dsd_out_note.clone();
     if let Some(now) = state.now.lock().unwrap().as_mut() {
         now.signal = signal.clone();
@@ -1709,6 +1908,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_devices,
+            open_control_panel,
             system_locales,
             set_menu_labels,
             update::update_check,
@@ -1810,6 +2010,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 use tauri::Manager;
                 drop(app.state::<AppState>().player.lock().unwrap().take());
+                // Then whatever an output keeps open between playbacks (Windows: the ASIO
+                // driver, left in PCM mode for the next app). Nothing to do elsewhere.
+                outputs::release_outputs();
             }
         });
 }
@@ -1829,6 +2032,103 @@ mod tests {
         assert!(!d.reshapes() && !d.is_active());
         assert_eq!((d.upsample_filter, d.dsd_out, d.crossfeed), (None, None, None));
         assert!(AppState::default().dsp.lock().unwrap().is_empty());
+    }
+
+    /// A DSD file goes as it is to a DAC that takes its rate natively, DoP switch or not; DoP
+    /// still needs the switch. The notes say which way was in question.
+    #[test]
+    fn a_dsd_file_goes_natively_without_the_dop_switch() {
+        let base = DsdFacts {
+            exclusive: true,
+            dop: false,
+            native: true,
+            native_any: true,
+            dop_carries: false,
+            dop_blocked: false,
+            dsp: false,
+            level: false,
+            channels: None,
+        };
+        let rate = || ("DAC".to_string(), 705.6, "DSD256".to_string());
+        let note = |f: DsdFacts| dsd_note(&f, rate);
+        let why = |native, why| Some(DsdNote { native, why });
+        // Native: as it is, whatever the DoP switch, and what blocks DoP doesn't matter.
+        assert_eq!(note(base), None);
+        assert_eq!(note(DsdFacts { dop: true, dop_carries: true, ..base }), None);
+        assert_eq!(note(DsdFacts { dop_blocked: true, ..base }), None);
+        // The other conditions hold for native DSD too.
+        assert_eq!(note(DsdFacts { exclusive: false, ..base }), why(true, DsdWhy::Exclusive));
+        assert_eq!(note(DsdFacts { dsp: true, ..base }), why(true, DsdWhy::Dsp));
+        assert_eq!(note(DsdFacts { level: true, ..base }), why(true, DsdWhy::Level));
+        assert_eq!(note(DsdFacts { channels: Some(6), ..base }), why(true, DsdWhy::Channels { channels: 6 }));
+        // Native DSD, but not at this rate, and DoP off: the rate, straight away.
+        let rate_note = |dop| why(true, DsdWhy::Rate { device: "DAC".into(), khz: 705.6, dsd: "DSD256".into(), dop });
+        let other_rate = DsdFacts { native: false, ..base };
+        assert_eq!(note(other_rate), rate_note(false));
+        assert_eq!(note(DsdFacts { exclusive: false, ..other_rate }), rate_note(false));
+        // ...and DoP on: DoP where it carries the rate, else the rate note for both ways.
+        assert_eq!(note(DsdFacts { dop: true, dop_carries: true, ..other_rate }), None);
+        assert_eq!(note(DsdFacts { dop: true, ..other_rate }), rate_note(true));
+        assert_eq!(note(DsdFacts { dop: true, dop_carries: true, exclusive: false, ..other_rate }), why(false, DsdWhy::Exclusive));
+        // No native DSD at all: DoP as before, nothing said with the switch off.
+        let dop_only = DsdFacts { native: false, native_any: false, dop: true, dop_carries: true, ..base };
+        assert_eq!(note(dop_only), None);
+        assert_eq!(note(DsdFacts { dop: false, ..dop_only }), None);
+        assert_eq!(note(DsdFacts { dop_blocked: true, ..dop_only }), why(false, DsdWhy::Volume));
+        assert_eq!(note(DsdFacts { exclusive: false, ..dop_only }), why(false, DsdWhy::Exclusive));
+        assert_eq!(
+            note(DsdFacts { dop_carries: false, ..dop_only }),
+            why(false, DsdWhy::Rate { device: "DAC".into(), khz: 705.6, dsd: "DSD256".into(), dop: true })
+        );
+        // On the wire: the note's kind and its fields side by side.
+        let json = |n: Option<DsdNote>| serde_json::to_string(&n.unwrap()).unwrap();
+        assert_eq!(json(note(DsdFacts { exclusive: false, ..base })), r#"{"native":true,"kind":"exclusive"}"#);
+        assert_eq!(json(note(other_rate)), r#"{"native":true,"kind":"rate","device":"DAC","khz":705.6,"dsd":"DSD256","dop":false}"#);
+    }
+
+    /// A DSD file sent natively that the device refused plays as PCM, as before native DSD;
+    /// one sent as DoP alone keeps its error, and so does a device that isn't there or busy.
+    #[test]
+    fn a_refused_native_dsd_file_falls_back_to_pcm() {
+        let refused = [
+            UserError::FormatRefused,
+            UserError::RateRefused { khz: 352.8 },
+            UserError::DopRefused { device: "DAC".into(), dsd: "DSD128".into(), khz: 352.8 },
+            UserError::other("ALSA: no DSD_U32_BE at 176.4 kHz"),
+        ];
+        for e in &refused {
+            assert!(pcm_fallback(true, true, e), "{e:?}");
+            assert!(!pcm_fallback(true, false, e), "DoP alone: {e:?}");
+            assert!(!pcm_fallback(false, true, e), "PCM already: {e:?}");
+        }
+        let no_better = [
+            UserError::DeviceNotFound,
+            UserError::NoDevice,
+            UserError::DeviceBusy,
+            UserError::DeviceUnplugged,
+            UserError::ExclusiveDisabled,
+            UserError::OpenFailed { device: "DAC (ASIO)".into(), detail: "no device".into() },
+            UserError::DriverPanelOpen { device: "DAC (ASIO)".into() },
+        ];
+        for e in &no_better {
+            assert!(!pcm_fallback(true, true, e), "{e:?}");
+        }
+        let note = DsdNote { native: true, why: DsdWhy::NativeRefused { device: "DAC".into(), dsd: "DSD128".into() } };
+        assert_eq!(serde_json::to_string(&note).unwrap(), r#"{"native":true,"kind":"nativeRefused","device":"DAC","dsd":"DSD128"}"#);
+    }
+
+    /// DSD output the device refused natively, where the engine then played PCM, is said as
+    /// such; a start that failed with it says that first, and nothing is said while it runs.
+    #[test]
+    fn dsd_output_refused_natively_is_said() {
+        let quietly = Some(DsdOutNote::RefusedNative { device: "DAC".into(), dsd: "DSD256".into() });
+        let failed = Some(DsdOutNote::Refused { device: "DAC".into(), dsd: "DSD256".into(), khz: 705.6 });
+        let resolved = Some(DsdOutNote::Device);
+        assert_eq!(dsd_out_note_for(false, false, None, quietly.clone(), None), quietly);
+        assert_eq!(dsd_out_note_for(false, false, failed.clone(), quietly.clone(), None), failed);
+        assert_eq!(dsd_out_note_for(false, false, None, None, resolved.clone()), resolved);
+        assert_eq!(dsd_out_note_for(true, false, None, quietly.clone(), None), None, "DoP runs: the path shows it");
+        assert_eq!(dsd_out_note_for(false, true, failed, quietly, resolved), None, "a DSD file ignores it");
     }
 
     /// Levelling by album holds while albums play through; a shuffled queue is levelled

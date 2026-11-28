@@ -321,6 +321,11 @@ impl Device {
             i.bit_perfect.iter().any(|b| b.rate == dsd_rate / 16 && matches!(b.encoding, ENCODING_PCM_32BIT | ENCODING_PCM_24BIT_PACKED))
         })
     }
+
+    /// Never: AAudio has no native DSD format, so DSD reaches a DAC here only as DoP.
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -359,11 +364,11 @@ unsafe impl Sync for Player {}
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r));
         let bit_perfect_on = opts.exclusive && !info.bit_perfect.is_empty();
         let rates = if bit_perfect_on { info.rates.clone() } else { vec![RateRange::exact(info.mixer_rate as f64)] };
         let opts_eff = PlayOptions { exclusive: bit_perfect_on, ..opts.clone() };
-        let plan = output::plan(&track, &opts_eff, &rates, &info.name, dop_ok, &crate::channels::default_layout(2))?;
+        let plan = output::plan(&track, &opts_eff, &rates, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &crate::channels::default_layout(2))?;
         let target = plan.target as u32;
 
         // The bit-perfect format at the target rate: integer first, ≥24-bit for DoP.
@@ -398,7 +403,7 @@ impl Player {
         let (plan, rate) = if bit_perfect || !bit_perfect_on {
             (plan, target)
         } else {
-            let p = output::plan(&track, &PlayOptions { exclusive: false, ..opts.clone() }, &[RateRange::exact(info.mixer_rate as f64)], &info.name, false, &crate::channels::default_layout(2))?;
+            let p = output::plan(&track, &PlayOptions { exclusive: false, ..opts.clone() }, &[RateRange::exact(info.mixer_rate as f64)], &info.name, output::DsdSupport { dop: false, native: false }, &crate::channels::default_layout(2))?;
             (p, info.mixer_rate)
         };
 

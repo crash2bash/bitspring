@@ -55,7 +55,10 @@
       steps.push(t(`step.level.${signal.levelBasis}${signal.levelBasis === "unknown" ? "" : limited}`, { db }));
     }
     // The last thing done: everything above works on PCM, which is then encoded to DSD.
-    if (signal.dsdOut)
+    // As DoP the DAC gets PCM words at the device rate; natively, the bitstream at its own rate.
+    if (signal.dsdOut && signal.nativeDsd)
+      steps.push(t(signal.dsdOutOrder === 5 ? "step.pcmToDsdNative5" : "step.pcmToDsdNative7", { dsd: `DSD${signal.dsdOut}`, rate: num((signal.dsdOut * 44100) / 1e6, { maximumFractionDigits: 2 }) }));
+    else if (signal.dsdOut)
       steps.push(t(signal.dsdOutOrder === 5 ? "step.pcmToDsd5" : "step.pcmToDsd7", { dsd: `DSD${signal.dsdOut}`, rate: khz(signal.deviceRate) }));
     return steps;
   });
@@ -73,7 +76,7 @@
 
   let clipping = $derived(status.peakDb !== null && status.peakDb > -0.1);
 
-  /** What reaches the DAC as DSD in DoP: a DSD file as it is, or PCM encoded to DSD. */
+  /** What reaches the DAC as DSD, natively or in DoP: a DSD file as it is, or PCM encoded to DSD. */
   let dsdShown = $derived(signal?.dop && signal.dsdRate ? dsdName(signal.dsdRate) : signal?.dsdOut ? `DSD${signal.dsdOut}` : null);
 
   let lamp = $derived.by(() => {
@@ -101,8 +104,8 @@
   /** What the path does to the signal outside a crossfade. */
   function steady(): string {
     if (!signal || !links) return t("verdict.empty");
-    // Only a DSD file can go bit-perfect as DoP; PCM encoded to DSD is processing.
-    if (signal.bitPerfect && signal.dop) return t("verdict.dop");
+    // Only a DSD file can go bit-perfect as DSD; PCM encoded to DSD is processing.
+    if (signal.bitPerfect && signal.dop) return t(signal.nativeDsd ? "verdict.native" : "verdict.dop");
     // DSD output was chosen and PCM plays: said after whatever else is said, bit-perfect or not.
     const noDsdOut = signal.dsdOutNote && t("verdict.noDsdOut", { reason: dsdOutNoteText(signal.dsdOutNote) });
     // iOS may scale the samples by the system volume (unless the DAC takes the volume itself).
@@ -114,7 +117,7 @@
     return sentences([
       t(processing.length ? "verdict.processed" : "verdict.changed", { reasons }),
       clipping && t("verdict.clip"),
-      signal.dsdNote && t("verdict.noDop", { reason: dsdNoteText(signal.dsdNote) }),
+      signal.dsdNote && t(signal.dsdNote.native ? "verdict.noNative" : "verdict.noDop", { reason: dsdNoteText(signal.dsdNote) }),
       noDsdOut,
     ]);
   }
@@ -212,7 +215,7 @@
   <div class="readout">
     <div class="digits" class:dim={!signal}>
       {#if dsdShown}
-        <span class="value num">{dsdShown}</span><span class="unit">DoP</span>
+        <span class="value num">{dsdShown}</span><span class="unit">{signal?.nativeDsd ? t("unit.native") : "DoP"}</span>
       {:else}
         <span class="value num">{signal ? khz(signal.deviceRate) : "– –"}</span><span class="unit">{t("unit.khz")}</span>
         <span class="value num bits">{signal?.dacBits ?? "– –"}</span><span class="unit">{t("unit.bit")}</span>

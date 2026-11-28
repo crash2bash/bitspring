@@ -1,0 +1,21 @@
+[package]
+name = "bitspring-asio"
+description = "A small, safe ASIO host for Windows, used by BitSpring for bit-perfect PCM and native DSD output"
+version.workspace = true
+edition.workspace = true
+# The bindings are translated from the Steinberg ASIO SDK headers, which are
+# used under the SDK's GPLv3 licence option. See README.md and LICENSE.
+license = "GPL-3.0-only"
+publish = false
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }

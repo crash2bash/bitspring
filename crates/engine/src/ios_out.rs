@@ -201,6 +201,11 @@ impl Device {
             && dev_rate <= MAX_DOP_RATE
             && !failed_dop().lock().unwrap().get(&self.uid).is_some_and(|v| v.contains(&dev_rate))
     }
+
+    /// Never: iOS has no native DSD format, so DSD reaches a DAC here only as DoP.
+    pub fn supports_native_dsd(&self, _dsd_rate: u32) -> bool {
+        false
+    }
 }
 
 pub fn output_devices() -> Result<Vec<DeviceInfo>> {
@@ -268,14 +273,14 @@ fn activate_at(hz: f64) -> Result<f64> {
 impl Player {
     pub fn start(device: Device, track: Arc<Track>, opts: &PlayOptions) -> Result<Self> {
         let info = device.info()?;
-        let dop_ok = output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r)) && dop_blocker().is_none();
+        let dop_ok = opts.allow_dop && output::wire_dsd_rate(&track, opts).is_some_and(|r| device.supports_dop(r)) && dop_blocker().is_none();
         // Plan against every rate a USB DAC might have; the session tells us what it took.
         let wide: Vec<RateRange> = if info.transport == Transport::Usb {
             USB_RATES.iter().copied().map(RateRange::exact).collect()
         } else {
             info.rates.clone()
         };
-        let mut plan = output::plan(&track, opts, &wide, &info.name, dop_ok, &crate::channels::default_layout(2))?;
+        let mut plan = output::plan(&track, opts, &wide, &info.name, output::DsdSupport { dop: dop_ok, native: false }, &crate::channels::default_layout(2))?;
         let device_rate = activate_at(plan.target)?;
         remember_rate(&info.uid, device_rate);
         if (device_rate - plan.target).abs() >= 0.5 {
@@ -283,7 +288,7 @@ impl Player {
                 failed_dop().lock().unwrap().entry(info.uid.clone()).or_default().push(plan.target as u32);
                 return Err(output::dop_error(&info.name, (plan.target * 16.0).round() as u32));
             }
-            plan = output::plan(&track, opts, &[RateRange::exact(device_rate)], &info.name, false, &crate::channels::default_layout(2))?;
+            plan = output::plan(&track, opts, &[RateRange::exact(device_rate)], &info.name, output::DsdSupport { dop: false, native: false }, &crate::channels::default_layout(2))?;
         }
 
         let channels = 2u32;

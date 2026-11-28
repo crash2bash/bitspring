@@ -363,6 +363,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitspring-asio"
+version = "0.1.0"
+dependencies = [
+ "windows",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1785,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "hifi-desktop"
-version = "0.24.1"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -1820,6 +1827,7 @@ dependencies = [
  "alsa",
  "anyhow",
  "ape-decoder",
+ "bitspring-asio",
  "coreaudio-sys",
  "encoding_rs",
  "jni 0.21.1",

@@ -33,7 +33,7 @@ use crate::ring::Ring;
 #[cfg(target_os = "macos")]
 pub use crate::coreaudio::{Device, DeviceInfo, Player, output_devices};
 #[cfg(windows)]
-pub use crate::wasapi_out::{Device, DeviceInfo, Player, output_devices};
+pub use crate::windows_out::{Device, DeviceInfo, Player, asio_release, find_device, output_devices, refresh as refresh_devices};
 #[cfg(target_os = "ios")]
 pub use crate::ios_out::{Device, DeviceInfo, Player, dop_blocker, output_devices, system_volume};
 #[cfg(target_os = "android")]
@@ -71,6 +71,9 @@ pub enum Transport {
     Virtual,
     /// A network player we stream to (UPnP/DLNA): the samples reach it exactly, over TCP.
     Network,
+    /// Windows: a device's own ASIO driver, which takes our samples (and native DSD) past the
+    /// Windows audio stack. (Software ASIO wrappers over Windows audio count as `Virtual`.)
+    Asio,
     Other(u32),
 }
 
@@ -107,11 +110,17 @@ pub struct PlayOptions {
     /// seek, stop), instead of a click. A track playing through, and a gapless join, are never
     /// touched. Off for a network stream: there the player on the other end does the pausing.
     pub fades: bool,
+    /// The user's DoP switch for this device: DSD may go out as DoP only with it on. Native DSD
+    /// doesn't need it (the driver declares that format), so with it off a device whose native
+    /// DSD is missing or fails to open gets PCM (or an error, for a DSD track sent straight),
+    /// never DoP: to a DAC that doesn't decode DoP, DoP is loud noise. On by default, so the
+    /// CLI and the tests keep working as before.
+    pub allow_dop: bool,
 }
 
 impl Default for PlayOptions {
     fn default() -> Self {
-        Self { exclusive: true, dsp: DspSettings::default(), start_at: 0.0, start_paused: false, fades: true }
+        Self { exclusive: true, dsp: DspSettings::default(), start_at: 0.0, start_paused: false, fades: true, allow_dop: true }
     }
 }
 
@@ -149,9 +158,16 @@ pub struct SignalPath {
     pub lossy: Option<LossyPlan>,
     /// The source is DSD: its rate, and whether it goes out as DoP or was converted to PCM.
     pub dsd: Option<DsdSource>,
-    /// PCM encoded to DSD on the way and sent as DoP: the rate and modulator it runs with.
-    /// None when it isn't, also where it was asked for and the device couldn't take it.
+    /// PCM encoded to DSD on the way and sent as DoP or natively: the rate and modulator it
+    /// runs with. None when it isn't, also where it was asked for and the device couldn't take it.
     pub dsd_out: Option<DsdOut>,
+    /// The DSD on the wire (a DSD track's own bits, or `dsd_out`) goes natively, in the
+    /// device's native DSD format; false when it goes as DoP, or no DSD goes out at all.
+    pub native_dsd: bool,
+    /// The device was to take the DSD natively but refused it when opened, and the playback was
+    /// planned again without native DSD (DoP where allowed, else PCM): what plays isn't what
+    /// the device claimed it could do. Set by the backend that retried.
+    pub native_refused: bool,
     /// The gain this track plays at (volume levelling, peak headroom), when one applies.
     pub level: Option<Level>,
     pub bit_perfect: bool,
@@ -222,28 +238,69 @@ pub(crate) enum OutFormat {
     I24Packed,
     /// 4-byte container; `bits` = full-scale width of the value (32 when aligned high).
     I32 { bits: u32 },
+    /// Native DSD: the raw bitstream, no PCM framing and no DoP markers. Each device frame
+    /// holds `bytes` (1, 2 or 4) DSD bytes per channel: ALSA's DSD_U8, DSD_U16_LE/BE and
+    /// DSD_U32_LE/BE, ASIO's DSDInt8MSB1/LSB1 (`bytes: 1`, one buffer per channel).
+    ///
+    /// Per channel the DSD bytes run in time order t = 0, 1, 2…; the 16-bit word of our frame
+    /// f (see [`Track::dop_payload`]) supplies t = 2f (its high byte) and t = 2f + 1 (its low
+    /// byte). Time byte t of channel c lands in device frame t / `bytes`, at position
+    /// k = t % `bytes` within that channel's container, which in an interleaved buffer of nch
+    /// channels is byte (frame · nch + c) · `bytes` + (k when `big_endian`, else `bytes` − 1 − k).
+    /// So big-endian has the earliest byte first in memory; little-endian holds the container
+    /// as a number with the earliest byte most significant, stored low byte first (the
+    /// earliest byte at the highest address). With `bytes: 1` the order doesn't matter.
+    ///
+    /// Within a byte the oldest bit is the MSB, as in our words; `lsb_first` (ASIO
+    /// DSDInt8LSB1) reverses the bits of every byte on the way out. Silence is the idle
+    /// pattern, 0x69 a byte (MSB first, the bytes of [`DOP_IDLE`]; 0x96 with `lsb_first`),
+    /// never zeros.
+    ///
+    /// Positions, seeks, joins and the ring all go on counting our 16-bit frames, whatever
+    /// the container: see [`OutFormat::frame_bytes`].
+    Dsd { bytes: u8, big_endian: bool, lsb_first: bool },
 }
 
+/// One byte of the DSD idle pattern, MSB first.
+const DSD_IDLE_BYTE: u8 = DOP_IDLE.to_be_bytes()[0];
+
 impl OutFormat {
+    /// Bytes per channel in one device frame (for native DSD, the container: 1, 2 or 4).
     pub(crate) fn bytes(self) -> usize {
         match self {
             Self::F32 | Self::I32 { .. } => 4,
             Self::I16 => 2,
             Self::I24Packed => 3,
+            Self::Dsd { bytes, .. } => bytes as usize,
         }
     }
 
-    /// Significant bits the format carries (float32: its 24-bit mantissa).
+    /// Bytes per channel in one of *our* frames, the unit [`Shared::render`] counts in: the
+    /// device frame for PCM, and for native DSD one 16-bit word (2 bytes), whatever the
+    /// container. A DSD_U32 device frame holds two of our frames, two DSD_U8 frames one.
+    #[inline(always)]
+    pub(crate) fn frame_bytes(self) -> usize {
+        match self {
+            Self::Dsd { .. } => 2,
+            _ => self.bytes(),
+        }
+    }
+
+    /// Significant bits the format carries (float32: its 24-bit mantissa). Native DSD: 1, the
+    /// bitstream's own width (it is never PCM, whatever its container size).
     pub(crate) fn bits(self) -> u32 {
         match self {
             Self::I16 => 16,
             Self::I24Packed | Self::F32 => 24,
             Self::I32 { bits } => bits,
+            Self::Dsd { .. } => 1,
         }
     }
 
     /// Write one sample. f32 → int scaling is by a power of two, so a 16/24-bit source comes
     /// out as exactly its original integer (16-bit lands as `x << 8` in a 24-bit slot).
+    /// Native DSD takes no samples: should PCM ever reach it, it writes the idle pattern
+    /// (silence to a DSD DAC) instead of noise.
     #[inline(always)]
     pub(crate) fn write(self, out: &mut [u8], s: f32) {
         fn to_int(s: f32, bits: u32) -> i32 {
@@ -255,6 +312,7 @@ impl OutFormat {
             Self::I16 => out.copy_from_slice(&(to_int(s, 16) as i16).to_le_bytes()),
             Self::I24Packed => out.copy_from_slice(&to_int(s, 24).to_le_bytes()[..3]),
             Self::I32 { bits } => out.copy_from_slice(&to_int(s, bits).to_le_bytes()),
+            Self::Dsd { lsb_first, .. } => out.fill(dsd_byte(DSD_IDLE_BYTE, lsb_first)),
         }
     }
 
@@ -276,8 +334,17 @@ impl OutFormat {
             Self::I32 { .. } => out.copy_from_slice(&signed.to_le_bytes()),
             Self::F32 => out.copy_from_slice(&(signed as f32 / 8_388_608.0).to_le_bytes()),
             Self::I16 => out.fill(0),
+            // (Never used: native DSD goes out through `fill_native`, without markers.)
+            Self::Dsd { lsb_first, .. } => out.fill(dsd_byte(DSD_IDLE_BYTE, lsb_first)),
         }
     }
+}
+
+/// A DSD byte (oldest bit in the MSB) as a native DSD format sends it: bit-reversed when the
+/// format takes the oldest bit in the LSB.
+#[inline(always)]
+fn dsd_byte(b: u8, lsb_first: bool) -> u8 {
+    if lsb_first { b.reverse_bits() } else { b }
 }
 
 /// One device buffer handed to [`Shared::render`]: interleaved frames of `channels` samples.
@@ -300,11 +367,18 @@ pub(crate) struct Plan {
     pub resampled: bool,
     /// Audio goes through the render thread (resampling, DSP or lossy enhancers).
     pub processing: bool,
-    /// The wire carries DoP: a DSD track's own bits sent straight, or PCM encoded (`encode`).
-    /// The device must run at `target` in a format that carries the words untouched.
+    /// The wire carries raw DSD bits: a DSD track's own sent straight, or PCM encoded
+    /// (`encode`) — as DoP, or natively when `native`. (The name is from when DoP was the only
+    /// way: every "is this DSD on the wire" check goes by it, whichever way it goes.) The
+    /// device must run at `target` in a format that carries the bits untouched: for DoP a
+    /// ≥24-bit PCM format, for native DSD an [`OutFormat::Dsd`].
     pub dop: bool,
+    /// The DSD on the wire (see `dop`) goes natively, not as DoP: the backend opens the device
+    /// in its native DSD format, at the hardware rate that matches `target` (see
+    /// [`native_device_rate`]). Never without `dop`.
+    pub native: bool,
     /// PCM is encoded to DSD on the render thread (after the whole chain and the EQ) and the
-    /// words go out as DoP. A DSD track played straight is `dop` with this None.
+    /// words go out as DoP or natively. A DSD track played straight is `dop` with this None.
     pub encode: Option<DsdOut>,
     /// How the track's channels reach the device's (straight, or folded down).
     pub route: Route,
@@ -321,9 +395,40 @@ pub(crate) fn dop_error(device_name: &str, dsd_hz: u32) -> anyhow::Error {
     .into()
 }
 
-/// The DSD rate that would go over the wire as DoP for `track`: its own when it is a DSD
+/// What the device can do with the DSD rate that would go over the wire (see
+/// [`wire_dsd_rate`]), as the backend finds it before planning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct DsdSupport {
+    /// It can carry that rate as DoP (in a ≥24-bit PCM format at `dsd_rate / 16`).
+    pub dop: bool,
+    /// It takes that rate as raw DSD in a native DSD format (ALSA DSD_U8/U16/U32, ASIO
+    /// DSDInt8): decided by the backend from what the driver reports. Preferred over DoP
+    /// where both work.
+    pub native: bool,
+}
+
+/// The DSD bit rate per channel (2 822 400 for DSD64) behind a native DSD playback's word
+/// rate: [`Plan::target`], the rate `Playback::new` is given, counts our 16-bit words, one
+/// every 16 DSD bits. What an ASIO driver is set to (its sample rate is the DSD bit rate).
+pub(crate) fn dsd_rate_of_words(word_rate: f64) -> u32 {
+    (word_rate * 16.0).round() as u32
+}
+
+/// The rate to open a device at for native DSD in `format` when the plan's word rate is
+/// `word_rate` ([`Plan::target`]): one device frame carries `bytes` DSD bytes per channel, so
+/// the DSD bit rate / (8 · `bytes`) — ALSA's rate for DSD_U8, DSD_U16 and DSD_U32 (DSD64:
+/// 352.8, 176.4 and 88.2 kHz). None for a PCM format. `Playback::new` still gets `word_rate`
+/// itself, never this.
+pub(crate) fn native_device_rate(word_rate: f64, format: OutFormat) -> Option<f64> {
+    match format {
+        OutFormat::Dsd { bytes, .. } if bytes > 0 => Some(dsd_rate_of_words(word_rate) as f64 / (8.0 * bytes as f64)),
+        _ => None,
+    }
+}
+
+/// The DSD rate that would go over the wire (as DoP or natively) for `track`: its own when it is a DSD
 /// track sent straight, else the rate PCM is to be encoded at, if that is asked for. What a
-/// backend checks the device's DoP support against, before planning.
+/// backend checks the device's DoP and native DSD support against, before planning.
 pub(crate) fn wire_dsd_rate(track: &Track, opts: &PlayOptions) -> Option<u32> {
     if track.is_dop() {
         Some(track.dsd.map_or(track.sample_rate * 16, |d| d.rate))
@@ -343,33 +448,45 @@ fn effective(dsp: &DspSettings, encode: Option<DsdOut>) -> Cow<'_, DspSettings> 
     }
 }
 
-/// `rates`: what the device can run at. `dop_ok`: the device could carry this DoP track.
-/// `speakers`: what each device channel feeds (see [`crate::channels`]).
-pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], device_name: &str, dop_ok: bool, speakers: &[Speaker]) -> Result<Plan> {
+/// `rates`: what the device can run at (PCM). `dsd`: what it can do with the DSD rate that
+/// would go over the wire (see [`wire_dsd_rate`]). `speakers`: what each device channel feeds
+/// (see [`crate::channels`]).
+pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], device_name: &str, dsd: DsdSupport, speakers: &[Speaker]) -> Result<Plan> {
     let src_hz = track.sample_rate as f64;
     let route = Route::new(&track.layout, speakers);
-    // DoP: the DSD bits must reach the DAC exactly, so no processing, no rate change and no
-    // folding channels together.
+    // DoP only with the user's switch on for this device, whatever the device could carry
+    // (the backends check it too; this keeps a fallback re-plan from slipping into DoP).
+    let dsd = DsdSupport { dop: dsd.dop && opts.allow_dop, ..dsd };
+    // DSD bits on the wire (DoP or native): they must reach the DAC exactly, so no
+    // processing, no rate change and no folding channels together.
     let dop = track.is_dop();
     let dsd_hz = wire_dsd_rate(track, opts).unwrap_or(0);
-    if dop && (!opts.exclusive || !dop_ok || !route.is_direct()) {
+    if dop && (!opts.exclusive || !(dsd.dop || dsd.native) || !route.is_direct()) {
         return Err(dop_error(device_name, dsd_hz));
     }
-    // PCM encoded to DSD: only with the device to ourselves and able to carry DoP at the wire
-    // rate (`dop_ok` is for that rate: see `wire_dsd_rate`). Otherwise the playback is planned
-    // exactly as if it weren't asked for, without an error: the app says why, and the signal
-    // path shows what plays. A DSD track sent straight ignores it.
+    // PCM encoded to DSD: only with the device to ourselves and able to take DSD at the wire
+    // rate (`dsd` is for that rate: see `wire_dsd_rate`) — natively, or as DoP at a PCM rate
+    // it lists. Otherwise the playback is planned exactly as if it weren't asked for, without
+    // an error: the app says why, and the signal path shows what plays. A DSD track sent
+    // straight ignores it.
     let encode = opts.dsp.dsd_out.filter(|out| {
         let wire = out.rate.wire_rate();
         !dop && opts.exclusive
-            && dop_ok
-            && rates.iter().any(|r| r.contains(wire as f64))
+            && (dsd.native || (dsd.dop && rates.iter().any(|r| r.contains(wire as f64))))
             && crate::dsp::resample::phases(track.sample_rate, wire) <= crate::dsp::resample::MAX_PHASES
     });
+    // Native DSD where the device takes it, DoP otherwise.
+    let native = dsd.native && (dop || encode.is_some());
     let dsp = effective(&opts.dsp, encode);
-    let mut target = match choose_device_rate(track.sample_rate, rates) {
-        RateDecision::BitPerfect(hz) | RateDecision::Resample { device_hz: hz } => hz,
-        RateDecision::Unsupported => bail!(crate::UserError::NoRates { device: device_name.trim().to_string() }),
+    // Native DSD doesn't go by the PCM rates: `target` is the word rate (`dsd_rate / 16`, set
+    // below when encoding), and the backend opens the device at the hardware rate for it.
+    let mut target = if native {
+        src_hz
+    } else {
+        match choose_device_rate(track.sample_rate, rates) {
+            RateDecision::BitPerfect(hz) | RateDecision::Resample { device_hz: hz } => hz,
+            RateDecision::Unsupported => bail!(crate::UserError::NoRates { device: device_name.trim().to_string() }),
+        }
     };
     if let Upsample::UpTo(max_hz) = dsp.upsample {
         if !dop {
@@ -400,7 +517,7 @@ pub(crate) fn plan(track: &Track, opts: &PlayOptions, rates: &[RateRange], devic
     if resampled && crate::dsp::resample::phases(track.sample_rate, target as u32) > crate::dsp::resample::MAX_PHASES {
         bail!(crate::UserError::Resample { from: track.sample_rate, to: target as u32 });
     }
-    Ok(Plan { target, start_frame, lossy, resampled, processing, dop: dop || encode.is_some(), encode, route })
+    Ok(Plan { target, start_frame, lossy, resampled, processing, dop: dop || encode.is_some(), native, encode, route })
 }
 
 /// Fill in the signal path from what the backend actually got from the device.
@@ -453,10 +570,12 @@ pub(crate) fn signal_path(
         lossy: plan.lossy,
         dsd: track.dsd,
         dsd_out: plan.encode,
+        native_dsd: plan.native,
+        native_refused: false,
         level: if leveled { track.level() } else { None },
-        // DoP gets this far only with the exact rate, a ≥24-bit integer format and exclusive
-        // access (the backend checked). Only a DSD track's own bits are bit-perfect: PCM
-        // encoded to DSD is a new signal.
+        // DSD on the wire (DoP or native) gets this far only with the exact rate, a format
+        // that carries the bits untouched and exclusive access (the backend checked). Only a
+        // DSD track's own bits are bit-perfect: PCM encoded to DSD is a new signal.
         bit_perfect: (plan.dop && plan.encode.is_none() && track.is_dop() && transport.can_be_bit_perfect()) || pcm_clean && bits_ok,
         out_bits: out.bits(),
         pcm_clean,
@@ -583,14 +702,15 @@ pub(crate) struct Shared {
     /// Peak |sample| per output channel (L, R) since the UI last read it, as f32 bits.
     /// Non-negative f32 bit patterns order like u32, so `fetch_max` works on them directly.
     meter: [AtomicU32; 2],
-    /// The track is raw DSD: the callback packs it as DoP, straight from the track. (False
-    /// when PCM is encoded: those words come through the ring, see `RingState::dop_words`.)
+    /// The track is raw DSD: the callback packs it straight from the track, as DoP or natively
+    /// (by the buffers' format: see `fill_dsd`). (False when PCM is encoded: those words come
+    /// through the ring, see `RingState::dop_words`.)
     dop: bool,
     /// Track channels → device channels.
     route: Route,
     /// Callback-only: marker of the next DoP frame (false = 0x05, true = 0xFA). Runs on across
     /// callbacks, pauses, seeks, dropouts and tracks — a break in the alternation makes the
-    /// DAC drop out of DSD.
+    /// DAC drop out of DSD. Untouched by native DSD, which has no markers.
     dop_phase: AtomicBool,
     /// The lossy enhancers are on: they measure each track, so no track may follow another
     /// in the same chain when either is lossy.
@@ -598,9 +718,9 @@ pub(crate) struct Shared {
     /// Length of a fade in device frames (see [`PlayOptions::fades`]); 0 = no fades now.
     /// Set from the control side (`Playback::set_fades`), read by the callback.
     fade_len: AtomicU32,
-    /// What `fade_len` is with fades on; 0 = this playback never fades (DoP: the DSD bits
-    /// can't be scaled, and the DAC mutes by itself; PCM encoded to DSD fades in ahead of the
-    /// encoder instead, see `Encode`).
+    /// What `fade_len` is with fades on; 0 = this playback never fades (DSD on the wire, DoP or
+    /// native: the DSD bits can't be scaled, and the DAC mutes by itself; PCM encoded to DSD
+    /// fades in ahead of the encoder instead, see `Encode`).
     fade_max: u32,
     /// Where the fade stands: 0 (silent) ..= `fade_len` (full level). Written by the callback
     /// only.
@@ -644,12 +764,12 @@ fn fade_gain(pos: u32, len: u32) -> f32 {
 /// Hand-off between the render thread (producer) and the callback (consumer).
 struct RingState {
     /// Processed samples at the device rate, program channels interleaved. When `dop_words`,
-    /// DoP payloads instead: each 16-bit word the encoder made, as its numeric value (0..=65535
-    /// is exact in f32; the callback takes it back with `as u16`).
+    /// DSD words instead (for DoP or native DSD): each 16-bit word the encoder made, as its
+    /// numeric value (0..=65535 is exact in f32; the callback takes it back with `as u16`).
     ring: Ring,
     /// The ring carries DSD words, not PCM (see [`Plan::encode`]): the render thread has run
-    /// the EQ, the clamp, the fade-in and the encoder; the callback only packs the words as
-    /// DoP, under the next markers.
+    /// the EQ, the clamp, the fade-in and the encoder; the callback only packs the words, as
+    /// DoP under the next markers or natively.
     dop_words: bool,
     channels: usize,
     source_rate: f64,
@@ -1162,7 +1282,7 @@ impl Drop for Playback {
 pub(crate) fn render_offline(track: Arc<Track>, dsp: &DspSettings) -> Result<Vec<f32>> {
     let rate = track.sample_rate as f64;
     let ch = track.channels;
-    let opts = PlayOptions { exclusive: true, dsp: dsp.clone(), start_at: 0.0, start_paused: false, fades: false };
+    let opts = PlayOptions { exclusive: true, dsp: dsp.clone(), start_at: 0.0, start_paused: false, fades: false, allow_dop: true };
     let plan = Plan {
         target: rate,
         start_frame: 0,
@@ -1170,6 +1290,7 @@ pub(crate) fn render_offline(track: Arc<Track>, dsp: &DspSettings) -> Result<Vec
         resampled: false,
         processing: true,
         dop: false,
+        native: false,
         // PCM out, whatever `dsp.dsd_out` says: the chain runs as if it were unset.
         encode: None,
         route: Route::new(&track.layout, &track.layout),
@@ -1585,10 +1706,12 @@ impl Shared {
         let st = self;
         let slots = &*st.slots;
         let paused = st.paused.load(Ordering::Relaxed);
+        // In our frames: for native DSD one 16-bit word per channel, whatever the container (a
+        // DSD_U32 device frame is two of them; see `OutFormat::frame_bytes`).
         let frames = buffers
             .iter()
             .find(|b| b.channels > 0)
-            .map(|b| b.data.len() / (b.channels * b.format.bytes()))
+            .map(|b| b.data.len() / (b.channels * b.format.frame_bytes()))
             .unwrap_or(0);
 
         match &st.ring {
@@ -1714,7 +1837,7 @@ impl Shared {
                     let to = if after == After::Stop { frames } else { done + avail };
                     let route = &st.route;
                     let p = if st.dop {
-                        fill_dop(buffers, done..to, avail, &st.dop_phase, |f, dc| dop_sample(track, route, pos + f, dc))
+                        fill_dsd(buffers, done..to, avail, &st.dop_phase, |f, dc| dop_sample(track, route, pos + f, dc))
                     } else if level < fade_len && avail > 0 {
                         // Picking up after a pause or a jump: fade in.
                         let from = level;
@@ -1782,7 +1905,7 @@ impl Shared {
                 st.meter(peaks);
                 done
             }
-            // PCM encoded to DSD: words from the ring, packed as DoP.
+            // PCM encoded to DSD: words from the ring, packed as DoP or natively.
             Some(rs) if rs.dop_words => self.render_words(rs, buffers, frames, paused),
             // Processed path: pre-rendered samples from the ring.
             Some(rs) => {
@@ -1935,9 +2058,9 @@ impl Shared {
     }
 
     /// The callback when the ring carries DSD words (PCM the render thread encoded): every
-    /// device frame goes out as DoP under the next marker, the words while there are any, the
-    /// idle pattern otherwise (paused, the ring dry, after the end). Nothing here changes a
-    /// level — no EQ (the render thread ran it, and the callback must never touch it in this
+    /// frame goes out as DoP under the next marker (or natively, by the buffers' format: see
+    /// `fill_dsd`), the words while there are any, the idle pattern otherwise (paused, the
+    /// ring dry, after the end). Nothing here changes a level — no EQ (the render thread ran it, and the callback must never touch it in this
     /// mode), no clamp, no fades: the words are bits, not samples. A seek drops what is queued
     /// at once.
     fn render_words(&self, rs: &RingState, buffers: &mut [OutBuf<'_>], frames: usize, paused: bool) -> usize {
@@ -1956,15 +2079,15 @@ impl Shared {
         }
         let mut got = 0;
         let mut peaks = [0f32; 2];
-        // In pieces of the scratch size; once the ring runs short, the rest is idle DoP. Each
-        // piece follows on from the last, so the markers run on unbroken (see `fill_dop`).
+        // In pieces of the scratch size; once the ring runs short, the rest is idle. Each piece
+        // follows on from the last, so DoP's markers run on unbroken (see `fill_dop`).
         while got < frames {
             let want = (frames - got).min(piece);
             let n = if paused { 0 } else { rs.ring.pop(&mut scratch[..want * ch]) / ch };
             let block = &scratch[..n * ch];
             let to = if n < want { frames } else { got + want };
             // (A word is exact in f32; `as u16` takes it back.)
-            let p = fill_dop(buffers, got..to, n, &self.dop_phase, |f, dc| match route.program_channel(dc) {
+            let p = fill_dsd(buffers, got..to, n, &self.dop_phase, |f, dc| match route.program_channel(dc) {
                 Some(pc) => block[f * ch + pc] as u16,
                 None => DOP_IDLE,
             });
@@ -1974,7 +2097,7 @@ impl Shared {
                 break;
             }
         }
-        // `fill_dop` reads the density as a DSD file's level (70 % modulation = PCM full scale);
+        // `fill_dsd` reads the density as a DSD file's level (70 % modulation = PCM full scale);
         // here PCM full scale went into the encoder as `LEVEL` (50 %), so the meters show the
         // PCM level the music had before it was encoded.
         const TO_PCM: f32 = (1.0 / (crate::dsp::dsd_encode::LEVEL * PCM_GAIN)) as f32;
@@ -2008,9 +2131,11 @@ fn fill(
         if nch == 0 {
             continue;
         }
-        let all = buf.data.chunks_exact_mut(nch * fmt.bytes());
+        // (By our frames: for native DSD, which never takes PCM, `write` fills them with the
+        // idle pattern, so the bytes come out right however they are cut.)
+        let all = buf.data.chunks_exact_mut(nch * fmt.frame_bytes());
         for (f, frame) in all.skip(frames.start).take(frames.len()).enumerate() {
-            for (c, out) in frame.chunks_exact_mut(fmt.bytes()).enumerate() {
+            for (c, out) in frame.chunks_exact_mut(fmt.frame_bytes()).enumerate() {
                 let s = if f < avail { sample(f, first_channel + c) } else { 0.0 };
                 if let Some(p) = peaks.get_mut(first_channel + c) {
                     *p = p.max(s.abs());
@@ -2039,13 +2164,15 @@ fn fill_dop(
     let start = phase.load(Ordering::Relaxed);
     let mut written = 0;
     let mut peaks = [0f32; 2];
-    let mut ones = [0u32; 2];
     let mut first_channel = 0;
     for buf in buffers.iter_mut() {
         let (nch, fmt) = (buf.channels, buf.format);
         if nch == 0 {
             continue;
         }
+        // Counted per buffer, for the device channels 0 and 1 it holds: interleaved, both; one
+        // buffer per channel (ASIO), its own.
+        let mut ones = [0u32; 2];
         let mut n = 0;
         let all = buf.data.chunks_exact_mut(nch * fmt.bytes());
         for (f, frame) in all.skip(frames.start).take(frames.len()).enumerate() {
@@ -2058,11 +2185,11 @@ fn fill_dop(
                 }
                 fmt.write_dop(out, marker << 16 | p as u32);
             }
-            if first_channel == 0 && (f + 1) % WINDOW == 0 {
-                for c in 0..2 {
-                    let level = (ones[c] as f32 / (8 * WINDOW) as f32 - 1.0).abs() * PCM_GAIN as f32;
-                    peaks[c] = peaks[c].max(level);
-                    ones[c] = 0;
+            if (f + 1) % WINDOW == 0 {
+                for dc in first_channel..(first_channel + nch).min(2) {
+                    let level = (ones[dc] as f32 / (8 * WINDOW) as f32 - 1.0).abs() * PCM_GAIN as f32;
+                    peaks[dc] = peaks[dc].max(level);
+                    ones[dc] = 0;
                 }
             }
             n = f + 1;
@@ -2074,9 +2201,102 @@ fn fill_dop(
     peaks
 }
 
+/// Native DSD counterpart of [`fill_dop`]: in our frames `frames` (one 16-bit word per channel
+/// each, see [`OutFormat::frame_bytes`]), `avail` frames of DSD from `payload(i,
+/// device_channel)`, then the idle pattern, every byte placed as [`OutFormat::Dsd`] says. No
+/// markers, and nothing kept between calls: a callback's bytes follow on from the last by
+/// position alone. Buffers may be interleaved or one per channel (`channels: 1` each, as ASIO
+/// gives them), as in [`fill`]. A buffer that holds an odd number of DSD bytes per channel
+/// (DSD_U8 with an odd period) ends in half of one of our frames: that byte is idle, and the
+/// frame isn't counted as played (`Shared::render` counts whole frames). Returns the same rough
+/// level per channel as `fill_dop`. Realtime-safe: no allocation, no locks.
+#[inline(always)]
+fn fill_native(
+    buffers: &mut [OutBuf<'_>],
+    frames: std::ops::Range<usize>,
+    avail: usize,
+    payload: impl Fn(usize, usize) -> u16,
+) -> [f32; 2] {
+    const WINDOW: usize = 16; // frames → 256 bits per channel
+    let mut peaks = [0f32; 2];
+    let mut first_channel = 0;
+    for buf in buffers.iter_mut() {
+        let nch = buf.channels;
+        if nch == 0 {
+            continue;
+        }
+        let OutFormat::Dsd { bytes, big_endian, lsb_first } = buf.format else {
+            // (Never: the buffers of one device share a format. Its channels stay as they are.)
+            first_channel += nch;
+            continue;
+        };
+        let idle = dsd_byte(DSD_IDLE_BYTE, lsb_first);
+        if !matches!(bytes, 1 | 2 | 4) {
+            // No such container: silence rather than bytes in the wrong places.
+            buf.data.fill(idle);
+            first_channel += nch;
+            continue;
+        }
+        let bytes = bytes as usize;
+        let (shift, mask) = (bytes.trailing_zeros(), bytes - 1);
+        // DSD bytes per channel the buffer holds, in whole device frames.
+        let per_channel = buf.data.len() / (nch * bytes) * bytes;
+        // Where time byte `t` of the buffer's channel `c` goes.
+        let at = |t: usize, c: usize| ((t >> shift) * nch + c) * bytes + if big_endian { t & mask } else { mask - (t & mask) };
+        if per_channel % 2 == 1 {
+            for c in 0..nch {
+                buf.data[at(per_channel - 1, c)] = idle;
+            }
+        }
+        let mut ones = [0u32; 2];
+        let end = frames.end.min(per_channel / 2);
+        for f in frames.start..end {
+            let i = f - frames.start;
+            for c in 0..nch {
+                let dc = first_channel + c;
+                let w = if i < avail { payload(i, dc) } else { DOP_IDLE };
+                if dc < 2 {
+                    ones[dc] += w.count_ones();
+                }
+                let [early, late] = w.to_be_bytes();
+                buf.data[at(2 * f, c)] = dsd_byte(early, lsb_first);
+                buf.data[at(2 * f + 1, c)] = dsd_byte(late, lsb_first);
+            }
+            if (i + 1) % WINDOW == 0 {
+                for dc in first_channel..(first_channel + nch).min(2) {
+                    let level = (ones[dc] as f32 / (8 * WINDOW) as f32 - 1.0).abs() * PCM_GAIN as f32;
+                    peaks[dc] = peaks[dc].max(level);
+                    ones[dc] = 0;
+                }
+            }
+        }
+        first_channel += nch;
+    }
+    peaks
+}
+
+/// The DSD bits for `frames`, packed the way the device takes them: natively when its buffers
+/// are an [`OutFormat::Dsd`] ([`fill_native`]; `phase` untouched), else as DoP under the next
+/// markers ([`fill_dop`]). Both places that send DSD go through here: a DSD track's own bits,
+/// and PCM encoded to DSD.
+#[inline(always)]
+fn fill_dsd(
+    buffers: &mut [OutBuf<'_>],
+    frames: std::ops::Range<usize>,
+    avail: usize,
+    phase: &AtomicBool,
+    payload: impl Fn(usize, usize) -> u16,
+) -> [f32; 2] {
+    if buffers.iter().any(|b| b.channels > 0 && matches!(b.format, OutFormat::Dsd { .. })) {
+        fill_native(buffers, frames, avail, payload)
+    } else {
+        fill_dop(buffers, frames, avail, phase, payload)
+    }
+}
+
 #[inline(always)]
 fn dop_sample(track: &Track, route: &Route, frame: usize, device_channel: usize) -> u16 {
-    // DoP only ever goes channel for channel (see `plan`).
+    // DSD only ever goes channel for channel (see `plan`).
     match route.program_channel(device_channel) {
         Some(c) => track.dop_payload(frame, c),
         None => DOP_IDLE,
@@ -2104,6 +2324,10 @@ fn source_sample(samples: &[f32], channels: usize, route: &Route, frame: usize, 
 mod tests {
     use super::*;
 
+    /// A device that takes DoP at the wire rate, and one that takes no DSD at all.
+    const DOP: DsdSupport = DsdSupport { dop: true, native: false };
+    const NO_DSD: DsdSupport = DsdSupport { dop: false, native: false };
+
     /// The processed path end to end, as a device would pull it: the EQ runs in the callback,
     /// takes edits live, and the compare bypass and the linear-phase FIR work there too.
     mod eq_path {
@@ -2130,7 +2354,7 @@ mod tests {
 
         fn start(eq: EqPreset) -> Playback {
             let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
-            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
+            let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, native: false, encode: None, route: stereo_route() };
             Playback::new(sine_track(8.0), &opts, &plan, FS as f64).unwrap()
         }
 
@@ -2215,7 +2439,7 @@ mod tests {
         }
 
         fn playback(first: Arc<Track>, processing: bool) -> Playback {
-            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop(), encode: None, route: stereo_route() };
+            let plan = Plan { target: first.sample_rate as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: first.is_dop(), native: false, encode: None, route: stereo_route() };
             Playback::new(first.clone(), &PlayOptions::default(), &plan, first.sample_rate as f64).unwrap()
         }
 
@@ -2298,7 +2522,7 @@ mod tests {
                 ..Default::default()
             };
             let opts = PlayOptions { dsp: DspSettings { eq: Some(eq), ..Default::default() }, ..Default::default() };
-            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
+            let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, native: false, encode: None, route: stereo_route() };
             let p = Playback::new(a, &opts, &plan, fs as f64).unwrap();
             assert!(p.queue_next(b));
             let rs = p.shared().ring.as_ref().unwrap();
@@ -2669,7 +2893,7 @@ mod tests {
         }
 
         fn plan(start_frame: usize) -> Plan {
-            Plan { target: DEV as f64, start_frame, lossy: None, resampled: true, processing: true, dop: false, encode: None, route: stereo_route() }
+            Plan { target: DEV as f64, start_frame, lossy: None, resampled: true, processing: true, dop: false, native: false, encode: None, route: stereo_route() }
         }
 
         fn start(track: Arc<Track>, filter: Option<FilterSpec>, start_frame: usize, fades: bool) -> Playback {
@@ -2792,7 +3016,7 @@ mod tests {
                 println!("44.1 → 88.2 kHz stereo, {name}: load {load:.4} ({:.0}× real time)", 1.0 / load);
                 assert!(load > 0.0 && load < 1.0, "{name}: {load}");
             }
-            let plan = Plan { target: SRC as f64, start_frame: 0, lossy: None, resampled: false, processing: false, dop: false, encode: None, route: stereo_route() };
+            let plan = Plan { target: SRC as f64, start_frame: 0, lossy: None, resampled: false, processing: false, dop: false, native: false, encode: None, route: stereo_route() };
             let direct = Playback::new(sine(0, 1_000), &PlayOptions::default(), &plan, SRC as f64).unwrap();
             assert_eq!(direct.load(), None);
         }
@@ -2864,7 +3088,7 @@ mod tests {
         /// at that rate.
         fn start(track: Arc<Track>, opts: &PlayOptions) -> Playback {
             let out = opts.dsp.dsd_out.unwrap();
-            let plan = plan(&track, opts, &dac_rates(), "DAC", true, &crate::channels::default_layout(2)).unwrap();
+            let plan = plan(&track, opts, &dac_rates(), "DAC", DOP, &crate::channels::default_layout(2)).unwrap();
             assert_eq!(plan.encode, Some(out));
             Playback::new(track, opts, &plan, out.rate.wire_rate() as f64).unwrap()
         }
@@ -2876,7 +3100,7 @@ mod tests {
                 OutFormat::I32 { bits: 32 } => u32::from_le_bytes(bytes.try_into().unwrap()) >> 8,
                 OutFormat::I32 { .. } => u32::from_le_bytes(bytes.try_into().unwrap()) & 0xFF_FFFF,
                 OutFormat::F32 => ((f32::from_le_bytes(bytes.try_into().unwrap()) as f64 * 8_388_608.0).round() as i32 as u32) & 0xFF_FFFF,
-                OutFormat::I16 => unreachable!("DoP never goes out in 16 bits"),
+                OutFormat::I16 | OutFormat::Dsd { .. } => unreachable!("DoP never goes out in 16 bits or as native DSD"),
             }
         }
 
@@ -3248,9 +3472,9 @@ mod tests {
                 ("no DoP, 88.2 kHz only", with(Upsample::Off, true), false, only_88k),
             ];
             for (name, o, dop_ok, rates) in cases {
-                let p = plan(&pcm, &o, &rates, "DAC", dop_ok, &speakers).unwrap();
+                let p = plan(&pcm, &o, &rates, "DAC", DsdSupport { dop: dop_ok, native: false }, &speakers).unwrap();
                 assert_eq!(p.encode, None, "{name}");
-                assert_eq!(fields(&p), fields(&plan(&pcm, &without(&o), &rates, "DAC", dop_ok, &speakers).unwrap()), "{name}");
+                assert_eq!(fields(&p), fields(&plan(&pcm, &without(&o), &rates, "DAC", DsdSupport { dop: dop_ok, native: false }, &speakers).unwrap()), "{name}");
                 let path = signal_path(&pcm, &o, &p, p.target, Some(physical), OutFormat::I24Packed, o.exclusive, Transport::Usb);
                 let plain = signal_path(&pcm, &without(&o), &p, p.target, Some(physical), OutFormat::I24Packed, o.exclusive, Transport::Usb);
                 assert_eq!(path.dsd_out, None, "{name}");
@@ -3263,9 +3487,9 @@ mod tests {
             dsd.push_dop(&vec![0x69; 4_000]);
             dsd.finish(None);
             let o = with(Upsample::Off, true);
-            let p = plan(&dsd, &o, &dac_rates(), "DAC", true, &speakers).unwrap();
+            let p = plan(&dsd, &o, &dac_rates(), "DAC", DOP, &speakers).unwrap();
             assert!(p.dop && p.encode.is_none() && !p.processing);
-            assert_eq!(fields(&p), fields(&plan(&dsd, &without(&o), &dac_rates(), "DAC", true, &speakers).unwrap()));
+            assert_eq!(fields(&p), fields(&plan(&dsd, &without(&o), &dac_rates(), "DAC", DOP, &speakers).unwrap()));
             let path = signal_path(&dsd, &o, &p, 176_400.0, Some(physical), OutFormat::I24Packed, true, Transport::Usb);
             assert!(path.bit_perfect && path.dsd_out.is_none());
             assert_eq!(wire_dsd_rate(&dsd, &o), Some(2_822_400));
@@ -3275,7 +3499,7 @@ mod tests {
             assert_eq!(wire_dsd_rate(&pcm, &without(&o)), None);
             for upsample in [Upsample::Off, Upsample::UpTo(96_000.0), Upsample::UpTo(768_000.0)] {
                 let o = with(upsample, true);
-                let p = plan(&pcm, &o, &dac_rates(), "DAC", true, &speakers).unwrap();
+                let p = plan(&pcm, &o, &dac_rates(), "DAC", DOP, &speakers).unwrap();
                 assert_eq!(p.encode, Some(DSD64_7), "{upsample:?}");
                 assert!(p.dop && p.processing && p.resampled, "{upsample:?}");
                 assert_eq!(p.target, 176_400.0, "{upsample:?}");
@@ -3287,11 +3511,11 @@ mod tests {
             }
             // A source at the wire rate itself: encoded, not resampled.
             let at_wire = tones(176_400, 1000.0, 1000.0, 0.5, 0, 1_000);
-            let p = plan(&at_wire, &with(Upsample::Off, true), &dac_rates(), "DAC", true, &speakers).unwrap();
+            let p = plan(&at_wire, &with(Upsample::Off, true), &dac_rates(), "DAC", DOP, &speakers).unwrap();
             assert!(p.encode.is_some() && p.processing && !p.resampled && p.target == 176_400.0);
             // DSD256 at its own wire rate.
             let o = PlayOptions { dsp: DspSettings { dsd_out: Some(DsdOut { rate: DsdRate::Dsd256, order: ModOrder::Fifth }), ..Default::default() }, ..Default::default() };
-            assert_eq!(plan(&pcm, &o, &dac_rates(), "DAC", true, &speakers).unwrap().target, 705_600.0);
+            assert_eq!(plan(&pcm, &o, &dac_rates(), "DAC", DOP, &speakers).unwrap().target, 705_600.0);
             // The long filter runs with DSD output whether or not upsampling is on.
             let filtered = DspSettings { upsample_filter: Some(spec), ..Default::default() };
             assert_eq!(crate::dsp::long_filter(&DspSettings { dsd_out: Some(DSD64_7), ..filtered.clone() }, 44_100, 176_400), Some(spec));
@@ -3308,6 +3532,384 @@ mod tests {
             assert_eq!(plain.len(), 2 * 22_050);
             assert!(asked == plain, "the same samples with dsd_out set");
             assert!(asked.iter().all(|v| v.abs() <= 1.0), "samples, not words");
+        }
+    }
+
+    /// Native DSD: the raw bitstream in DSD_U8/U16/U32 (either byte order) and ASIO's LSB-first
+    /// bytes, no markers, idle as 0x69; positions and joins in our 16-bit frames.
+    mod native_dsd {
+        use super::*;
+        use crate::decode::TrackMeta;
+        use crate::dsp::dsd_encode::{DsdRate, ModOrder};
+
+        const U32_BE: OutFormat = OutFormat::Dsd { bytes: 4, big_endian: true, lsb_first: false };
+        const U8: OutFormat = OutFormat::Dsd { bytes: 1, big_endian: false, lsb_first: false };
+        /// DSD64's word rate: our frames per second.
+        const WORDS: f64 = 176_400.0;
+
+        fn dsd(bytes: u8, big_endian: bool, lsb_first: bool) -> OutFormat {
+            OutFormat::Dsd { bytes, big_endian, lsb_first }
+        }
+
+        /// The interleaved buffer a DAC expects for `streams` (per channel, its DSD bytes in
+        /// time order, oldest bit in the MSB), written out from the rule itself: time byte t of
+        /// channel c at ((t / bytes) · nch + c) · bytes + (k or bytes − 1 − k), k = t % bytes.
+        fn place(streams: &[Vec<u8>], bytes: usize, big_endian: bool, lsb_first: bool) -> Vec<u8> {
+            let nch = streams.len();
+            let mut out = vec![0u8; streams[0].len() * nch];
+            for (c, s) in streams.iter().enumerate() {
+                for (t, &b) in s.iter().enumerate() {
+                    let k = t % bytes;
+                    let at = ((t / bytes) * nch + c) * bytes + if big_endian { k } else { bytes - 1 - k };
+                    out[at] = if lsb_first { b.reverse_bits() } else { b };
+                }
+            }
+            out
+        }
+
+        /// What a DAC reads back from an interleaved DSD_U32_BE buffer: each channel's bytes in
+        /// time order.
+        fn read_u32_be(data: &[u8], nch: usize) -> Vec<Vec<u8>> {
+            (0..nch).map(|c| data.chunks_exact(4 * nch).flat_map(|frame| frame[c * 4..c * 4 + 4].to_vec()).collect()).collect()
+        }
+
+        /// A distinct word for every frame and channel, high and low bytes different.
+        fn word(f: usize, c: usize) -> u16 {
+            0x1000 * c as u16 + 0x0102 * f as u16 + 0x0811
+        }
+
+        /// Each channel's DSD bytes for `frames` of `word`, the first `avail` real, then idle.
+        fn streams(nch: usize, frames: usize, avail: usize) -> Vec<Vec<u8>> {
+            (0..nch).map(|c| (0..frames).flat_map(|f| if f < avail { word(f, c) } else { DOP_IDLE }.to_be_bytes()).collect()).collect()
+        }
+
+        #[test]
+        fn every_container_places_the_bytes_exactly() {
+            // Pinned by hand: two words of one channel, 0x1234 then 0x5678.
+            let one = |format: OutFormat, frames: usize| {
+                let mut data = vec![0u8; frames * 2];
+                fill_native(&mut [OutBuf { data: &mut data, channels: 1, format }], 0..frames, frames, |f, _| [0x1234, 0x5678][f]);
+                data
+            };
+            assert_eq!(one(dsd(4, true, false), 2), [0x12, 0x34, 0x56, 0x78], "DSD_U32_BE");
+            assert_eq!(one(dsd(4, false, false), 2), [0x78, 0x56, 0x34, 0x12], "DSD_U32_LE");
+            assert_eq!(one(dsd(2, true, false), 2), [0x12, 0x34, 0x56, 0x78], "DSD_U16_BE");
+            assert_eq!(one(dsd(2, false, false), 2), [0x34, 0x12, 0x78, 0x56], "DSD_U16_LE");
+            assert_eq!(one(dsd(1, false, false), 1), [0x12, 0x34], "DSD_U8");
+            assert_eq!(one(dsd(1, true, false), 1), [0x12, 0x34], "DSD_U8, either order");
+            assert_eq!(one(dsd(1, false, true), 1), [0x48, 0x2C], "LSB first: each byte reversed");
+            // Stereo DSD_U32_BE: four bytes of the left, then four of the right.
+            let mut data = vec![0u8; 8];
+            fill_native(&mut [OutBuf { data: &mut data, channels: 2, format: U32_BE }], 0..2, 2, |f, c| [[0x1111, 0x2222], [0x3333, 0x4444]][c][f]);
+            assert_eq!(data, [0x11, 0x11, 0x22, 0x22, 0x33, 0x33, 0x44, 0x44]);
+
+            // Every container, both orders, both bit orders, stereo interleaved: 8 frames, 6 of
+            // them music, written in two calls that split a U32 container (frames 0..3, 3..8).
+            for bytes in [1u8, 2, 4] {
+                for big_endian in [false, true] {
+                    for lsb_first in [false, true] {
+                        let format = dsd(bytes, big_endian, lsb_first);
+                        let mut data = vec![0u8; 8 * 2 * 2];
+                        let mut bufs = [OutBuf { data: &mut data, channels: 2, format }];
+                        fill_native(&mut bufs, 0..3, 3, word);
+                        fill_native(&mut bufs, 3..8, 3, |f, c| word(3 + f, c));
+                        assert_eq!(data, place(&streams(2, 8, 6), bytes as usize, big_endian, lsb_first), "{format:?}");
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn idle_is_0x69_never_a_marker_or_zero() {
+            for bytes in [1u8, 2, 4] {
+                for big_endian in [false, true] {
+                    for lsb_first in [false, true] {
+                        let format = dsd(bytes, big_endian, lsb_first);
+                        let mut data = vec![0u8; 16 * 2 * 2];
+                        let peaks = fill_native(&mut [OutBuf { data: &mut data, channels: 2, format }], 0..16, 0, word);
+                        let idle = if lsb_first { 0x96 } else { 0x69 };
+                        assert!(data.iter().all(|&b| b == idle), "{format:?}: {data:x?}");
+                        assert!(!data.iter().any(|&b| b == 0x05 || b == 0xFA || b == 0), "{format:?}");
+                        assert_eq!(peaks, [0.0, 0.0], "idle reads as silence");
+                        // PCM must never reach it, but if it did: silence too.
+                        let mut one = [0u8; 4];
+                        format.write(&mut one[..bytes as usize], 0.5);
+                        assert!(one[..bytes as usize].iter().all(|&b| b == idle));
+                    }
+                }
+            }
+            assert!(!U32_BE.carries_dop());
+            assert_eq!((U32_BE.bytes(), U32_BE.frame_bytes(), U32_BE.bits()), (4, 2, 1));
+            assert_eq!((U8.bytes(), U8.frame_bytes()), (1, 2));
+        }
+
+        /// ASIO's layout: one buffer per channel, `channels: 1` each.
+        #[test]
+        fn one_buffer_per_channel() {
+            for format in [dsd(1, false, true), dsd(1, false, false), U32_BE] {
+                let (mut left, mut right) = (vec![0u8; 8 * 2], vec![0u8; 8 * 2]);
+                let mut bufs = [OutBuf { data: &mut left, channels: 1, format }, OutBuf { data: &mut right, channels: 1, format }];
+                fill_native(&mut bufs, 0..8, 5, word);
+                let OutFormat::Dsd { bytes, big_endian, lsb_first } = format else { unreachable!() };
+                let s = streams(2, 8, 5);
+                assert_eq!(left, place(&s[..1], bytes as usize, big_endian, lsb_first), "{format:?}");
+                assert_eq!(right, place(&s[1..], bytes as usize, big_endian, lsb_first), "{format:?}");
+            }
+        }
+
+        /// The meters read the bit density as `fill_dop` does, interleaved or not.
+        #[test]
+        fn meters_read_the_density() {
+            let full = PCM_GAIN as f32; // all ones (or all zeros) over the window
+            let mut data = vec![0u8; 16 * 2 * 4];
+            let p = fill_native(&mut [OutBuf { data: &mut data, channels: 2, format: U32_BE }], 0..32, 32, |_, c| [0xFFFF, 0x0000][c]);
+            assert_eq!(p, [full, full]);
+            let (mut l, mut r) = (vec![0u8; 32 * 2], vec![0u8; 32 * 2]);
+            let mut bufs = [OutBuf { data: &mut l, channels: 1, format: U8 }, OutBuf { data: &mut r, channels: 1, format: U8 }];
+            let p = fill_native(&mut bufs, 0..32, 32, |_, c| [0xFFFF, DOP_IDLE][c]);
+            assert_eq!(p, [full, 0.0]);
+        }
+
+        /// A raw DSD64 track whose every byte differs from its neighbours.
+        fn dsd_track(frames: usize, seed: u32) -> Arc<Track> {
+            let t = Track::new_dop(2_822_400, 2, TrackMeta::default(), frames);
+            let bytes: Vec<u8> = (0..frames as u32 * 4).map(|i| (i.wrapping_mul(37) + seed * 101 + i / 251) as u8).collect();
+            t.push_dop(&bytes);
+            t.finish(None);
+            Arc::new(t)
+        }
+
+        /// The track's DSD bytes per channel, in time order.
+        fn track_bytes(t: &Track) -> Vec<Vec<u8>> {
+            (0..2).map(|c| (0..t.frames()).flat_map(|f| t.dop_payload(f, c).to_be_bytes()).collect()).collect()
+        }
+
+        fn direct(track: Arc<Track>) -> Playback {
+            let plan = Plan { target: WORDS, start_frame: 0, lossy: None, resampled: false, processing: false, dop: true, native: true, encode: None, route: stereo_route() };
+            Playback::new(track, &PlayOptions::default(), &plan, WORDS).unwrap()
+        }
+
+        /// One callback of `frames` of our frames in DSD_U32_BE (`frames` even): what it
+        /// returned, and each channel's bytes.
+        fn callback(p: &Playback, frames: usize) -> (usize, Vec<Vec<u8>>) {
+            let mut data = vec![0u8; frames * 2 * 2];
+            let got = p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: U32_BE }]);
+            (got, read_u32_be(&data, 2))
+        }
+
+        #[test]
+        fn the_direct_path_counts_our_frames_and_joins_seamlessly() {
+            let (a, b) = (dsd_track(1_001, 1), dsd_track(700, 2));
+            let p = direct(a.clone());
+            assert_eq!(p.shared().fade_max, 0, "native DSD never fades");
+            assert!(p.queue_next(b.clone()));
+            let mut heard: Vec<Vec<u8>> = vec![Vec::new(), Vec::new()];
+            // 500 of our frames a callback (250 DSD_U32 device frames): A ends in the middle of
+            // a container of the third, and B starts in the same one.
+            for (i, (want_got, want_pos)) in [(500, 500), (500, 1_000), (500, 499), (201, 700)].into_iter().enumerate() {
+                let (got, bytes) = callback(&p, 500);
+                assert_eq!(got, want_got, "callback {i}");
+                assert_eq!(p.shared().pos.load(Ordering::Relaxed), want_pos, "callback {i}");
+                for c in 0..2 {
+                    heard[c].extend(bytes[c].iter());
+                }
+            }
+            assert!(Arc::ptr_eq(&p.heard(), &b) && p.switches() == 1 && p.is_finished());
+            assert!((p.position_secs() - 700.0 / WORDS).abs() < 1e-12);
+            let (ta, tb) = (track_bytes(&a), track_bytes(&b));
+            for c in 0..2 {
+                let want: Vec<u8> = ta[c].iter().chain(&tb[c]).copied().collect();
+                assert_eq!(&heard[c][..want.len()], &want[..], "channel {c}: A then B, nothing between");
+                assert!(heard[c][want.len()..].iter().all(|&x| x == 0x69), "after the end: idle");
+            }
+            assert!(!p.shared().dop_phase.load(Ordering::Relaxed));
+        }
+
+        #[test]
+        fn pause_is_idle_and_resume_carries_on() {
+            let a = dsd_track(3_000, 3);
+            let p = direct(a.clone());
+            let ta = track_bytes(&a);
+            let (got, first) = callback(&p, 400);
+            assert_eq!(got, 400);
+            p.set_paused(true);
+            let mut raw = vec![0u8; 400 * 4];
+            assert_eq!(p.shared().render(&mut [OutBuf { data: &mut raw, channels: 2, format: U32_BE }]), 0);
+            assert!(raw.iter().all(|&x| x == 0x69), "paused: all idle, no markers, no zeros");
+            assert_eq!(p.shared().pos.load(Ordering::Relaxed), 400);
+            p.set_paused(false);
+            let (got, second) = callback(&p, 400);
+            assert_eq!(got, 400);
+            for c in 0..2 {
+                assert_eq!(first[c], ta[c][..800]);
+                assert_eq!(second[c], ta[c][800..1_600], "picks up where it stopped");
+            }
+            // A seek lands on the exact frame, with no fade.
+            assert!(p.seek(2_000.0 / WORDS));
+            let (_, third) = callback(&p, 400);
+            for c in 0..2 {
+                assert_eq!(third[c], ta[c][4_000..4_800]);
+            }
+        }
+
+        /// DSD_U8 with an odd period: a byte per channel left over, idle, not counted as played.
+        #[test]
+        fn an_odd_u8_period_ends_in_an_idle_half_frame() {
+            let a = dsd_track(100, 4);
+            let p = direct(a.clone());
+            let ta = track_bytes(&a);
+            let mut heard: Vec<Vec<u8>> = vec![Vec::new(), Vec::new()];
+            for i in 0..2 {
+                // 7 device frames of 2 channels.
+                let mut data = vec![0u8; 14];
+                assert_eq!(p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: U8 }]), 3);
+                assert_eq!(p.shared().pos.load(Ordering::Relaxed), 3 * (i + 1));
+                assert_eq!(&data[12..], &[0x69, 0x69], "the half frame is idle");
+                for c in 0..2 {
+                    heard[c].extend(data[..12].iter().skip(c).step_by(2));
+                }
+            }
+            for c in 0..2 {
+                assert_eq!(heard[c], ta[c][..12], "channel {c}");
+            }
+            // An even period: 8 device frames, 4 of our frames.
+            let mut data = vec![0u8; 16];
+            assert_eq!(p.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: U8 }]), 4);
+            // DoP's marker alternation is left alone (3 frames would have flipped it).
+            assert!(!p.shared().dop_phase.load(Ordering::Relaxed));
+        }
+
+        /// PCM encoded to DSD goes out natively word for word what it would as DoP (the
+        /// encoder is deterministic), and the ring counts our frames.
+        #[test]
+        fn encoded_pcm_goes_out_natively_as_the_dop_words() {
+            let fs = 44_100u32;
+            let samples: Vec<f32> = (0..fs as usize).flat_map(|i| {
+                let v = ((2.0 * std::f64::consts::PI * 1000.0 * i as f64 / fs as f64).sin() * 0.5) as f32;
+                [v, -v]
+            }).collect();
+            let track = Arc::new(Track::from_samples(fs, 2, Some(24), &samples, TrackMeta::default()));
+            let out = DsdOut { rate: DsdRate::Dsd64, order: ModOrder::Fifth };
+            let opts = PlayOptions { dsp: DspSettings { dsd_out: Some(out), ..Default::default() }, ..Default::default() };
+            let speakers = crate::channels::default_layout(2);
+            let native_plan = plan(&track, &opts, &[RateRange::exact(44_100.0)], "DAC", DsdSupport { dop: false, native: true }, &speakers).unwrap();
+            assert!(native_plan.native && native_plan.dop && native_plan.encode == Some(out) && native_plan.target == WORDS);
+            let dop_plan = plan(&track, &opts, &[RateRange::exact(176_400.0)], "DAC", DOP, &speakers).unwrap();
+            assert!(!dop_plan.native && dop_plan.encode == Some(out));
+            let native = Playback::new(track.clone(), &opts, &native_plan, WORDS).unwrap();
+            let dop = Playback::new(track, &opts, &dop_plan, WORDS).unwrap();
+            assert_eq!(native.shared().fade_max, 0);
+            let wait = |p: &Playback| {
+                let rs = p.shared().ring.as_ref().unwrap();
+                let deadline = Instant::now() + Duration::from_secs(20);
+                while rs.ring.available() < 512 * 2 && !rs.render_done.load(Ordering::Acquire) {
+                    assert!(Instant::now() < deadline, "the render thread stalled");
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            };
+            let (mut a, mut b): (Vec<Vec<u8>>, Vec<Vec<u8>>) = (vec![Vec::new(), Vec::new()], vec![Vec::new(), Vec::new()]);
+            for _ in 0..20 {
+                wait(&native);
+                let (got, bytes) = callback(&native, 512);
+                assert_eq!(got, 512);
+                for c in 0..2 {
+                    a[c].extend(bytes[c].iter());
+                }
+                wait(&dop);
+                let mut data = vec![0u8; 512 * 2 * 4];
+                dop.shared().render(&mut [OutBuf { data: &mut data, channels: 2, format: OutFormat::I32 { bits: 32 } }]);
+                // DoP in a 32-bit container: [0, low payload byte, high payload byte, marker].
+                for f in data.chunks_exact(8) {
+                    for c in 0..2 {
+                        b[c].extend([f[c * 4 + 2], f[c * 4 + 1]]);
+                    }
+                }
+            }
+            assert_eq!(a, b);
+            assert!(a[0].iter().any(|&x| x != 0x69), "music, not idle");
+            assert_eq!(native.shared().ring.as_ref().unwrap().played.load(Ordering::Relaxed), 20 * 512);
+            assert!(!native.shared().dop_phase.load(Ordering::Relaxed));
+        }
+
+        #[test]
+        fn no_dop_without_the_users_switch() {
+            let speakers = crate::channels::default_layout(2);
+            let pcm_rates = [44_100.0, 88_200.0, 176_400.0].map(RateRange::exact).to_vec();
+            let off = PlayOptions { allow_dop: false, ..Default::default() };
+            let both = DsdSupport { dop: true, native: true };
+            // A DSD track: natively still (no switch needed), but never as DoP with the switch
+            // off, even where the device could carry it (native missing, or refused and
+            // re-planned without it): an error instead.
+            let track = dsd_track(1_000, 5);
+            let p = plan(&track, &off, &pcm_rates, "DAC", both, &speakers).unwrap();
+            assert!(p.native && p.dop);
+            assert!(plan(&track, &off, &pcm_rates, "DAC", DOP, &speakers).is_err());
+            let e = plan(&track, &off, &pcm_rates, "DAC", DsdSupport { native: false, ..both }, &speakers).err().unwrap();
+            assert!(matches!(crate::UserError::of(&e), crate::UserError::DopRefused { .. }));
+            // PCM encoded to DSD: natively with the switch off, else not encoded at all.
+            let out = DsdOut { rate: DsdRate::Dsd64, order: ModOrder::Fifth };
+            let pcm = Arc::new(Track::from_samples(44_100, 2, Some(24), &vec![0.0; 2 * 4_410], TrackMeta::default()));
+            let enc = |allow_dop| PlayOptions { allow_dop, dsp: DspSettings { dsd_out: Some(out), ..Default::default() }, ..Default::default() };
+            let p = plan(&pcm, &enc(false), &pcm_rates, "DAC", both, &speakers).unwrap();
+            assert!(p.native && p.encode == Some(out));
+            let p = plan(&pcm, &enc(false), &pcm_rates, "DAC", DOP, &speakers).unwrap();
+            assert!(!p.dop && !p.native && p.encode.is_none());
+            let p = plan(&pcm, &enc(true), &pcm_rates, "DAC", DOP, &speakers).unwrap();
+            assert!(p.dop && !p.native && p.encode == Some(out), "with the switch on, DoP as before");
+        }
+
+        #[test]
+        fn native_is_preferred_and_goes_by_its_own_rate() {
+            let speakers = crate::channels::default_layout(2);
+            let both = DsdSupport { dop: true, native: true };
+            let native = DsdSupport { dop: false, native: true };
+            let pcm_rates = [44_100.0, 88_200.0, 176_400.0].map(RateRange::exact).to_vec();
+            let only_44k = vec![RateRange::exact(44_100.0)];
+            let track = dsd_track(1_000, 5);
+            let opts = PlayOptions::default();
+            // A DSD track: native where it can, DoP as before where only that can, an error as
+            // before where neither can.
+            let p = plan(&track, &opts, &pcm_rates, "DAC", both, &speakers).unwrap();
+            assert!(p.native && p.dop && p.encode.is_none() && !p.processing && p.target == WORDS);
+            let p = plan(&track, &opts, &only_44k, "DAC", native, &speakers).unwrap();
+            assert!(p.native && p.dop && p.target == WORDS, "the PCM rates don't matter");
+            let p = plan(&track, &opts, &pcm_rates, "DAC", DOP, &speakers).unwrap();
+            assert!(!p.native && p.dop && p.target == WORDS);
+            assert!(plan(&track, &opts, &pcm_rates, "DAC", NO_DSD, &speakers).is_err());
+            assert!(plan(&track, &opts, &only_44k, "DAC", DOP, &speakers).is_err(), "DoP still needs the rate");
+            assert!(plan(&track, &PlayOptions { exclusive: false, ..opts.clone() }, &pcm_rates, "DAC", native, &speakers).is_err());
+            // Its signal path: bit-perfect, native.
+            let p = plan(&track, &opts, &pcm_rates, "DAC", both, &speakers).unwrap();
+            let path = signal_path(&track, &opts, &p, WORDS, None, U32_BE, true, Transport::Usb);
+            assert!(path.bit_perfect && path.native_dsd && path.dsd_out.is_none());
+            let p = plan(&track, &opts, &pcm_rates, "DAC", DOP, &speakers).unwrap();
+            assert!(!signal_path(&track, &opts, &p, WORDS, None, OutFormat::I24Packed, true, Transport::Usb).native_dsd);
+
+            // PCM encoded to DSD: native alone allows it, without the wire rate among the PCM
+            // rates; DoP alone still needs that rate; neither, as before, plays PCM.
+            let pcm = Arc::new(Track::from_samples(44_100, 2, Some(24), &[0.0; 2_000], TrackMeta::default()));
+            let out = DsdOut { rate: DsdRate::Dsd64, order: ModOrder::Fifth };
+            let enc = PlayOptions { dsp: DspSettings { dsd_out: Some(out), ..Default::default() }, ..Default::default() };
+            let p = plan(&pcm, &enc, &only_44k, "DAC", native, &speakers).unwrap();
+            assert!(p.native && p.dop && p.encode == Some(out) && p.processing && p.target == WORDS);
+            let path = signal_path(&pcm, &enc, &p, WORDS, None, U32_BE, true, Transport::Usb);
+            assert!(path.native_dsd && !path.bit_perfect && path.dsd_out == Some(out));
+            assert!(plan(&pcm, &enc, &pcm_rates, "DAC", both, &speakers).unwrap().native);
+            let p = plan(&pcm, &enc, &only_44k, "DAC", DOP, &speakers).unwrap();
+            assert!(p.encode.is_none() && !p.native && !p.dop && p.target == 44_100.0);
+            let p = plan(&pcm, &enc, &pcm_rates, "DAC", NO_DSD, &speakers).unwrap();
+            assert!(p.encode.is_none() && !p.native && !p.dop);
+            // Native is never without DSD on the wire.
+            let p = plan(&pcm, &opts, &pcm_rates, "DAC", both, &speakers).unwrap();
+            assert!(!p.native && !p.dop && p.target == 44_100.0);
+
+            // The rates a backend opens the device at.
+            assert_eq!(dsd_rate_of_words(WORDS), 2_822_400);
+            assert_eq!(native_device_rate(WORDS, U32_BE), Some(88_200.0));
+            assert_eq!(native_device_rate(WORDS, dsd(2, false, false)), Some(176_400.0));
+            assert_eq!(native_device_rate(WORDS, U8), Some(352_800.0));
+            assert_eq!(native_device_rate(WORDS * 4.0, U32_BE), Some(352_800.0), "DSD256 in DSD_U32");
+            assert_eq!(native_device_rate(WORDS, OutFormat::I32 { bits: 32 }), None);
         }
     }
 
@@ -3343,7 +3945,7 @@ mod tests {
         }
 
         fn playback(track: Arc<Track>, processing: bool, start_frame: usize, fades: bool) -> Playback {
-            let plan = Plan { target: FS as f64, start_frame, lossy: None, resampled: false, processing, dop: false, encode: None, route: stereo_route() };
+            let plan = Plan { target: FS as f64, start_frame, lossy: None, resampled: false, processing, dop: false, native: false, encode: None, route: stereo_route() };
             Playback::new(track, &PlayOptions { fades, ..Default::default() }, &plan, FS as f64).unwrap()
         }
 
@@ -3555,7 +4157,7 @@ mod tests {
         #[test]
         fn a_playback_started_paused_makes_no_sound_and_starts_exact() {
             for processing in [false, true] {
-                let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: false, encode: None, route: stereo_route() };
+                let plan = Plan { target: FS as f64, start_frame: 0, lossy: None, resampled: false, processing, dop: false, native: false, encode: None, route: stereo_route() };
                 let p = Playback::new(ramp(FS as usize), &PlayOptions { start_paused: true, ..Default::default() }, &plan, FS as f64).unwrap();
                 for _ in 0..3 {
                     assert!(callback(&p, 512).iter().all(|&v| v == 0.0), "paused: silence");
@@ -3715,7 +4317,7 @@ mod tests {
 
         /// Play `a` then `b` joined, through the processed path; returns the left channel.
         fn play(a: Arc<Track>, b: Arc<Track>, opts: &PlayOptions, frames: usize) -> Vec<f32> {
-            let plan = Plan { target: 48_000.0, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
+            let plan = Plan { target: 48_000.0, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, native: false, encode: None, route: stereo_route() };
             let p = Playback::new(a, opts, &plan, 48_000.0).unwrap();
             assert!(p.queue_next(b));
             let rs = p.shared().ring.as_ref().unwrap();
@@ -3756,12 +4358,12 @@ mod tests {
             let rates = [RateRange::exact(48_000.0)];
             let speakers = crate::channels::default_layout(2);
             let t = ramp(0, 48_000);
-            let plain = plan(&t, &PlayOptions::default(), &rates, "DAC", true, &speakers).unwrap();
+            let plain = plan(&t, &PlayOptions::default(), &rates, "DAC", DOP, &speakers).unwrap();
             assert!(!plain.processing);
             // On, with nothing known about the track yet: it still goes through the chain, so
             // the next one can join at its own gain.
             let opts = levelled();
-            let pl = plan(&t, &opts, &rates, "DAC", true, &speakers).unwrap();
+            let pl = plan(&t, &opts, &rates, "DAC", DOP, &speakers).unwrap();
             assert!(pl.processing);
             t.set_level(at(0.5));
             let physical = StreamFormat { sample_rate: 48_000.0, bits: 24, float: false, channels: 2, non_mixable: true };
@@ -3793,7 +4395,7 @@ mod tests {
         fn run(device: &[Speaker], processing: bool) -> Vec<f32> {
             let track = five_one(48_000);
             let opts = PlayOptions::default();
-            let mut plan = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", false, device).unwrap();
+            let mut plan = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", NO_DSD, device).unwrap();
             plan.processing = processing;
             let p = Playback::new(track, &opts, &plan, 48_000.0).unwrap();
             let ch = device.len();
@@ -3819,7 +4421,7 @@ mod tests {
             }
             let track = five_one(10);
             let opts = PlayOptions::default();
-            let p = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", false, &device).unwrap();
+            let p = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", NO_DSD, &device).unwrap();
             let path = signal_path(&track, &opts, &p, 48_000.0, None, OutFormat::F32, true, Transport::Usb);
             assert_eq!(path.layout, "5.1");
             assert!(path.downmix.is_none());
@@ -3836,7 +4438,7 @@ mod tests {
             }
             let track = five_one(10);
             let opts = PlayOptions::default();
-            let p = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", false, &device).unwrap();
+            let p = plan(&track, &opts, &[RateRange::exact(48_000.0)], "test", NO_DSD, &device).unwrap();
             let path = signal_path(&track, &opts, &p, 48_000.0, None, OutFormat::F32, true, Transport::Usb);
             assert_eq!(path.downmix.as_ref().map(|d| d.to.as_str()), Some("Stereo"));
             assert!(!path.bit_perfect);
@@ -3850,7 +4452,7 @@ mod tests {
         let samples: Vec<f32> = (0..fs as usize * 4).flat_map(|i| [((i % 100) as f32 + 1.0) / 1000.0; 2]).collect();
         let track = Arc::new(Track::from_samples(fs, 2, Some(24), &samples, crate::decode::TrackMeta::default()));
         let opts = PlayOptions { dsp: DspSettings { crossfeed: None, ..Default::default() }, ..Default::default() };
-        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, encode: None, route: stereo_route() };
+        let plan = Plan { target: fs as f64, start_frame: 0, lossy: None, resampled: false, processing: true, dop: false, native: false, encode: None, route: stereo_route() };
         let p = Playback::new(track, &opts, &plan, fs as f64).unwrap();
         let rs = p.shared().ring.as_ref().unwrap();
         // Bigger than the scratch, smaller than the ring (which holds ~0.68 s here).
@@ -3923,6 +4525,33 @@ mod tests {
             assert_eq!(&data[3..5], &[1, 0]);
         }
         assert_eq!(markers, [0x05, 0xFA, 0x05, 0xFA, 0x05, 0xFA]);
+    }
+
+    /// DoP in one buffer per channel (ASIO) meters each channel by its own bits, exactly as
+    /// the interleaved stereo buffer does, and writes the same words and markers.
+    #[test]
+    fn dop_meters_per_channel_buffers_like_interleaved() {
+        let frames = 64;
+        // Left mostly ones, right a balanced pattern with a few more ones: different levels.
+        let payload = |f: usize, c: usize| if c == 0 { 0xFFF0 } else if f.is_multiple_of(2) { 0x6969 } else { 0x69FF };
+        let fmt = OutFormat::I32 { bits: 32 };
+        let mut inter = vec![0u8; frames * 2 * 4];
+        let peaks_inter = fill_dop(&mut [OutBuf { data: &mut inter, channels: 2, format: fmt }], 0..frames, frames, &AtomicBool::new(false), payload);
+        let (mut left, mut right) = (vec![0u8; frames * 4], vec![0u8; frames * 4]);
+        let peaks_split = fill_dop(
+            &mut [OutBuf { data: &mut left, channels: 1, format: fmt }, OutBuf { data: &mut right, channels: 1, format: fmt }],
+            0..frames,
+            frames,
+            &AtomicBool::new(false),
+            payload,
+        );
+        assert!(peaks_inter[0] > 0.0 && peaks_inter[1] > 0.0 && peaks_inter[0] != peaks_inter[1]);
+        assert_eq!(peaks_split, peaks_inter);
+        assert!(peaks_split[1] <= PCM_GAIN as f32, "no channel counted from bits it doesn't hold");
+        for f in 0..frames {
+            assert_eq!(&left[f * 4..f * 4 + 4], &inter[f * 8..f * 8 + 4]);
+            assert_eq!(&right[f * 4..f * 4 + 4], &inter[f * 8 + 4..f * 8 + 8]);
+        }
     }
 
     #[test]

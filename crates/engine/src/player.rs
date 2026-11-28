@@ -78,9 +78,71 @@ impl Output {
         }
     }
 
+    /// The output takes DSD at `dsd_rate` natively, as raw DSD without DoP's markers (a Linux
+    /// card the kernel gives a DSD format, a Windows ASIO driver with a DSD mode; network
+    /// players never). Where both
+    /// work, the engine sends it natively.
+    pub fn supports_native_dsd(&self, dsd_rate: u32) -> bool {
+        match self {
+            Self::Device(d) => d.device.supports_native_dsd(dsd_rate),
+            Self::Network(_) => false,
+        }
+    }
+
+    /// [`Self::supports_native_dsd`] as far as it is known, without asking a driver (Windows:
+    /// an ASIO driver's DSD mode is probed only when it is about to be used, so until then it
+    /// isn't known): for the device list.
+    pub fn native_dsd_known(&self, dsd_rate: u32) -> bool {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.native_dsd_known(dsd_rate),
+            #[cfg(not(windows))]
+            Self::Device(d) => d.device.supports_native_dsd(dsd_rate),
+            Self::Network(_) => false,
+        }
+    }
+
     pub fn is_network(&self) -> bool {
         matches!(self, Self::Network(_))
     }
+
+    /// Every playback has the device to itself, whether exclusive access is asked for or not
+    /// (Windows: an ASIO driver, which is never shared).
+    pub fn always_exclusive(&self) -> bool {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.always_exclusive(),
+            _ => false,
+        }
+    }
+
+    /// The output's driver has a settings window of its own (Windows: an ASIO driver's
+    /// control panel, for its buffer size and the like).
+    pub fn has_control_panel(&self) -> bool {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.has_control_panel(),
+            _ => false,
+        }
+    }
+
+    /// Open that window. Blocks while the driver shows it modally (some do), so call it off
+    /// the UI thread. Errors where there is none, or (ASIO) while another ASIO driver plays.
+    pub fn control_panel(&self) -> Result<()> {
+        match self {
+            #[cfg(windows)]
+            Self::Device(d) => d.device.control_panel(),
+            _ => anyhow::bail!("this output has no control panel"),
+        }
+    }
+}
+
+/// Before the app quits: let go of what an output keeps open between playbacks (Windows: the
+/// ASIO driver, which is closed properly and left in PCM mode for the next app). Nothing to
+/// do elsewhere.
+pub fn release_outputs() {
+    #[cfg(windows)]
+    output::asio_release();
 }
 
 /// The system's devices, then the network players found so far.
@@ -92,11 +154,15 @@ pub fn outputs() -> Result<Vec<Output>> {
     Ok(v)
 }
 
-/// One output by uid. A network player not seen yet gets a few seconds to answer.
+/// One output by uid. A network player not seen yet gets a few seconds to answer. (Windows:
+/// without opening any ASIO driver but the one asked for: see `windows_out::find_device`.)
 pub fn find(uid: &str) -> Result<Option<Output>> {
     if net::is_network_uid(uid) {
         return Ok(if NETWORK { net::find(uid).map(Output::Network) } else { None });
     }
+    #[cfg(windows)]
+    return Ok(output::find_device(uid)?.map(Output::Device));
+    #[cfg(not(windows))]
     Ok(output::output_devices()?.into_iter().find(|d| d.uid == uid).map(Output::Device))
 }
 
@@ -109,11 +175,14 @@ pub fn start_discovery() {
     }
 }
 
-/// Look for network players again now.
+/// The user asked to look again: for network players now, and (Windows) at ASIO drivers that
+/// failed to open before (tried again at the next listing; never by themselves).
 pub fn refresh() {
     if NETWORK {
         net::refresh();
     }
+    #[cfg(windows)]
+    output::refresh_devices();
 }
 
 enum Kind {
